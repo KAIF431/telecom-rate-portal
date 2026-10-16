@@ -277,16 +277,33 @@ current_user = st.session_state.user or {}
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
 
-# ----------------- SIDEBAR: USER INFO & ADMIN CONSOLE -----------------
+# ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
 with st.sidebar:
     st.markdown(f"""
-    <div style="padding: 10px 14px; background: #EEF2FF; border-left: 4px solid #4F46E5; border-radius: 6px; margin-bottom: 12px;">
+    <div style="padding: 12px 14px; background: #EEF2FF; border-left: 4px solid #4F46E5; border-radius: 8px; margin-bottom: 12px;">
         <div style="font-size: 0.72rem; color: #6B7280; text-transform: uppercase; font-weight: 600;">Logged In User</div>
-        <div style="font-size: 1.15rem; color: #1E1B4B; font-weight: 700;">{current_user.get('name')}</div>
+        <div style="font-size: 1.18rem; color: #1E1B4B; font-weight: 700; margin-top: 2px;">{current_user.get('name')}</div>
         <div style="font-size: 0.8rem; color: #4F46E5; font-weight: 600;">Role: {current_user.get('role', 'user').upper()}</div>
         <div style="font-size: 0.72rem; color: #9CA3AF; margin-top: 4px;">📅 Session active till Monday 00:00</div>
     </div>
     """, unsafe_allow_html=True)
+
+    if is_admin:
+        st.markdown("### 🧭 Navigation")
+        admin_nav_mode = st.radio(
+            "Select Portal View:",
+            ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
+            key="portal_nav_mode",
+            label_visibility="collapsed"
+        )
+        
+        pending_reqs_count = len(am.get_pending_reset_requests())
+        if pending_reqs_count > 0:
+            st.warning(f"🔔 **{pending_reqs_count} Reset Request(s) Pending!** Check Admin Panel.")
+            
+        st.divider()
+    else:
+        admin_nav_mode = "⚡ Rate Deck Standardizer"
 
     if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
         clear_current_session()
@@ -294,144 +311,30 @@ with st.sidebar:
 
     st.divider()
 
-    # Admin Management Section (Visible ONLY to Admin like Kaif)
-    if is_admin:
-        st.subheader("⚙️ Admin Management")
-        
-        # 1. Pending Reset Requests
-        pending_reqs = am.get_pending_reset_requests()
-        if pending_reqs:
-            st.warning(f"🔔 **{len(pending_reqs)} Password Reset Request(s) Pending!**")
-            with st.expander("📬 Review Reset Requests", expanded=True):
-                for pr in pending_reqs:
-                    st.write(f"**User:** `{pr['username']}` ({pr['name']})")
-                    st.write(f"**Current Password:** `{pr.get('current_password', '')}`")
-                    st.caption(f"Time: {pr['requested_at']} | Note: {pr.get('note', '')}")
-                    new_pw_for_req = st.text_input(f"New Password for {pr['username']}:", key=f"pw_req_{pr['username']}")
-                    rc1, rc2 = st.columns(2)
-                    if rc1.button("Set PW", key=f"btn_set_{pr['username']}", type="primary", use_container_width=True):
-                        if new_pw_for_req:
-                            am.update_password(pr['username'], new_pw_for_req)
-                            st.success(f"Password updated for {pr['username']}!")
-                            st.rerun()
-                        else:
-                            st.warning("Enter a new password.")
-                    if rc2.button("Dismiss", key=f"btn_dism_{pr['username']}", use_container_width=True):
-                        am.dismiss_reset_request(pr['username'])
-                        st.rerun()
-                    st.divider()
-
-        # 2. Latest Active Email OTP (for kaifofficial4@gmail.com)
-        active_otp_info = am.get_last_active_otp()
-        if active_otp_info:
-            with st.expander("📧 Latest Email OTP Sent", expanded=False):
-                st.info(f"**User:** `{active_otp_info['username']}`\n\n**OTP Code:** `{active_otp_info['otp']}`\n\nSent to: `{active_otp_info['target_email']}` (Time: {active_otp_info['created_at']})")
-
-        # 3. Master Users Table (ID & Password explicitly visible to Admin!)
-        with st.expander("👥 All Users List (IDs & Passwords)", expanded=False):
-            st.caption(f"🔑 Shared Master Authy Key: `{am.get_master_totp_secret()}`")
-            all_users = am.get_all_users()
-            user_table_data = []
-            for u_k, u_v in all_users.items():
-                user_table_data.append({
-                    "Username": u_k,
-                    "Name": u_v.get("name"),
-                    "Password": u_v.get("password"),
-                    "Role": u_v.get("role", "user").upper(),
-                    "Authy Key": u_v.get("totp_secret", am.get_master_totp_secret()),
-                    "Created At": u_v.get("created_at")
-                })
-            st.dataframe(pd.DataFrame(user_table_data), use_container_width=True, hide_index=True)
-
-        # 4. Create New User & Set Password Direct
-        with st.expander("➕ Create New User", expanded=False):
-            st.caption(f"ℹ️ New users will use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
-            new_u_username = st.text_input("Username", key="new_u_username", placeholder="e.g. rahul")
-            new_u_name = st.text_input("Full Name", key="new_u_name", placeholder="e.g. Rahul Sharma")
-            new_u_pw = st.text_input("Password (Set Directly)", key="new_u_pw", placeholder="e.g. rahul123")
-            new_u_role = st.selectbox("Role", ["user", "admin"], key="new_u_role")
-            new_u_email = st.text_input("Email (Optional)", key="new_u_email")
-            if st.button("Create User Account", use_container_width=True, type="primary"):
-                if new_u_username and new_u_pw:
-                    ok_c, msg_c = am.create_user(new_u_username, new_u_name, new_u_pw, new_u_role, new_u_email)
-                    if ok_c:
-                        st.success(msg_c)
-                        st.rerun()
-                    else:
-                        st.error(msg_c)
-                else:
-                    st.warning("Both Username and Password are required.")
-
-        # 5. Reset Any User Password
-        with st.expander("🔑 Reset Any User Password", expanded=False):
-            all_users = am.get_all_users()
-            target_user = st.selectbox("Select User", list(all_users.keys()), key="reset_target_u")
-            st.caption(f"Current Password: `{all_users[target_user].get('password', '')}`")
-            new_pw_admin = st.text_input("New Password to Set:", key=f"admin_new_pw_{target_user}")
-            if st.button("Update Password Now", key=f"admin_btn_save_pw_{target_user}", use_container_width=True, type="primary"):
-                if new_pw_admin:
-                    ok_u, msg_u = am.update_password(target_user, new_pw_admin)
-                    if ok_u:
-                        st.success(msg_u)
-                        st.rerun()
-                    else:
-                        st.error(msg_u)
-                else:
-                    st.warning("Password cannot be blank.")
-
-        # 6. Edit User Name
-        with st.expander("✏️ Edit User Display Name", expanded=False):
-            sb_users = am.get_all_users()
-            sb_u_sel = st.selectbox("Select User", list(sb_users.keys()), key="sidebar_edit_name_user")
-            sb_cur_name = sb_users[sb_u_sel].get("name", "")
-            sb_new_name = st.text_input(f"New Name for {sb_u_sel}:", value=sb_cur_name, key=f"sidebar_new_name_input_{sb_u_sel}")
-            if st.button("Save Name", key=f"sidebar_btn_save_name_{sb_u_sel}", use_container_width=True, type="primary"):
-                if sb_new_name and sb_new_name.strip():
-                    ok_sn, msg_sn = am.update_user_name(sb_u_sel, sb_new_name.strip())
-                    if ok_sn:
-                        if sb_u_sel == current_user.get("username"):
-                            current_user["name"] = sb_new_name.strip()
-                            st.session_state.user["name"] = sb_new_name.strip()
-                        st.success(msg_sn)
-                        st.rerun()
-                    else:
-                        st.error(msg_sn)
-                else:
-                    st.warning("Name cannot be empty.")
-
-        # 7. Delete User Account
-        with st.expander("🗑️ Delete User Account", expanded=False):
-            deletable_users = [u for u in am.get_all_users().keys() if u != "kaif"]
-            if deletable_users:
-                u_to_delete = st.selectbox("Select User to Remove", deletable_users, key="del_u_select")
-                if st.button("Delete Account", use_container_width=True, type="primary"):
-                    ok_d, msg_d = am.delete_user(u_to_delete)
-                    if ok_d:
-                        st.success(msg_d)
-                        st.rerun()
-                    else:
-                        st.error(msg_d)
-            else:
-                st.caption("No non-admin users to delete.")
-
-        # 7. Recent Processing Activity
-        with st.expander("📜 Recent User Processing Log", expanded=False):
-            sb_hist = am.get_processing_history()[:8]
-            if sb_hist:
-                for sh in sb_hist:
-                    st.markdown(f"""
-                    <div style="font-size: 0.85rem; padding: 6px 0;">
-                        👤 <b>{sh.get('user_name')}</b> (<code>{sh.get('username')}</code>)<br>
-                        🏷️ <code>{sh.get('vendor_name')}</code><br>
-                        📊 {sh.get('clean_rows', 0):,} rows &nbsp;|&nbsp; ⏱️ {sh.get('elapsed_sec', 0)}s<br>
-                        <small style="color: #64748B;">{sh.get('timestamp')}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.divider()
-            else:
-                st.caption("No processing activity recorded yet.")
-
-        st.divider()
+    # Reference Templates Quick Downloads in Sidebar
+    st.markdown("### 📥 Reference Sheets")
+    sample_file_p = os.path.join(TEMPLATE_DIR, "Vendor Sample sheet.xlsx")
+    qc_file_p = os.path.join(TEMPLATE_DIR, "QC exception Vlookup.xlsx")
+    if os.path.exists(sample_file_p):
+        with open(sample_file_p, "rb") as fs:
+            st.download_button(
+                label="📄 Sample Format Sheet",
+                data=fs.read(),
+                file_name="Vendor Sample sheet.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="sb_dl_sample",
+                use_container_width=True
+            )
+    if os.path.exists(qc_file_p):
+        with open(qc_file_p, "rb") as fq:
+            st.download_button(
+                label="📋 QC Exception Codes",
+                data=fq.read(),
+                file_name="QC exception Vlookup.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="sb_dl_qc",
+                use_container_width=True
+            )
 
 # ----------------- MAIN PORTAL -----------------
 top_head_col1, top_head_col2 = st.columns([3, 1.2])
@@ -457,16 +360,8 @@ with top_head_col2:
 t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
 
 if is_admin:
-    st.markdown("---")
-    admin_nav_mode = st.radio(
-        "Navigation Mode:",
-        ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
-        horizontal=True,
-        key="main_admin_nav_toggle"
-    )
-    st.markdown("---")
-    
     if admin_nav_mode == "👑 Admin Management Panel":
+        st.markdown("---")
         st.markdown("## 👑 Admin Control Panel")
         st.caption("Master controls: Manage all users, view IDs & passwords, reset credentials, review requests.")
         
