@@ -27,27 +27,52 @@ from core_engine import (
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Isolated In-Memory Session Handlers (Strictly per-tab, zero URL leaks)
+# Persistent Secure Session Handlers (Local Browser Storage + Zero URL Leak)
 def authenticate_current_session():
-    # Never read from query params or shared disk - strictly tab session state
-    try:
-        st.query_params.clear()
-    except Exception:
-        pass
-    return st.session_state.get("user")
+    # 1. Check in-memory session first
+    if st.session_state.get("user"):
+        return st.session_state.get("user")
+    
+    # 2. Check query params for restore token
+    token = st.query_params.get("auth_token")
+    if token:
+        user_info = am.get_session_user(token)
+        if user_info:
+            st.session_state.user = user_info
+            st.session_state.active_token = token
+            try:
+                st.query_params.clear()
+            except Exception:
+                pass
+            return user_info
+        else:
+            try:
+                st.query_params.clear()
+            except Exception:
+                pass
+    return None
 
 def set_login_session(session_data):
+    token = secrets.token_hex(24)
+    am.register_session(token, session_data)
     st.session_state.user = session_data
+    st.session_state.active_token = token
+    st.session_state.token_to_save = token
     try:
         st.query_params.clear()
     except Exception:
         pass
 
 def clear_current_session():
+    tok = st.session_state.get("active_token")
+    if tok:
+        am.destroy_session(tok)
     st.session_state.user = None
+    st.session_state.active_token = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
+    st.session_state.clear_storage_flag = True
     try:
         st.query_params.clear()
     except Exception:
@@ -115,6 +140,63 @@ st.markdown("""
 
 # ----------------- AUTHENTICATION CHECK -----------------
 st.session_state.user = authenticate_current_session()
+
+# Browser LocalStorage Session Handlers (Safe F5 Refresh & Zero URL Leaks)
+if st.session_state.get("token_to_save"):
+    save_tok = st.session_state.pop("token_to_save")
+    components.html(f"""
+    <script>
+        try {{
+            localStorage.setItem("kaif_rate_token", "{save_tok}");
+            const p = window.parent ? window.parent : window;
+            if (p.localStorage) p.localStorage.setItem("kaif_rate_token", "{save_tok}");
+            if (p.history) p.history.replaceState({{}}, '', p.location.pathname);
+        }} catch(e) {{}}
+    </script>
+    """, height=0, width=0)
+
+if st.session_state.get("clear_storage_flag"):
+    st.session_state.pop("clear_storage_flag", None)
+    components.html("""
+    <script>
+        try {
+            localStorage.removeItem("kaif_rate_token");
+            const p = window.parent ? window.parent : window;
+            if (p.localStorage) p.localStorage.removeItem("kaif_rate_token");
+            if (p.history) p.history.replaceState({}, '', p.location.pathname);
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
+
+if st.session_state.user is not None:
+    # Ensure URL is always 100% clean so copying link never leaks session
+    components.html("""
+    <script>
+        try {
+            const p = window.parent ? window.parent : window;
+            if (p.history && p.location.search.includes("auth_token")) {
+                p.history.replaceState({}, '', p.location.pathname);
+            }
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
+elif not st.query_params.get("auth_token"):
+    # If not logged in and not restoring, check browser storage
+    components.html("""
+    <script>
+        try {
+            const p = window.parent ? window.parent : window;
+            const tok = localStorage.getItem("kaif_rate_token") || (p.localStorage && p.localStorage.getItem("kaif_rate_token"));
+            if (tok && tok.length > 10) {
+                const u = new URL(p.location.href);
+                if (!u.searchParams.get("auth_token")) {
+                    u.searchParams.set("auth_token", tok);
+                    p.location.replace(u.toString());
+                }
+            }
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
 
 if "pending_totp_user" not in st.session_state:
     st.session_state.pending_totp_user = None
