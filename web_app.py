@@ -27,65 +27,31 @@ from core_engine import (
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Isolated Per-Browser Session Handlers (Prevents Chrome vs Incognito session collision)
-def get_current_browser_token():
-    try:
-        tok = st.query_params.get("session_token")
-        if isinstance(tok, list):
-            tok = tok[0] if tok else None
-        if tok:
-            tok = str(tok).strip()
-        return tok if tok else None
-    except Exception:
-        return None
-
+# Isolated In-Memory Session Handlers (Strictly per-tab, zero URL leaks)
 def authenticate_current_session():
-    # If already set in this browser's session state
-    if st.session_state.get("user") is not None:
-        return st.session_state.user
-    
-    # Check URL query param session token
-    token = get_current_browser_token()
-    if token:
-        user_info = am.get_session_user(token)
-        if user_info:
-            st.session_state.user = user_info
-            st.session_state.session_token = token
-            return user_info
-        else:
-            try:
-                st.query_params.clear()
-            except Exception:
-                pass
-    return None
+    # Never read from query params or shared disk - strictly tab session state
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
+    return st.session_state.get("user")
 
 def set_login_session(session_data):
-    token = secrets.token_hex(16)
-    am.register_session(token, session_data)
     st.session_state.user = session_data
-    st.session_state.session_token = token
     try:
-        st.query_params["session_token"] = token
+        st.query_params.clear()
     except Exception:
         pass
 
 def clear_current_session():
-    token = st.session_state.get("session_token") or get_current_browser_token()
-    if token:
-        am.destroy_session(token)
-    try:
-        st.query_params.clear()
-    except Exception:
-        try:
-            if "session_token" in st.query_params:
-                del st.query_params["session_token"]
-        except Exception:
-            pass
     st.session_state.user = None
-    st.session_state.session_token = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
 
 st.set_page_config(
     page_title="Vendor Rate Sheet Standardizer",
@@ -94,7 +60,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar)
+# Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
 st.markdown("""
 <style>
     .main-title {
@@ -128,13 +94,16 @@ st.markdown("""
         margin: 12px 0;
         font-size: 1rem;
     }
-    /* Hide Streamlit default Deploy button, 3-dots menu & footer while keeping sidebar toggle visible */
+    /* Hide Streamlit default Deploy button, 3-dots menu, footer, and Manage App button */
     #MainMenu {visibility: hidden !important; display: none !important;}
     footer {visibility: hidden !important; display: none !important;}
     .stDeployButton {display: none !important;}
     [data-testid="stToolbar"] {visibility: hidden !important; display: none !important;}
     [data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
+    [data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
+    .viewerBadge_container__1QSob {display: none !important; visibility: hidden !important;}
+    div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
     [data-testid="stSidebarCollapsedControl"] {
         display: block !important;
@@ -280,61 +249,17 @@ active_member = current_user.get("name", "Kaif")
 # ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
 with st.sidebar:
     st.markdown(f"""
-    <div style="padding: 12px 14px; background: #EEF2FF; border-left: 4px solid #4F46E5; border-radius: 8px; margin-bottom: 12px;">
+    <div style="padding: 10px 14px; background: #EEF2FF; border-left: 4px solid #4F46E5; border-radius: 6px; margin-bottom: 12px;">
         <div style="font-size: 0.72rem; color: #6B7280; text-transform: uppercase; font-weight: 600;">Logged In User</div>
-        <div style="font-size: 1.18rem; color: #1E1B4B; font-weight: 700; margin-top: 2px;">{current_user.get('name')}</div>
+        <div style="font-size: 1.15rem; color: #1E1B4B; font-weight: 700;">{current_user.get('name')}</div>
         <div style="font-size: 0.8rem; color: #4F46E5; font-weight: 600;">Role: {current_user.get('role', 'user').upper()}</div>
         <div style="font-size: 0.72rem; color: #9CA3AF; margin-top: 4px;">📅 Session active till Monday 00:00</div>
     </div>
     """, unsafe_allow_html=True)
 
-    if is_admin:
-        st.markdown("### 🧭 Navigation")
-        admin_nav_mode = st.radio(
-            "Select Portal View:",
-            ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
-            key="portal_nav_mode",
-            label_visibility="collapsed"
-        )
-        
-        pending_reqs_count = len(am.get_pending_reset_requests())
-        if pending_reqs_count > 0:
-            st.warning(f"🔔 **{pending_reqs_count} Reset Request(s) Pending!** Check Admin Panel.")
-            
-        st.divider()
-    else:
-        admin_nav_mode = "⚡ Rate Deck Standardizer"
-
     if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
         clear_current_session()
         st.rerun()
-
-    st.divider()
-
-    # Reference Templates Quick Downloads in Sidebar
-    st.markdown("### 📥 Reference Sheets")
-    sample_file_p = os.path.join(TEMPLATE_DIR, "Vendor Sample sheet.xlsx")
-    qc_file_p = os.path.join(TEMPLATE_DIR, "QC exception Vlookup.xlsx")
-    if os.path.exists(sample_file_p):
-        with open(sample_file_p, "rb") as fs:
-            st.download_button(
-                label="📄 Sample Format Sheet",
-                data=fs.read(),
-                file_name="Vendor Sample sheet.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="sb_dl_sample",
-                use_container_width=True
-            )
-    if os.path.exists(qc_file_p):
-        with open(qc_file_p, "rb") as fq:
-            st.download_button(
-                label="📋 QC Exception Codes",
-                data=fq.read(),
-                file_name="QC exception Vlookup.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="sb_dl_qc",
-                use_container_width=True
-            )
 
 # ----------------- MAIN PORTAL -----------------
 top_head_col1, top_head_col2 = st.columns([3, 1.2])
@@ -360,8 +285,16 @@ with top_head_col2:
 t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
 
 if is_admin:
+    st.markdown("---")
+    admin_nav_mode = st.radio(
+        "Navigation Mode:",
+        ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
+        horizontal=True,
+        key="main_admin_nav_toggle"
+    )
+    st.markdown("---")
+    
     if admin_nav_mode == "👑 Admin Management Panel":
-        st.markdown("---")
         st.markdown("## 👑 Admin Control Panel")
         st.caption("Master controls: Manage all users, view IDs & passwords, reset credentials, review requests.")
         
