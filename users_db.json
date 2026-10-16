@@ -1,0 +1,36 @@
+{
+  "users": {
+    "kaif": {
+      "username": "kaif",
+      "name": "Kaif",
+      "role": "admin",
+      "password_hash": "ed4065700662a6f22fdd4c31a440762e:150c6e513ae0b22bca397fc4d6865dd5e2bb024d00dd95066536838c719bda1e",
+      "email": "kaifofficial4@gmail.com",
+      "created_at": "2026-10-16 13:21:43",
+      "status": "active",
+      "totp_secret": "XCASLSAZCIRXLXFV",
+      "password": "ratesadmin@431"
+    },
+    "v_arhama": {
+      "username": "v_arhama",
+      "name": "Arhama",
+      "password": "Arhama_@431",
+      "role": "user",
+      "totp_secret": "XCASLSAZCIRXLXFV",
+      "email": "",
+      "created_at": "2026-10-16 15:00:19",
+      "status": "active"
+    },
+    "v_aliba": {
+      "username": "v_aliba",
+      "name": "Aliba",
+      "password": "aliba@006221",
+      "role": "user",
+      "totp_secret": "XCASLSAZCIRXLXFV",
+      "email": "",
+      "created_at": "2026-10-16 15:22:29",
+      "status": "active"
+    }
+  },
+  "reset_requests": []
+}
