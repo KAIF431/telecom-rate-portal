@@ -27,49 +27,52 @@ from core_engine import (
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Persistent Secure Session Handlers (Safe Browser Cookie + Zero URL Leak)
+# Persistent Secure Session Handlers (Safe Tab Storage + Clean URL)
 def authenticate_current_session():
     # 1. Check in-memory session first
     if st.session_state.get("user"):
         return st.session_state.get("user")
     
-    # 2. Check browser cookie for seamless F5 persistence
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies"):
-            token = st.context.cookies.get("kaif_rate_session")
-            if token:
-                user_info = am.get_session_user(token)
-                if user_info:
-                    st.session_state.user = user_info
-                    return user_info
-    except Exception:
-        pass
-        
+    # 2. Check query param for session token (sent during F5 auto-restore)
+    token = st.query_params.get("session_token")
+    if token:
+        user_info = am.get_session_user(token)
+        if user_info:
+            st.session_state.user = user_info
+            st.session_state.active_token = token
+            try:
+                st.query_params.clear()
+            except Exception:
+                pass
+            return user_info
+        else:
+            try:
+                st.query_params.clear()
+            except Exception:
+                pass
     return None
 
 def set_login_session(session_data):
     token = secrets.token_hex(24)
     am.register_session(token, session_data)
     st.session_state.user = session_data
-    st.session_state.cookie_token_to_set = token
+    st.session_state.active_token = token
+    st.session_state.token_to_save = token
     try:
         st.query_params.clear()
     except Exception:
         pass
 
 def clear_current_session():
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies"):
-            token = st.context.cookies.get("kaif_rate_session")
-            if token:
-                am.destroy_session(token)
-    except Exception:
-        pass
+    tok = st.session_state.get("active_token")
+    if tok:
+        am.destroy_session(tok)
     st.session_state.user = None
+    st.session_state.active_token = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
-    st.session_state.cookie_token_to_clear = True
+    st.session_state.clear_session_storage = True
     try:
         st.query_params.clear()
     except Exception:
@@ -138,14 +141,45 @@ st.markdown("""
 # ----------------- AUTHENTICATION CHECK -----------------
 st.session_state.user = authenticate_current_session()
 
-# Browser Cookie Handlers (Safe F5 Refresh & Zero URL Leaks)
-if st.session_state.get("cookie_token_to_set"):
-    tok = st.session_state.pop("cookie_token_to_set")
-    st.markdown(f'<img src="x" style="display:none;" onerror="document.cookie=\'kaif_rate_session={tok}; path=/; max-age=604800; SameSite=Lax\';">', unsafe_allow_html=True)
+# Browser Tab Storage Handlers (Safe F5 Refresh & Zero URL Leaks)
+if st.session_state.get("token_to_save"):
+    t_save = st.session_state.pop("token_to_save")
+    components.html(f"""
+    <script>
+        try {{
+            window.top.sessionStorage.setItem("kaif_auth_token", "{t_save}");
+            window.top.history.replaceState({{}}, '', window.top.location.pathname);
+        }} catch(e) {{}}
+    </script>
+    """, height=0, width=0)
 
-if st.session_state.get("cookie_token_to_clear"):
-    st.session_state.pop("cookie_token_to_clear", None)
-    st.markdown('<img src="x" style="display:none;" onerror="document.cookie=\'kaif_rate_session=; path=/; max-age=0;\';">', unsafe_allow_html=True)
+if st.session_state.get("clear_session_storage"):
+    st.session_state.pop("clear_session_storage", None)
+    components.html("""
+    <script>
+        try {
+            window.top.sessionStorage.removeItem("kaif_auth_token");
+            window.top.history.replaceState({}, '', window.top.location.pathname);
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
+
+# If not authenticated, check if this browser tab has an active session token to restore
+if st.session_state.user is None and not st.query_params.get("session_token"):
+    components.html("""
+    <script>
+        try {
+            const tok = window.top.sessionStorage.getItem("kaif_auth_token");
+            if (tok && tok.length > 10) {
+                const u = new URL(window.top.location.href);
+                if (!u.searchParams.get("session_token")) {
+                    u.searchParams.set("session_token", tok);
+                    window.top.location.replace(u.toString());
+                }
+            }
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
 
 if "pending_totp_user" not in st.session_state:
     st.session_state.pending_totp_user = None
