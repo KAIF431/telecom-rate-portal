@@ -30,13 +30,28 @@ from core_engine import (
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Persistent Secure Session Handlers (Safe Refresh Persistence)
+def load_excel_safely(f_content, fname):
+    """Safely loads Excel files (.xlsx, .xls, .xlsm, .xlsb) using calamine with xlrd/openpyxl fallback."""
+    f_content.seek(0)
+    try:
+        return pd.ExcelFile(f_content, engine='calamine')
+    except Exception:
+        pass
+    f_content.seek(0)
+    try:
+        engine = 'xlrd' if fname.lower().endswith('.xls') else None
+        return pd.ExcelFile(f_content, engine=engine)
+    except Exception:
+        f_content.seek(0)
+        return pd.ExcelFile(f_content)
+
+# Persistent Secure Session Handlers (Safe Refresh Persistence across Cloud Iframes)
 def authenticate_current_session():
     # 1. Check in-memory session first
     if st.session_state.get("user"):
         return st.session_state.get("user")
     
-    # 2. Check query param for session token (persists across F5 refresh)
+    # 2. Check query param for session token (persists across direct F5 refresh)
     token = st.query_params.get("session_token")
     if token:
         user_info = am.get_session_user(token)
@@ -49,6 +64,20 @@ def authenticate_current_session():
                 st.query_params.clear()
             except Exception:
                 pass
+
+    # 3. Check Streamlit Cloud persistent browser cookie (ajs_anonymous_id)
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "cookies"):
+            cookie_id = st.context.cookies.get("ajs_anonymous_id")
+            if cookie_id:
+                user_info = am.get_session_user(cookie_id)
+                if user_info:
+                    st.session_state.user = user_info
+                    st.session_state.active_token = cookie_id
+                    return user_info
+    except Exception:
+        pass
+
     return None
 
 def set_login_session(session_data):
@@ -61,12 +90,30 @@ def set_login_session(session_data):
     except Exception:
         pass
 
+    # Bind session to browser cookie so F5 refresh preserves login in iframe
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "cookies"):
+            cookie_id = st.context.cookies.get("ajs_anonymous_id")
+            if cookie_id:
+                am.register_session(cookie_id, session_data)
+                st.session_state.cookie_id = cookie_id
+    except Exception:
+        pass
+
 def clear_current_session():
     tok = st.session_state.get("active_token") or st.query_params.get("session_token")
     if tok:
         am.destroy_session(tok)
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "cookies"):
+            cookie_id = st.context.cookies.get("ajs_anonymous_id")
+            if cookie_id:
+                am.destroy_session(cookie_id)
+    except Exception:
+        pass
     st.session_state.user = None
     st.session_state.active_token = None
+    st.session_state.cookie_id = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
@@ -781,9 +828,8 @@ if uploaded_files:
         preview_tag = ""
         try:
             f_content.seek(0)
-            if fname.lower().endswith(('.xlsx', '.xlsm', '.xls')):
-                eng = 'xlrd' if fname.lower().endswith('.xls') else None
-                xl_sample = pd.ExcelFile(f_content, engine=eng)
+            if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
+                xl_sample = load_excel_safely(f_content, fname)
                 df_sample = xl_sample.parse(0, header=None, nrows=150)
                 h_idx, c_map = detect_header_row_and_columns(df_sample)
                 _, p_tag = analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
@@ -832,9 +878,8 @@ if uploaded_files:
             f_content.seek(0)
             df_raw = None
             try:
-                if fname.lower().endswith(('.xlsx', '.xlsm', '.xls')):
-                    engine = 'xlrd' if fname.lower().endswith('.xls') else None
-                    xl = pd.ExcelFile(f_content, engine=engine)
+                if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
+                    xl = load_excel_safely(f_content, fname)
                     best_df = None
                     best_score = -1
                     for s_name in xl.sheet_names:

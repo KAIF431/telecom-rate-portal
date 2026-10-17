@@ -126,7 +126,7 @@ def detect_header_row_and_columns(df_raw):
                     mapping['effective_date'] = col_idx
                     score += 5
             # 6. Pulse / Billing keywords
-            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit']):
+            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution']):
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     score += 4
@@ -205,9 +205,9 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     inc_col_idx = None
     for idx, col_name in enumerate(header_names):
         c_name = str(col_name).lower().strip()
-        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse']) and not any(k in c_name for k in ['increment', 'incremental', 'incre']):
+        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time']) and not any(k in c_name for k in ['increment', 'incremental', 'incre', 'resolution']):
             min_col_idx = idx
-        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse']) and not any(k in c_name for k in ['minimum', 'initial']):
+        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'res']) and not any(k in c_name for k in ['minimum', 'initial', 'minimal']):
             inc_col_idx = idx
 
     # If only one increment or minimum column exists without separate pair, treat as combined pulse column
