@@ -98,7 +98,7 @@ def detect_header_row_and_columns(df_raw):
                     mapping['status'] = col_idx
                     score += 4
             # 2. Dial code keywords
-            elif any(k in v for k in ['dial code', 'dial codes', 'dialcode', 'dialcodes', 'prefix', 'prefixes', 'dest code', 'dest codes', 'destination code']) or v in ['code', 'codes']:
+            elif any(k in v for k in ['dial code', 'dial codes', 'dialcode', 'dialcodes', 'prefix', 'prefixes', 'dest code', 'dest codes', 'destination code', 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'full prefix', 'complete prefix', 'dialed digit', 'dialed digits', 'dialed number', 'dialed numbers']) or v in ['code', 'codes']:
                 if 'dial_code' not in mapping:
                     mapping['dial_code'] = col_idx
                     score += 6
@@ -225,12 +225,14 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         a_col = col_map['area_code']
         raw_c = df_data.iloc[:, c_col].fillna('').astype(str).str.split('.').str[0].str.strip()
         raw_a = df_data.iloc[:, a_col].fillna('').astype(str).str.split('.').str[0].str.strip()
-        if raw_a.str.contains(r'[,;]', regex=True, na=False).any():
-            df_data['_split_a'] = raw_a.str.split(r'[,;]+')
+        # Clean area code from any placeholder template strings like %%=...
+        raw_a_clean = raw_a.str.replace(r'[^\d,;]', '', regex=True)
+        if raw_a_clean.str.contains(r'[,;]', regex=True, na=False).any():
+            df_data['_split_a'] = raw_a_clean.str.split(r'[,;]+')
             df_data = df_data.explode('_split_a').reset_index(drop=True)
             raw_c = df_data.iloc[:, c_col].fillna('').astype(str).str.split('.').str[0].str.strip()
-            raw_a = df_data['_split_a'].fillna('').astype(str).str.split('.').str[0].str.strip()
-        raw_code_series = (raw_c + raw_a).str.split('.').str[0].str.strip()
+            raw_a_clean = df_data['_split_a'].fillna('').astype(str).str.split('.').str[0].str.strip()
+        raw_code_series = (raw_c + raw_a_clean).str.split('.').str[0].str.strip()
     else:
         code_raw_series = df_data.iloc[:, code_idx].fillna('').astype(str).str.strip()
         if code_raw_series.str.contains(r'[,;]', regex=True, na=False).any():
