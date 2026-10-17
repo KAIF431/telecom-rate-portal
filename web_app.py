@@ -692,6 +692,7 @@ if st.session_state.processed_results:
         clear_user_processed_cache(u_name)
         st.session_state.processed_results = None
         st.session_state.elapsed_time = None
+        st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
         st.rerun()
 
     if elapsed_sec is not None:
@@ -777,11 +778,15 @@ if st.session_state.processed_results:
         )
     st.markdown("---")
 
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
 # File Uploader
 uploaded_files = st.file_uploader(
-    "Upload Vendor Rate Sheet(s) (Max 5 files or ZIP Archive)",
+    "Upload Vendor Rate Sheet(s) (Max 10 files or ZIP Archive)",
     type=["xlsx", "xls", "csv", "zip"],
     accept_multiple_files=True,
+    key=f"vendor_file_uploader_{st.session_state.uploader_key}",
     help="Supports .xlsx, .xls, .csv, or .zip archives with multiple sheets."
 )
 
@@ -800,9 +805,9 @@ if uploaded_files:
         else:
             raw_files.append((uploaded.name, uploaded))
 
-    if len(raw_files) > 5:
-        st.warning(f"⚠️ Maximum 5 sheets allowed per batch. Processing first 5 files out of {len(raw_files)}.")
-        raw_files = raw_files[:5]
+    if len(raw_files) > 10:
+        st.warning(f"⚠️ Maximum 10 sheets allowed per batch. Processing first 10 files out of {len(raw_files)}.")
+        raw_files = raw_files[:10]
 
     st.markdown("### 📝 Enter Vendor / Trunk Names")
     st.caption("Customize Vendor / Trunk name for each file. Live final filename preview is shown below:")
@@ -817,7 +822,7 @@ if uploaded_files:
         v_name = c1.text_input(
             f"Vendor Name for File {idx+1} ({fname}):",
             value=default_vendor_name,
-            key=f"v_name_input_{idx}"
+            key=f"v_name_input_{st.session_state.uploader_key}_{idx}"
         )
         vendor_names[idx] = v_name
         
@@ -865,7 +870,7 @@ if uploaded_files:
     
     # User's explicit requested button name: Proceed for Download
     btn_label = f"⚡ Proceed for Download ({len(raw_files)} Sheets)" if len(raw_files) > 1 else "⚡ Proceed for Download"
-    if st.button(btn_label, type="primary", use_container_width=True):
+    if st.button(btn_label, type="primary", use_container_width=True, key=f"proceed_btn_{st.session_state.uploader_key}"):
         t_start = time.time()
         processed_list = []
         progress_bar = st.progress(0)
@@ -977,4 +982,7 @@ if uploaded_files:
         st.session_state.elapsed_time = elapsed_sec
         st.session_state.just_processed = True
         save_user_processed_cache(current_user.get("username", "kaif"), processed_list, elapsed_sec)
+        
+        # Reset file uploader so next batch starts with a fresh, clean uploader!
+        st.session_state.uploader_key += 1
         st.rerun()
