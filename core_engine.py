@@ -126,13 +126,16 @@ def detect_header_row_and_columns(df_raw):
                     mapping['effective_date'] = col_idx
                     score += 5
             # 6. Pulse / Billing keywords
-            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution']):
+            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution', 'interval', 'intervals', 'billing interval']):
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     score += 4
 
         if ('country_code' in mapping and 'area_code' in mapping) and 'dial_code' not in mapping:
             mapping['dial_code_split'] = True
+        elif 'country_code' in mapping and 'dial_code' not in mapping and 'area_code' not in mapping:
+            mapping['dial_code'] = mapping['country_code']
+            score += 6
 
         if score > best_score and ('dial_code' in mapping or ('country_code' in mapping and 'area_code' in mapping)) and ('rate' in mapping or 'destination' in mapping):
             best_score = score
@@ -205,9 +208,9 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     inc_col_idx = None
     for idx, col_name in enumerate(header_names):
         c_name = str(col_name).lower().strip()
-        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time']) and not any(k in c_name for k in ['increment', 'incremental', 'incre', 'resolution']):
+        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period']) and not any(k in c_name for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur']):
             min_col_idx = idx
-        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'res']) and not any(k in c_name for k in ['minimum', 'initial', 'minimal']):
+        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period']) and not any(k in c_name for k in ['minimum', 'initial', 'minimal']):
             inc_col_idx = idx
 
     # If only one increment or minimum column exists without separate pair, treat as combined pulse column
@@ -320,11 +323,27 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     mins = []
     incs = []
     if min_col_idx is not None and inc_col_idx is not None:
-        raw_mins = pd.to_numeric(df_valid.iloc[:, min_col_idx], errors='coerce').tolist()
-        raw_incs = pd.to_numeric(df_valid.iloc[:, inc_col_idx], errors='coerce').tolist()
-        for m, i in zip(raw_mins, raw_incs):
-            mins.append(int(m) if pd.notna(m) else None)
-            incs.append(int(i) if pd.notna(i) else None)
+        raw_mins = df_valid.iloc[:, min_col_idx].tolist()
+        raw_incs = df_valid.iloc[:, inc_col_idx].tolist()
+        for m_val, i_val in zip(raw_mins, raw_incs):
+            m_res = None
+            i_res = None
+            if pd.notna(m_val):
+                try:
+                    m_res = int(float(m_val))
+                except Exception:
+                    nums_m = re.findall(r'\d+(?:\.\d+)?', str(m_val).strip())
+                    if nums_m:
+                        m_res = int(float(nums_m[0]))
+            if pd.notna(i_val):
+                try:
+                    i_res = int(float(i_val))
+                except Exception:
+                    nums_i = re.findall(r'\d+(?:\.\d+)?', str(i_val).strip())
+                    if nums_i:
+                        i_res = int(float(nums_i[0]))
+            mins.append(m_res)
+            incs.append(i_res)
     elif pulse_idx is not None:
         pulse_list = df_valid.iloc[:, pulse_idx].fillna('').astype(str).tolist()
         for p_val in pulse_list:
