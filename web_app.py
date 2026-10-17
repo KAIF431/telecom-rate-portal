@@ -22,6 +22,7 @@ from core_engine import (
     fast_process_dataframe,
     generate_target_excel_bytes,
     build_output_filename,
+    analyze_vendor_comments,
     TEMPLATE_DIR
 )
 
@@ -775,10 +776,38 @@ if uploaded_files:
         
         # Real-time live preview that updates instantly without session-state caching bugs
         clean_v_name = v_name.strip() if v_name else f"File {idx+1}"
+        
+        # Fast-detect real comments tag from uploaded sheet sample (< 0.1s)
+        preview_tag = ""
+        try:
+            f_content.seek(0)
+            if fname.lower().endswith(('.xlsx', '.xlsm', '.xls')):
+                eng = 'xlrd' if fname.lower().endswith('.xls') else None
+                xl_sample = pd.ExcelFile(f_content, engine=eng)
+                df_sample = xl_sample.parse(0, header=None, nrows=150)
+                h_idx, c_map = detect_header_row_and_columns(df_sample)
+                _, p_tag = analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                preview_tag = p_tag
+            elif fname.lower().endswith('.csv'):
+                try:
+                    df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=150)
+                except Exception:
+                    f_content.seek(0)
+                    df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=150, encoding='latin-1')
+                h_idx, c_map = detect_header_row_and_columns(df_sample)
+                _, p_tag = analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                preview_tag = p_tag
+            f_content.seek(0)
+        except Exception:
+            preview_tag = "UPdated"
+
+        if not preview_tag:
+            preview_tag = "UPdated"
+
         if 'a to z' in clean_v_name.lower():
-            preview_filename = f"{clean_v_name} [Comments] {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} {preview_tag} {active_member}.xlsx"
         else:
-            preview_filename = f"{clean_v_name} A to Z [Comments] {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} A to Z {preview_tag} {active_member}.xlsx"
             
         c2.markdown(f"""
         <div style="margin-top: 26px; padding: 8px 12px; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-family: monospace; font-size: 0.88rem; color: #1E293B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
