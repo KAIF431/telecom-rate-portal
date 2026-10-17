@@ -344,8 +344,14 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                     nums_i = re.findall(r'\d+(?:\.\d+)?', str(i_val).strip())
                     if nums_i:
                         i_res = int(float(nums_i[0]))
-            mins.append(m_res)
-            incs.append(i_res)
+            if m_res is not None and i_res is not None:
+                m_final = max(m_res, i_res)
+                i_final = min(m_res, i_res)
+            else:
+                m_final = m_res
+                i_final = i_res
+            mins.append(m_final)
+            incs.append(i_final)
     elif pulse_idx is not None:
         pulse_list = df_valid.iloc[:, pulse_idx].fillna('').astype(str).tolist()
         for p_val in pulse_list:
@@ -361,13 +367,17 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                 continue
             try:
                 if len(nums) >= 3:
-                    # e.g. 0/60/1, 0-60-1, 0+60+1 -> min=60, inc=1
-                    m = int(float(nums[1]))
-                    i = int(float(nums[2]))
+                    # e.g. 0/60/1, 0/1/60, 0-60-1 -> min=60, inc=1
+                    n1 = int(float(nums[1]))
+                    n2 = int(float(nums[2]))
+                    m = max(n1, n2)
+                    i = min(n1, n2)
                 elif len(nums) == 2:
-                    # e.g. 1/1, 1-1, 1+1, 60/1, 60-1, 60+1, 60:1
-                    m = int(float(nums[0]))
-                    i = int(float(nums[1]))
+                    # e.g. 60/1, 1/60, 30/6, 6/30 -> Telecom Minimum is always >= Increment
+                    n1 = int(float(nums[0]))
+                    n2 = int(float(nums[1]))
+                    m = max(n1, n2)
+                    i = min(n1, n2)
                 elif len(nums) == 1:
                     # e.g. 1 or 60
                     v = int(float(nums[0]))
