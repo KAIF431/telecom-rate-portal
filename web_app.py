@@ -72,6 +72,68 @@ def clear_current_session():
     except Exception:
         pass
 
+def save_user_processed_cache(username, results, elapsed_time):
+    try:
+        cache_file = os.path.join(OUTPUT_DIR, f"last_results_{username}.json")
+        data = {
+            "elapsed_time": elapsed_time,
+            "items": []
+        }
+        for r in results:
+            data["items"].append({
+                "filename": r["filename"],
+                "vendor_name": r.get("vendor_name", ""),
+                "cached_path": r.get("cached_path", ""),
+                "stats": r.get("stats", {}),
+                "rows_count": r.get("rows_count", 0),
+                "saved_paths": r.get("saved_paths", [])
+            })
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+def load_user_processed_cache(username):
+    try:
+        cache_file = os.path.join(OUTPUT_DIR, f"last_results_{username}.json")
+        if os.path.exists(cache_file):
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            items = []
+            for item in data.get("items", []):
+                p = item.get("cached_path")
+                out_bytes = b""
+                if p and os.path.exists(p):
+                    try:
+                        with open(p, "rb") as f_b:
+                            out_bytes = f_b.read()
+                    except Exception:
+                        pass
+                if not out_bytes:
+                    alt_p = os.path.join(OUTPUT_DIR, item.get("filename", ""))
+                    if os.path.exists(alt_p):
+                        try:
+                            with open(alt_p, "rb") as f_b:
+                                out_bytes = f_b.read()
+                        except Exception:
+                            pass
+                item["bytes"] = out_bytes
+                if out_bytes:
+                    items.append(item)
+            if items:
+                return items, data.get("elapsed_time", 0.0)
+    except Exception:
+        pass
+    return None, None
+
+def clear_user_processed_cache(username):
+    try:
+        cache_file = os.path.join(OUTPUT_DIR, f"last_results_{username}.json")
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+    except Exception:
+        pass
+
 st.set_page_config(
     page_title="Vendor Rate Sheet Standardizer",
     page_icon="⚡",
@@ -528,13 +590,142 @@ st.write("")
 
 qc_codes = load_qc_exception_codes()
 
-# Initialize session state for persistent results (strictly per-browser session state)
-if "processed_results" not in st.session_state:
-    st.session_state.processed_results = None
-    st.session_state.elapsed_time = None
+# Auto-restore persistent processed results across F5 refresh
+u_name = current_user.get("username", "kaif")
+if "processed_results" not in st.session_state or st.session_state.processed_results is None:
+    cached_res, cached_time = load_user_processed_cache(u_name)
+    if cached_res:
+        st.session_state.processed_results = cached_res
+        st.session_state.elapsed_time = cached_time
+    else:
+        st.session_state.processed_results = None
+        st.session_state.elapsed_time = None
 
-if "auto_download_triggered" not in st.session_state:
-    st.session_state.auto_download_triggered = False
+# If sheets were just processed, trigger automatic browser download via JS
+if st.session_state.get("just_processed") and st.session_state.processed_results:
+    st.session_state.pop("just_processed", None)
+    first_item = st.session_state.processed_results[0]
+    f_b = first_item.get("bytes")
+    if f_b:
+        b64_str = base64.b64encode(f_b).decode('utf-8')
+        fname_dl = first_item["filename"]
+        components.html(f"""
+        <script>
+            try {{
+                var a = document.createElement('a');
+                a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
+                a.download = '{fname_dl}';
+                document.body.appendChild(a);
+                a.click();
+            }} catch(e) {{}}
+            try {{
+                var a2 = window.parent.document.createElement('a');
+                a2.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
+                a2.download = '{fname_dl}';
+                window.parent.document.body.appendChild(a2);
+                a2.click();
+                window.parent.document.body.removeChild(a2);
+            }} catch(err) {{}}
+        </script>
+        """, height=0, width=0)
+
+# Display persistent results AT THE TOP (Never hidden below the fold!)
+if st.session_state.processed_results:
+    results = st.session_state.processed_results
+    elapsed_sec = st.session_state.get("elapsed_time")
+    
+    st.markdown("---")
+    col_hdr, col_clr = st.columns([3, 1])
+    col_hdr.markdown(f'<div class="badge-success">🎉 {len(results)} Sheet(s) Standardized Successfully! Download below:</div>', unsafe_allow_html=True)
+    
+    if col_clr.button("🗑️ Clear All / Reset", type="secondary", use_container_width=True, key="top_clear_results_btn"):
+        clear_user_processed_cache(u_name)
+        st.session_state.processed_results = None
+        st.session_state.elapsed_time = None
+        st.rerun()
+
+    if elapsed_sec is not None:
+        st.markdown(f"""
+        <div style="background: #F0FDF4; border: 1.5px solid #22C55E; border-radius: 8px; padding: 12px 18px; margin: 8px 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 1.05rem; color: #15803D; font-weight: 600;">
+                ⏱️ <b>Processed in:</b> <span style="font-size: 1.35rem; color: #166534; font-weight: 800;">{elapsed_sec:.2f} seconds</span>
+            </span>
+            <span style="font-size: 0.85rem; color: #16A34A; background: #DCFCE7; padding: 5px 14px; border-radius: 20px; font-weight: 700;">
+                ⚡ Ultra-Fast Execution
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    for idx, item in enumerate(results):
+        out_name = item["filename"]
+        out_bytes = item.get("bytes")
+        stats = item.get("stats", {})
+        
+        if not out_bytes:
+            for possible_p in [
+                item.get("cached_path"),
+                os.path.join(OUTPUT_DIR, out_name),
+                os.path.join(os.path.expanduser('~'), 'Downloads', out_name)
+            ]:
+                if possible_p and os.path.exists(possible_p):
+                    try:
+                        with open(possible_p, "rb") as f_cached:
+                            out_bytes = f_cached.read()
+                        if out_bytes:
+                            break
+                    except Exception:
+                        pass
+        if not out_bytes:
+            out_bytes = b""
+
+        clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
+        qc_ex = stats.get('qc_excluded', 0)
+        nanp_ex = stats.get('nanp_excluded', 0)
+        minus1_ex = stats.get('rates_minus1_count', 0)
+
+        st.markdown(f"""
+        <div class="auto-dl-banner" style="margin-bottom: 8px;">
+            📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1.05rem; font-weight: 700;">{out_name}</code><br>
+            <span style="font-size: 0.92rem; color: #4B5563;">
+                Clean Rows: <b>{clean_rows_display:,}</b> &nbsp;|&nbsp; 
+                QC Excluded: <b>{qc_ex:,}</b> &nbsp;|&nbsp; 
+                USA/Canada/PR Excluded: <b>{nanp_ex:,}</b> &nbsp;|&nbsp;
+                Rates to -1: <b>{minus1_ex:,}</b>
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.download_button(
+            label=f"⬇️ Click Here to Download {out_name}",
+            data=out_bytes,
+            file_name=out_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"top_dl_btn_{idx}",
+            type="primary",
+            use_container_width=True
+        )
+
+    if len(results) > 1:
+        st.write("")
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for item in results:
+                f_name = item["filename"]
+                f_bytes = item.get("bytes")
+                if f_bytes:
+                    zip_file.writestr(f_name, f_bytes)
+        zip_buffer.seek(0)
+        
+        st.download_button(
+            label=f"📦 Download All {len(results)} Standardized Files (ZIP)",
+            data=zip_buffer.getvalue(),
+            file_name=f"Standardized_Rate_Sheets_{u_name}.zip",
+            mime="application/zip",
+            key="top_zip_dl",
+            type="primary",
+            use_container_width=True
+        )
+    st.markdown("---")
 
 # File Uploader
 uploaded_files = st.file_uploader(
@@ -705,150 +896,9 @@ if uploaded_files:
                 elapsed_sec=elapsed_sec
             )
 
-        # Store in session state for this user's browser
+        # Store in session state for this user's browser & disk cache
         st.session_state.processed_results = processed_list
         st.session_state.elapsed_time = elapsed_sec
+        st.session_state.just_processed = True
+        save_user_processed_cache(current_user.get("username", "kaif"), processed_list, elapsed_sec)
         st.rerun()
-
-# ----------------- DISPLAY PERSISTENT RESULTS & DOWNLOAD BUTTONS -----------------
-if st.session_state.processed_results:
-    st.write("---")
-    
-    # Top Action Bar: Status Header + Clear All Button
-    col_hdr, col_clr = st.columns([3, 1])
-    col_hdr.markdown('<div class="badge-success">🎉 All Sheets Standardized Successfully! Click below to download:</div>', unsafe_allow_html=True)
-    
-    if col_clr.button("🗑️ Clear All / Reset", type="secondary", use_container_width=True):
-        st.session_state.processed_results = None
-        st.session_state.elapsed_time = None
-        st.rerun()
-
-    # Time Taken Display Banner (Exact requested feature)
-    if st.session_state.get("elapsed_time") is not None:
-        sec_val = st.session_state["elapsed_time"]
-        st.markdown(f"""
-        <div style="background: #F0FDF4; border: 1.5px solid #22C55E; border-radius: 8px; padding: 12px 18px; margin: 8px 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 1.05rem; color: #15803D; font-weight: 600;">
-                ⏱️ <b>Processed & Downloaded in:</b> <span style="font-size: 1.35rem; color: #166534; font-weight: 800;">{sec_val:.2f} seconds</span>
-            </span>
-            <span style="font-size: 0.85rem; color: #16A34A; background: #DCFCE7; padding: 5px 14px; border-radius: 20px; font-weight: 700;">
-                ⚡ Ultra-Fast Execution
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    results = st.session_state.processed_results
-
-    # Render prominent download buttons and path info for each processed file
-    for idx, item in enumerate(results):
-        out_name = item["filename"]
-        out_bytes = item.get("bytes")
-        stats = item["stats"]
-        saved_paths = item.get("saved_paths", [])
-
-        main_path = saved_paths[0] if saved_paths else f"C:\\Users\\Windows 10 Pro\\Downloads\\{out_name}"
-
-        # Multi-location fallback to guarantee bytes are never empty
-        if not out_bytes:
-            for possible_p in [
-                item.get("cached_path"),
-                main_path,
-                os.path.join(OUTPUT_DIR, out_name),
-                os.path.join(os.path.expanduser('~'), 'Downloads', out_name),
-                os.path.join(kaif_dir, out_name)
-            ]:
-                if possible_p and os.path.exists(possible_p):
-                    try:
-                        with open(possible_p, "rb") as f_cached:
-                            out_bytes = f_cached.read()
-                        if out_bytes:
-                            break
-                    except Exception:
-                        pass
-        if not out_bytes:
-            out_bytes = b""
-
-        st.markdown(f"""
-        <div class="auto-dl-banner">
-            📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1rem;">{out_name}</code><br>
-            📍 <b>Exact Saved Location:</b> <code style="color: #047857;">{main_path}</code><br>
-            <span style="font-size: 0.9rem; color: #4B5563;">
-                Clean Rows: <b>{stats['final_clean_rows']:,}</b> &nbsp;|&nbsp; 
-                QC Excluded: <b>{stats['qc_excluded']:,}</b> &nbsp;|&nbsp; 
-                USA/Canada/PR Excluded: <b>{stats['nanp_excluded']:,}</b> &nbsp;|&nbsp;
-                Rates to -1: <b>{stats['rates_minus1_count']:,}</b>
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if hasattr(os, 'startfile'):
-            col_dl, col_excel, col_folder = st.columns([1.5, 1, 1])
-            col_dl.download_button(
-                label=f"⬇️ Download",
-                data=out_bytes,
-                file_name=out_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"persistent_dl_{idx}",
-                type="primary",
-                use_container_width=True
-            )
-
-            if col_excel.button(f"📊 Open in Excel", key=f"open_excel_{idx}", use_container_width=True):
-                try:
-                    os.startfile(main_path)
-                except Exception as e:
-                    st.info(f"File path: {main_path}")
-
-            if col_folder.button(f"📂 Open Folder", key=f"open_folder_{idx}", use_container_width=True):
-                try:
-                    os.startfile(os.path.dirname(main_path))
-                except Exception as e:
-                    st.info(f"Folder: {os.path.dirname(main_path)}")
-        else:
-            st.download_button(
-                label=f"⬇️ Download {out_name}",
-                data=out_bytes,
-                file_name=out_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"persistent_dl_{idx}",
-                type="primary",
-                use_container_width=True
-            )
-
-    # If multiple files, provide a single ZIP download
-    if len(results) > 1:
-        st.write("")
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for item in results:
-                f_name = item["filename"]
-                f_bytes = item.get("bytes")
-                if not f_bytes:
-                    for possible_p in [
-                        item.get("cached_path"),
-                        item.get("saved_paths", [""])[0] if item.get("saved_paths") else "",
-                        os.path.join(OUTPUT_DIR, f_name),
-                        os.path.join(os.path.expanduser('~'), 'Downloads', f_name),
-                        os.path.join(kaif_dir, f_name)
-                    ]:
-                        if possible_p and os.path.exists(possible_p):
-                            try:
-                                with open(possible_p, "rb") as f_b:
-                                    f_bytes = f_b.read()
-                                if f_bytes:
-                                    break
-                            except Exception:
-                                pass
-                if f_bytes:
-                    zip_file.writestr(f_name, f_bytes)
-        zip_buffer.seek(0)
-        
-        st.download_button(
-            label=f"📦 Download All {len(results)} Standardized Files (ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name=f"Standardized_Rate_Sheets_{active_member}.zip",
-            mime="application/zip",
-            key="persistent_zip_dl",
-            type="primary",
-            use_container_width=True
-        )

@@ -126,10 +126,10 @@ def detect_header_row_and_columns(df_raw):
                     mapping['effective_date'] = col_idx
                     score += 5
             # 6. Pulse / Billing keywords
-            elif any(k in v for k in ['initial billing', 'incremental billing', 'billing increment', 'pulse', 'billing', 'minimum increments', 'billing step', 'min billing time']):
+            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit']):
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
-                    score += 3
+                    score += 4
 
         if ('country_code' in mapping and 'area_code' in mapping) and 'dial_code' not in mapping:
             mapping['dial_code_split'] = True
@@ -205,10 +205,16 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     inc_col_idx = None
     for idx, col_name in enumerate(header_names):
         c_name = str(col_name).lower().strip()
-        if any(k in c_name for k in ['minimum', 'initial']) and not any(k in c_name for k in ['increment', 'incremental']):
+        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse']) and not any(k in c_name for k in ['increment', 'incremental', 'incre']):
             min_col_idx = idx
-        elif any(k in c_name for k in ['increment', 'incremental']) and not any(k in c_name for k in ['minimum', 'initial']):
+        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse']) and not any(k in c_name for k in ['minimum', 'initial']):
             inc_col_idx = idx
+
+    # If only one increment or minimum column exists without separate pair, treat as combined pulse column
+    if min_col_idx is None and inc_col_idx is not None and pulse_idx is None:
+        pulse_idx = inc_col_idx
+    elif min_col_idx is not None and inc_col_idx is None and pulse_idx is None:
+        pulse_idx = min_col_idx
 
     # 1. Expand dial codes (split columns or comma/semicolon delimited)
     if col_map.get('dial_code_split', False):
