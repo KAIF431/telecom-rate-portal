@@ -398,7 +398,7 @@ top_head_col1, top_head_col2 = st.columns([3, 1.2])
 
 with top_head_col1:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting. <span style="font-size:0.75rem; color:#9CA3AF;">(Build: 2026.10.17.v3)</span></div>', unsafe_allow_html=True)
 
 with top_head_col2:
     st.markdown(f"""
@@ -836,8 +836,8 @@ if uploaded_files:
             if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
                 xl_sample = load_excel_safely(f_content, fname)
                 df_sample = xl_sample.parse(0, header=None, nrows=150)
-                h_idx, c_map = detect_header_row_and_columns(df_sample)
-                _, p_tag = analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
+                _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
                 preview_tag = p_tag
             elif fname.lower().endswith('.csv'):
                 try:
@@ -845,8 +845,8 @@ if uploaded_files:
                 except Exception:
                     f_content.seek(0)
                     df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=150, encoding='latin-1')
-                h_idx, c_map = detect_header_row_and_columns(df_sample)
-                _, p_tag = analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
+                _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
                 preview_tag = p_tag
             f_content.seek(0)
         except Exception:
@@ -891,7 +891,7 @@ if uploaded_files:
                         temp_df = xl.parse(s_name, header=None)
                         if len(temp_df) < 2:
                             continue
-                        _, col_map = detect_header_row_and_columns(temp_df)
+                        _, col_map = core_engine.detect_header_row_and_columns(temp_df)
                         score = len(col_map)
                         if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
                             score += 15
@@ -917,12 +917,12 @@ if uploaded_files:
                 st.warning(f"File '{fname}' is empty.")
                 continue
 
-            df_clean, df_excluded, stats = fast_process_dataframe(df_raw, qc_codes, fname)
+            df_clean, df_excluded, stats = core_engine.fast_process_dataframe(df_raw, qc_codes, fname)
 
             user_base = vendor_names.get(f_idx, f"Name - {fname}")
-            final_filename = build_output_filename(user_base, stats['comments_tag'], active_member)
+            final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
 
-            excel_bytes = generate_target_excel_bytes(df_clean)
+            excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
 
             # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
             saved_paths = []
