@@ -12,6 +12,8 @@ import importlib
 
 import auth_manager as am
 importlib.reload(am)
+import core_engine
+importlib.reload(core_engine)
 import secrets
 from config_manager import load_config, add_member, remove_member, set_active_member
 from core_engine import (
