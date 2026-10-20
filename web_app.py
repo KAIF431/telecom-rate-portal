@@ -656,28 +656,24 @@ if st.session_state.get("just_processed") and st.session_state.processed_results
     st.session_state.pop("just_processed", None)
     first_item = st.session_state.processed_results[0]
     f_b = first_item.get("bytes")
-    if f_b:
-        b64_str = base64.b64encode(f_b).decode('utf-8')
-        fname_dl = first_item["filename"]
-        components.html(f"""
-        <script>
-            try {{
-                var a = document.createElement('a');
-                a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
-                a.download = '{fname_dl}';
-                document.body.appendChild(a);
-                a.click();
-            }} catch(e) {{}}
-            try {{
-                var a2 = window.parent.document.createElement('a');
-                a2.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
-                a2.download = '{fname_dl}';
-                window.parent.document.body.appendChild(a2);
-                a2.click();
-                window.parent.document.body.removeChild(a2);
-            }} catch(err) {{}}
-        </script>
-        """, height=0, width=0)
+    # Only trigger JS download for small payloads (<250KB) to avoid WebSocket buffer overflow and browser freeze
+    if f_b and len(f_b) < 250_000:
+        try:
+            b64_str = base64.b64encode(f_b).decode('utf-8')
+            fname_dl = first_item["filename"]
+            components.html(f"""
+            <script>
+                try {{
+                    var a = document.createElement('a');
+                    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
+                    a.download = '{fname_dl}';
+                    document.body.appendChild(a);
+                    a.click();
+                }} catch(e) {{}}
+            </script>
+            """, height=0, width=0)
+        except Exception:
+            pass
 
 # Display persistent results AT THE TOP (Never hidden below the fold!)
 if st.session_state.processed_results:
@@ -829,31 +825,51 @@ if uploaded_files:
         # Real-time live preview that updates instantly without session-state caching bugs
         clean_v_name = v_name.strip() if v_name else f"File {idx+1}"
         
-        # Fast-detect real comments tag from uploaded sheet sample (< 0.1s)
-        preview_tag = ""
-        try:
-            f_content.seek(0)
-            if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
-                xl_sample = load_excel_safely(f_content, fname)
-                df_sample = xl_sample.parse(0, header=None, nrows=150)
-                h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
-                _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
-                preview_tag = p_tag
-            elif fname.lower().endswith('.csv'):
-                try:
-                    df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=150)
-                except Exception:
-                    f_content.seek(0)
-                    df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=150, encoding='latin-1')
-                h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
-                _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
-                preview_tag = p_tag
-            f_content.seek(0)
-        except Exception:
-            preview_tag = "UPdated"
+        # Fast-detect real comments tag with instant session-state caching (prevents typing lag/freezes)
+        f_len = getattr(f_content, 'size', len(f_content.getvalue()) if hasattr(f_content, 'getvalue') else 0)
+        cache_tag_key = f"tag_cache_{fname}_{f_len}"
+        if cache_tag_key in st.session_state:
+            preview_tag = st.session_state[cache_tag_key]
+        else:
+            preview_tag = ""
+            try:
+                f_content.seek(0)
+                if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
+                    xl = load_excel_safely(f_content, fname)
+                    best_score = -1
+                    best_sheet = None
+                    for s_name in xl.sheet_names:
+                        try:
+                            temp_sample = xl.parse(s_name, header=None, nrows=40)
+                            if len(temp_sample) < 2:
+                                continue
+                            _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
+                            score = len(col_map)
+                            if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
+                                score += 15
+                            if score > best_score:
+                                best_score = score
+                                best_sheet = s_name
+                        except Exception:
+                            pass
+                    target_sheet = best_sheet if best_sheet is not None else 0
+                    df_raw = xl.parse(target_sheet, header=None)
+                elif fname.lower().endswith('.csv'):
+                    try:
+                        df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=100)
+                    except Exception:
+                        f_content.seek(0)
+                        df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=100, encoding='latin-1')
+                    h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
+                    _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                    preview_tag = p_tag
+                f_content.seek(0)
+            except Exception:
+                preview_tag = "UPdated"
 
-        if not preview_tag:
-            preview_tag = "UPdated"
+            if not preview_tag:
+                preview_tag = "UPdated"
+            st.session_state[cache_tag_key] = preview_tag
 
         if 'a to z' in clean_v_name.lower():
             preview_filename = f"{clean_v_name} {preview_tag} {active_member}.xlsx"

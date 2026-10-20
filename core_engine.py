@@ -624,12 +624,8 @@ def generate_target_excel_bytes(df_clean):
         inc = incs[i] if (i < len(incs) and incs[i] is not None and pd.notna(incs[i])) else None
         
         ws.append([c, s, r, d, m, inc])
-
-    # Apply date number format to column D ONLY where date object exists
-    for row_idx in range(2, len(df_clean) + 2):
-        cell_d = ws.cell(row=row_idx, column=4)
-        if cell_d.value is not None and isinstance(cell_d.value, (datetime.date, datetime.datetime)):
-            cell_d.number_format = 'mm-dd-yy'
+        if d is not None:
+            ws.cell(row=i + 2, column=4).number_format = 'mm-dd-yy'
 
     # Exact column widths matching Vendor Sample sheet.xlsx
     ws.column_dimensions['A'].width = 11.0
