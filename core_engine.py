@@ -108,7 +108,7 @@ def detect_header_row_and_columns(df_raw):
                     mapping['dial_code'] = col_idx
                     mapping['dial_code_is_generic_prefix'] = True
                     score += 5
-            elif 'country code' in v:
+            elif any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode']):
                 if 'country_code' not in mapping:
                     mapping['country_code'] = col_idx
                     score += 5
@@ -127,8 +127,8 @@ def detect_header_row_and_columns(df_raw):
                     mapping['rate'] = col_idx
                     score += 6
             # 5. Effective Date keywords (ignore expiry/end dates)
-            elif any(k in v for k in ['effective from', 'eff date', 'effective date', 'application date', 'date activate', 'date', 'eff', 'pricing valid from', 'valid from']) and not any(k in v for k in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
-                if 'effective_date' not in mapping or 'effective' in v:
+            elif any(k in v for k in ['effective from', 'eff date', 'effective date', 'effectiv date', 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from', 'valid from']) and not any(k in v for k in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
+                if 'effective_date' not in mapping or 'effective' in v or 'effectiv' in v:
                     mapping['effective_date'] = col_idx
                     score += 5
             # 6. Pulse / Billing keywords
@@ -139,7 +139,7 @@ def detect_header_row_and_columns(df_raw):
 
         if ('country_code' in mapping and 'area_code' in mapping) and 'dial_code' not in mapping:
             mapping['dial_code_split'] = True
-        elif 'country_code' in mapping and 'dial_code' not in mapping and 'area_code' not in mapping:
+        elif 'country_code' in mapping and ('dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False)) and 'area_code' not in mapping:
             mapping['dial_code'] = mapping['country_code']
             score += 6
 
