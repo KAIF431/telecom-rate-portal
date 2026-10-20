@@ -76,78 +76,166 @@ def load_qc_exception_codes():
 
 def detect_header_row_and_columns(df_raw):
     """
-    Scans first 40 rows to identify table header and map columns:
-    Handles 'CODES', 'Rate Changes', 'Effective From', 'Destination',
-    'National & International', and separate 'Country Code' + 'Area Code' columns.
+    Universal, fault-tolerant table header detection:
+    - Recognizes all telecom column aliases, abbreviations, and vendor typos (Dst Code, Dest Name, County Codes, etc.)
+    - Ignores title/banner rows (Rate Table, Trunk Prefix notes, disclaimers)
+    - Validates actual data in rows below the candidate header (numeric dial codes + numeric rates)
+    - Prevents false-positive headers permanently
     """
     best_row_idx = 0
     best_mapping = {}
-    best_score = -1
+    best_total_score = -9999
 
     for row_idx in range(min(40, len(df_raw))):
         row_vals = [str(x).strip().lower() for x in df_raw.iloc[row_idx].values]
+        non_empty = [x for x in row_vals if x not in ['nan', 'none', '', 'null', 'nat']]
+        if len(non_empty) < 2:
+            continue
+
         mapping = {}
-        score = 0
+        kw_score = 0
 
         for col_idx, val in enumerate(row_vals):
+            if val in ['nan', 'none', '', 'null', 'nat']:
+                continue
             v = re.sub(r'[^a-z0-9]', ' ', val).strip()
             
+            # Skip banner / metadata text with colons or excessive length
+            if len(val) > 45 or ':' in val or '=' in val:
+                continue
+
             # 1. Status / Changes (check before rate so 'rate changes' is mapped to status)
-            if any(k in v for k in ['rate changes', 'rate change', 'changes', 'status', 'comment', 'action', 'change']):
-                if 'status' not in mapping or 'change' in v or 'status' in v:
+            if any(k in v for k in ['rate changes', 'rate change', 'changes', 'status', 'comment', 'action', 'change', 'diff status', 'remarks', 'type', 'notes', 'diff']) \
+                and not any(bad in v for bad in ['table', 'sheet', 'notice']):
+                if 'status' not in mapping or 'change' in v or 'status' in v or 'diff' in v:
                     mapping['status'] = col_idx
-                    score += 4
-            # 2. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
-            elif any(k in v for k in ['dial code', 'dial codes', 'dialcode', 'dialcodes', 'dest code', 'dest codes', 'destination code', 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'full prefix', 'complete prefix', 'dialed digit', 'dialed digits', 'dialed number', 'dialed numbers']) or v in ['code', 'codes']:
+                    kw_score += 4
+
+            # 2. Destination / Summary with 'name', 'desc', 'location', 'country'
+            # (Check BEFORE dial code so 'dst code name', 'dest name', 'code name' are mapped to destination!)
+            elif any(k in v for k in [
+                'dst code name', 'dest code name', 'destination name', 'dest name', 'dst name',
+                'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination',
+                'destination', 'destinations', 'summary', 'country', 'country name', 'location', 'loc name',
+                'national', 'international', 'description', 'destinations name', 'dest summary'
+            ]) or (any(n in v for n in ['name', 'desc', 'summary']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country'])):
+                if 'destination' not in mapping:
+                    mapping['destination'] = col_idx
+                    kw_score += 7
+
+            # 3. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
+            elif (any(k in v for k in [
+                'dial code', 'dial codes', 'dialcode', 'dialcodes',
+                'dest code', 'dest codes', 'destination code', 'destination codes', 'destcode', 'destcodes',
+                'dst code', 'dst codes', 'dstcode', 'dstcodes', 'dst_code', 'dst. code',
+                'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
+                'dialed digit', 'dialed digits', 'dialled digit', 'dialled digits', 'dialed number', 'dialed numbers',
+                'calling code', 'call code', 'dial digit', 'dial digits', 'e164'
+            ]) or v in ['code', 'codes', 'dst', 'dst_code', 'dialcode']) and not any(n in v for n in ['name', 'desc', 'description']):
                 if 'dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False):
                     mapping['dial_code'] = col_idx
                     mapping['dial_code_is_generic_prefix'] = False
-                    score += 7
-            elif any(k in v for k in ['prefix', 'prefixes']):
-                if 'dial_code' not in mapping:
-                    mapping['dial_code'] = col_idx
-                    mapping['dial_code_is_generic_prefix'] = True
-                    score += 5
+                    kw_score += 8
+
             elif any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode']):
                 if 'country_code' not in mapping:
                     mapping['country_code'] = col_idx
-                    score += 5
-            elif 'area code' in v:
+                    kw_score += 6
+
+            elif any(k in v for k in ['area code', 'area codes', 'areacode', 'areacodes', 'npa', 'nxx']):
                 if 'area_code' not in mapping:
                     mapping['area_code'] = col_idx
-                    score += 5
-            # 3. Destination keywords
-            elif any(k in v for k in ['destination', 'destinations', 'summary', 'country', 'location', 'dest name', 'description', 'loc name', 'national', 'international']):
-                if 'destination' not in mapping:
-                    mapping['destination'] = col_idx
-                    score += 6
-            # 4. Rate keywords (use word boundaries so 'gold' is never mistaken for 'old', and ignore previous rates)
-            elif (any(k in v for k in ['new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'usd']) or '$' in val) and not re.search(r'\b(?:current|old|prev|previous|existing)\b', v):
+                    kw_score += 6
+
+            elif any(k in v for k in ['prefix', 'prefixes']) and not any(bad in v for bad in ['tech prefix', 'trunk prefix', 'routing prefix', 'gw prefix']):
+                if 'dial_code' not in mapping:
+                    mapping['dial_code'] = col_idx
+                    mapping['dial_code_is_generic_prefix'] = True
+                    kw_score += 4
+
+            # 4. Rate keywords (exclude table/sheet banners, decks, cards, zones, and previous rates)
+            elif (any(k in v for k in ['new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min']) or '$' in val) \
+                and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective']) \
+                and not re.search(r'\b(?:current|old|prev|previous|existing|base|diff)\b', v):
                 if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v:
                     mapping['rate'] = col_idx
-                    score += 6
+                    kw_score += 7
+
             # 5. Effective Date keywords (ignore expiry/end dates)
-            elif any(k in v for k in ['effective from', 'eff date', 'effective date', 'effectiv date', 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from', 'valid from']) and not any(k in v for k in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
+            elif any(k in v for k in ['effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date', 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from', 'valid from', 'valid date', 'start date']) \
+                and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
                 if 'effective_date' not in mapping or 'effective' in v or 'effectiv' in v:
                     mapping['effective_date'] = col_idx
-                    score += 5
+                    kw_score += 5
+
             # 6. Pulse / Billing keywords
-            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution', 'interval', 'intervals', 'billing interval']) or v in ['mc', 'ci']:
+            elif any(k in v for k in [
+                'increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing',
+                'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc',
+                'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
+                'interval', 'intervals', 'billing interval'
+            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
-                    score += 4
+                    kw_score += 4
 
+        # Link country + area code or country code standalone
         if ('country_code' in mapping and 'area_code' in mapping) and 'dial_code' not in mapping:
             mapping['dial_code_split'] = True
         elif 'country_code' in mapping and ('dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False)) and 'area_code' not in mapping:
             mapping['dial_code'] = mapping['country_code']
-            score += 6
+            kw_score += 6
 
-        if score > best_score and ('dial_code' in mapping or ('country_code' in mapping and 'area_code' in mapping)) and ('rate' in mapping or 'destination' in mapping):
-            best_score = score
+        # Must have at least a dial code (or split code), plus either rate or destination
+        has_code = ('dial_code' in mapping) or ('country_code' in mapping and 'area_code' in mapping)
+        has_rate_or_dest = ('rate' in mapping) or ('destination' in mapping)
+        if not (has_code and has_rate_or_dest):
+            continue
+
+        # Data Validation Below Candidate Row
+        data_score = 0
+        code_col = mapping.get('dial_code', mapping.get('country_code'))
+        rate_col = mapping.get('rate')
+        sample_rows = df_raw.iloc[row_idx + 1 : min(row_idx + 11, len(df_raw))]
+        
+        valid_codes = 0
+        valid_rates = 0
+        total_sample = len(sample_rows)
+        if total_sample > 0:
+            if code_col is not None and code_col < sample_rows.shape[1]:
+                for c_val in sample_rows.iloc[:, code_col]:
+                    cs = str(c_val).strip()
+                    if cs and re.match(r'^\+?\d{1,15}$', cs.split('.')[0]):
+                        valid_codes += 1
+            if rate_col is not None and rate_col < sample_rows.shape[1]:
+                for r_val in sample_rows.iloc[:, rate_col]:
+                    try:
+                        rf = float(str(r_val).replace('$', '').strip())
+                        if 0 <= rf <= 100:
+                            valid_rates += 1
+                    except:
+                        pass
+
+        # Data verification score
+        code_pct = valid_codes / total_sample if total_sample > 0 else 0
+        rate_pct = valid_rates / total_sample if total_sample > 0 else 0
+        
+        if code_pct >= 0.5 and rate_pct >= 0.5:
+            data_score += 40
+        elif code_pct >= 0.5:
+            data_score += 20
+        elif code_pct == 0:
+            data_score -= 30
+
+        # Distinct columns bonus
+        distinct_cols = len({v for k, v in mapping.items() if k not in ['dial_code_is_generic_prefix', 'dial_code_split']})
+        width_bonus = min(distinct_cols * 3, 18)
+        total_score = kw_score + data_score + width_bonus
+
+        if total_score > best_total_score:
+            best_total_score = total_score
             best_row_idx = row_idx
-            clean_map = {k: v for k, v in mapping.items() if k != 'dial_code_is_generic_prefix'}
-            best_mapping = clean_map
+            best_mapping = {k: v for k, v in mapping.items() if k != 'dial_code_is_generic_prefix'}
 
     return best_row_idx, best_mapping
 
@@ -216,9 +304,9 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     for idx, col_name in enumerate(header_names):
         c_name = str(col_name).lower().strip()
         c_clean = re.sub(r'[^a-z0-9]', ' ', c_name).strip()
-        if (any(k in c_clean for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge']) or c_clean in ['mc', 'min', 'initial', 'init', 'first']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
+        if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or c_clean in ['mc', 'min', 'initial', 'init', 'first', 'min volume']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
             min_col_idx = idx
-        elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment']) or c_clean in ['ci', 'inc', 'recur', 'next']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc']):
+        elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration']) or c_clean in ['ci', 'inc', 'recur', 'next', 'interval', 'step']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
             inc_col_idx = idx
 
     # If only one increment or minimum column exists without separate pair, treat as combined pulse column
