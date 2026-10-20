@@ -97,11 +97,17 @@ def detect_header_row_and_columns(df_raw):
                 if 'status' not in mapping or 'change' in v or 'status' in v:
                     mapping['status'] = col_idx
                     score += 4
-            # 2. Dial code keywords
-            elif any(k in v for k in ['dial code', 'dial codes', 'dialcode', 'dialcodes', 'prefix', 'prefixes', 'dest code', 'dest codes', 'destination code', 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'full prefix', 'complete prefix', 'dialed digit', 'dialed digits', 'dialed number', 'dialed numbers']) or v in ['code', 'codes']:
+            # 2. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
+            elif any(k in v for k in ['dial code', 'dial codes', 'dialcode', 'dialcodes', 'dest code', 'dest codes', 'destination code', 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'full prefix', 'complete prefix', 'dialed digit', 'dialed digits', 'dialed number', 'dialed numbers']) or v in ['code', 'codes']:
+                if 'dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False):
+                    mapping['dial_code'] = col_idx
+                    mapping['dial_code_is_generic_prefix'] = False
+                    score += 7
+            elif any(k in v for k in ['prefix', 'prefixes']):
                 if 'dial_code' not in mapping:
                     mapping['dial_code'] = col_idx
-                    score += 6
+                    mapping['dial_code_is_generic_prefix'] = True
+                    score += 5
             elif 'country code' in v:
                 if 'country_code' not in mapping:
                     mapping['country_code'] = col_idx
@@ -126,7 +132,7 @@ def detect_header_row_and_columns(df_raw):
                     mapping['effective_date'] = col_idx
                     score += 5
             # 6. Pulse / Billing keywords
-            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution', 'interval', 'intervals', 'billing interval']):
+            elif any(k in v for k in ['increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing', 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc', 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution', 'interval', 'intervals', 'billing interval']) or v in ['mc', 'ci']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     score += 4
@@ -140,7 +146,8 @@ def detect_header_row_and_columns(df_raw):
         if score > best_score and ('dial_code' in mapping or ('country_code' in mapping and 'area_code' in mapping)) and ('rate' in mapping or 'destination' in mapping):
             best_score = score
             best_row_idx = row_idx
-            best_mapping = mapping
+            clean_map = {k: v for k, v in mapping.items() if k != 'dial_code_is_generic_prefix'}
+            best_mapping = clean_map
 
     return best_row_idx, best_mapping
 
@@ -203,14 +210,15 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     status_idx = col_map.get('status', None)
     pulse_idx = col_map.get('pulse', None)
 
-    # Separate min/inc if exists
+    # Separate min/inc if exists (supports Minimum/Increment, Initial/Recurring, and carrier codes like MC/CI)
     min_col_idx = None
     inc_col_idx = None
     for idx, col_name in enumerate(header_names):
         c_name = str(col_name).lower().strip()
-        if any(k in c_name for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period']) and not any(k in c_name for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur']):
+        c_clean = re.sub(r'[^a-z0-9]', ' ', c_name).strip()
+        if (any(k in c_clean for k in ['minimum', 'initial', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge']) or c_clean in ['mc', 'min', 'initial', 'init', 'first']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
             min_col_idx = idx
-        elif any(k in c_name for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period']) and not any(k in c_name for k in ['minimum', 'initial', 'minimal']):
+        elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment']) or c_clean in ['ci', 'inc', 'recur', 'next']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc']):
             inc_col_idx = idx
 
     # If only one increment or minimum column exists without separate pair, treat as combined pulse column
@@ -218,6 +226,30 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         pulse_idx = inc_col_idx
     elif min_col_idx is not None and inc_col_idx is None and pulse_idx is None:
         pulse_idx = min_col_idx
+
+    # If no pulse/min/inc column was found in table, check header notes (rows 0 to header_row_idx) for default vendor pulse
+    default_header_min = None
+    default_header_inc = None
+    if min_col_idx is None and inc_col_idx is None and pulse_idx is None and header_row_idx > 0:
+        for r_hdr in range(header_row_idx):
+            for cell_val in df_raw.iloc[r_hdr].values:
+                cell_s = str(cell_val).strip()
+                if re.search(r'\b(?:billing\s+increment|pulse|interval|billing)\b', cell_s, re.I):
+                    nums_hdr = re.findall(r'\d+(?:\.\d+)?', cell_s)
+                    if len(nums_hdr) >= 3:
+                        n1 = int(float(nums_hdr[1]))
+                        n2 = int(float(nums_hdr[2]))
+                        default_header_min = max(n1, n2)
+                        default_header_inc = min(n1, n2)
+                        break
+                    elif len(nums_hdr) == 2:
+                        n1 = int(float(nums_hdr[0]))
+                        n2 = int(float(nums_hdr[1]))
+                        default_header_min = max(n1, n2)
+                        default_header_inc = min(n1, n2)
+                        break
+            if default_header_min is not None:
+                break
 
     # 1. Expand dial codes (split columns or comma/semicolon delimited)
     if col_map.get('dial_code_split', False):
@@ -241,6 +273,18 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
             raw_code_series = df_data['_split_code'].fillna('').astype(str).str.split('.').str[0].str.strip()
         else:
             raw_code_series = code_raw_series.str.split('.').str[0].str.strip()
+
+        # Safety: If selected dial code column has only 1 unique value (e.g. static tech prefix like 7676)
+        # while another column has varied numeric codes (>10 unique codes), switch to the true code column!
+        if raw_code_series.nunique() == 1 and len(df_data) > 10:
+            for alt_idx in range(df_data.shape[1]):
+                if alt_idx != code_idx and alt_idx != dest_idx and alt_idx != rate_idx:
+                    alt_cand = df_data.iloc[:, alt_idx].fillna('').astype(str).str.split('.').str[0].str.strip()
+                    alt_dig = alt_cand.str.replace(r'[^\d]', '', regex=True)
+                    if alt_dig.str.len().gt(0).sum() > len(df_data) * 0.7 and alt_dig.nunique() > 10:
+                        code_idx = alt_idx
+                        raw_code_series = alt_cand
+                        break
 
     # CRITICAL: STRICT DIAL CODE FILTERING & SANITIZATION
     # Checks notes/disclaimers/payment terms on original text before stripping characters
@@ -390,8 +434,12 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                 mins.append(None)
                 incs.append(None)
     else:
-        mins = [None] * len(df_valid)
-        incs = [None] * len(df_valid)
+        if default_header_min is not None and default_header_inc is not None:
+            mins = [default_header_min] * len(df_valid)
+            incs = [default_header_inc] * len(df_valid)
+        else:
+            mins = [None] * len(df_valid)
+            incs = [None] * len(df_valid)
 
     # 8. Clean Dial Codes
     clean_codes = []
