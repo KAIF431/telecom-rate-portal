@@ -100,8 +100,8 @@ def detect_header_row_and_columns(df_raw):
                 continue
             v = re.sub(r'[^a-z0-9]', ' ', val).strip()
             
-            # Skip banner / metadata text with colons or excessive length
-            if len(val) > 45 or ':' in val or '=' in val:
+            # Skip long disclaimers / policy sentences
+            if len(val) > 75:
                 continue
 
             # 1. Status / Changes (check before rate so 'rate changes' is mapped to status)
@@ -293,10 +293,32 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
 
     code_idx = col_map.get('dial_code', 0)
     dest_idx = col_map.get('destination', 1 if code_idx != 1 else 0)
-    rate_idx = col_map.get('rate', 2)
     date_idx = col_map.get('effective_date', None)
     status_idx = col_map.get('status', None)
     pulse_idx = col_map.get('pulse', None)
+    rate_idx = col_map.get('rate', None)
+
+    # Dynamic fallback if rate was not matched by keywords
+    if rate_idx is None:
+        known_indices = {code_idx, dest_idx, date_idx, status_idx, pulse_idx, col_map.get('country_code'), col_map.get('area_code')}
+        best_cand = None
+        best_cand_numeric_count = 0
+        sample_slice = df_data.head(50)
+        for c_i in range(df_data.shape[1]):
+            if c_i in known_indices or c_i is None:
+                continue
+            num_count = 0
+            for val in sample_slice.iloc[:, c_i]:
+                try:
+                    vf = float(str(val).replace('$', '').strip())
+                    if 0 <= vf <= 100:
+                        num_count += 1
+                except:
+                    pass
+            if num_count > best_cand_numeric_count:
+                best_cand_numeric_count = num_count
+                best_cand = c_i
+        rate_idx = best_cand if (best_cand is not None and best_cand_numeric_count >= 10) else (2 if 2 not in known_indices else 3)
 
     # Separate min/inc if exists (supports Minimum/Increment, Initial/Recurring, and carrier codes like MC/CI)
     min_col_idx = None
