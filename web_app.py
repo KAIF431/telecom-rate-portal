@@ -20,7 +20,9 @@ from core_engine import (
     load_qc_exception_codes,
     fast_process_dataframe,
     generate_target_excel_bytes,
+    generate_target_csv_bytes,
     build_output_filename,
+    build_csv_output_filename,
     analyze_vendor_comments,
     TEMPLATE_DIR
 )
@@ -130,8 +132,10 @@ def save_user_processed_cache(username, results, elapsed_time):
         for r in results:
             data["items"].append({
                 "filename": r["filename"],
+                "csv_filename": r.get("csv_filename", ""),
                 "vendor_name": r.get("vendor_name", ""),
                 "cached_path": r.get("cached_path", ""),
+                "cached_csv_path": r.get("cached_csv_path", ""),
                 "stats": r.get("stats", {}),
                 "rows_count": r.get("rows_count", 0),
                 "saved_paths": r.get("saved_paths", [])
@@ -166,6 +170,15 @@ def load_user_processed_cache(username):
                         except Exception:
                             pass
                 item["bytes"] = out_bytes
+                p_csv = item.get("cached_csv_path")
+                csv_bytes = b""
+                if p_csv and os.path.exists(p_csv):
+                    try:
+                        with open(p_csv, "rb") as f_c:
+                            csv_bytes = f_c.read()
+                    except Exception:
+                        pass
+                item["csv_bytes"] = csv_bytes
                 if out_bytes:
                     items.append(item)
             if items:
@@ -842,36 +855,69 @@ if st.session_state.processed_results:
         </div>
         """, unsafe_allow_html=True)
 
-        st.download_button(
-            label=f"⬇️ Click Here to Download {out_name}",
-            data=out_bytes,
-            file_name=out_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"top_dl_btn_{idx}",
-            type="primary",
-            use_container_width=True
-        )
+        col_dl_excel, col_dl_csv = st.columns(2)
+        with col_dl_excel:
+            st.download_button(
+                label="📊 Download Excel (.xlsx)",
+                data=out_bytes,
+                file_name=out_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"top_dl_btn_excel_{idx}",
+                type="primary",
+                use_container_width=True
+            )
+        with col_dl_csv:
+            csv_data = item.get("csv_bytes") or b""
+            csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
+            st.download_button(
+                label="📄 Download CSV (.csv)",
+                data=csv_data,
+                file_name=csv_name,
+                mime="text/csv",
+                key=f"top_dl_btn_csv_{idx}",
+                type="primary",
+                use_container_width=True
+            )
 
     if len(results) > 1:
         st.write("")
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for item in results:
-                f_name = item["filename"]
-                f_bytes = item.get("bytes")
-                if f_bytes:
-                    zip_file.writestr(f_name, f_bytes)
-        zip_buffer.seek(0)
-        
-        st.download_button(
-            label=f"📦 Download All {len(results)} Standardized Files (ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name=f"Standardized_Rate_Sheets_{u_name}.zip",
-            mime="application/zip",
-            key="top_zip_dl",
-            type="primary",
-            use_container_width=True
-        )
+        col_zip1, col_zip2 = st.columns(2)
+        with col_zip1:
+            zip_buffer_xl = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer_xl, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for item in results:
+                    f_name = item["filename"]
+                    f_bytes = item.get("bytes")
+                    if f_bytes:
+                        zip_file.writestr(f_name, f_bytes)
+            zip_buffer_xl.seek(0)
+            st.download_button(
+                label=f"📦 Download All {len(results)} Excel Files (ZIP)",
+                data=zip_buffer_xl.getvalue(),
+                file_name=f"Standardized_Excel_Sheets_{u_name}.zip",
+                mime="application/zip",
+                key="top_zip_excel_dl",
+                type="primary",
+                use_container_width=True
+            )
+        with col_zip2:
+            zip_buffer_csv = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer_csv, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for item in results:
+                    c_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", item["filename"]))
+                    c_bytes = item.get("csv_bytes")
+                    if c_bytes:
+                        zip_file.writestr(c_name, c_bytes)
+            zip_buffer_csv.seek(0)
+            st.download_button(
+                label=f"📦 Download All {len(results)} CSV Files (ZIP)",
+                data=zip_buffer_csv.getvalue(),
+                file_name=f"Standardized_CSV_Decks_{u_name}.zip",
+                mime="application/zip",
+                key="top_zip_csv_dl",
+                type="primary",
+                use_container_width=True
+            )
     st.markdown("---")
 
 if "uploader_key" not in st.session_state:
@@ -976,9 +1022,10 @@ if uploaded_files:
         else:
             preview_filename = f"{clean_v_name} A to Z {preview_tag} {active_member}.xlsx"
             
+        preview_csv_name = core_engine.build_csv_output_filename(clean_v_name)
         c2.markdown(f"""
-        <div style="margin-top: 26px; padding: 8px 12px; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-family: monospace; font-size: 0.88rem; color: #1E293B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            📄 <b>Preview:</b> <span style="color: #2563EB;">{preview_filename}</span>
+        <div style="margin-top: 26px; padding: 8px 12px; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #1E293B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            📊 <b>Excel:</b> <span style="color: #2563EB;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #059669;">{preview_csv_name}</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1038,7 +1085,10 @@ if uploaded_files:
             user_base = vendor_names.get(f_idx, f"Name - {fname}")
             final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
 
+            final_csv_filename = core_engine.build_csv_output_filename(user_base)
+
             excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
+            csv_bytes = core_engine.generate_target_csv_bytes(df_clean)
 
             # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
             saved_paths = []
@@ -1051,6 +1101,14 @@ if uploaded_files:
                 pass
 
             try:
+                dl_csv_path = os.path.join(user_dl_dir, final_csv_filename)
+                with open(dl_csv_path, "wb") as f_out:
+                    f_out.write(csv_bytes)
+                saved_paths.append(dl_csv_path)
+            except Exception:
+                pass
+
+            try:
                 kaif_path = os.path.join(kaif_dir, final_filename)
                 with open(kaif_path, "wb") as f_out:
                     f_out.write(excel_bytes)
@@ -1058,19 +1116,36 @@ if uploaded_files:
             except Exception:
                 pass
 
+            try:
+                kaif_csv_path = os.path.join(kaif_dir, final_csv_filename)
+                with open(kaif_csv_path, "wb") as f_out:
+                    f_out.write(csv_bytes)
+                saved_paths.append(kaif_csv_path)
+            except Exception:
+                pass
+
             # Guaranteed Save to OUTPUT_DIR
             cached_path = os.path.join(OUTPUT_DIR, final_filename)
+            cached_csv_path = os.path.join(OUTPUT_DIR, final_csv_filename)
             try:
                 with open(cached_path, "wb") as f_out:
                     f_out.write(excel_bytes)
             except Exception:
                 pass
+            try:
+                with open(cached_csv_path, "wb") as f_out:
+                    f_out.write(csv_bytes)
+            except Exception:
+                pass
 
             processed_list.append({
                 "filename": final_filename,
+                "csv_filename": final_csv_filename,
                 "vendor_name": user_base,
                 "bytes": excel_bytes,
+                "csv_bytes": csv_bytes,
                 "cached_path": cached_path,
+                "cached_csv_path": cached_csv_path,
                 "stats": stats,
                 "rows_count": len(df_clean),
                 "saved_paths": saved_paths

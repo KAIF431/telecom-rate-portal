@@ -1,6 +1,7 @@
 import os
 import re
 import io
+import csv
 import datetime
 import numpy as np
 import pandas as pd
@@ -750,3 +751,82 @@ def build_output_filename(base_name, comments_tag, member_name):
 
     filename = re.sub(r'\s+', ' ', filename).strip()
     return filename
+
+
+def generate_target_csv_bytes(df_clean):
+    """
+    Generates switch-ready CSV file matching Kaif's exact switch template:
+    - Headers: ['destination', 'code', 'rate_intl', 'initial_increment', 'subsequent_increment', 'effective_date']
+    - destination: Destination name from Summary
+    - code: Dial Code digits
+    - rate_intl: Pure decimal rate. If rate is -1 (or negative), the cell is completely BLANK!
+    - initial_increment: Minimum duration (e.g. 1, 30, 60) or blank if None
+    - subsequent_increment: Increment duration (e.g. 1, 6) or blank if None
+    - effective_date: Date formatted as MM/DD/YYYY (e.g. 10/15/2026) or blank if None
+    """
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator='\n')
+    writer.writerow(['destination', 'code', 'rate_intl', 'initial_increment', 'subsequent_increment', 'effective_date'])
+
+    summaries = df_clean['Summary'].tolist() if 'Summary' in df_clean.columns else []
+    codes = df_clean['Dial Code'].tolist() if 'Dial Code' in df_clean.columns else []
+    rates = df_clean['New Rate'].tolist() if 'New Rate' in df_clean.columns else []
+    dt_col = df_clean['_dt_obj'].tolist() if '_dt_obj' in df_clean.columns else (df_clean['Eff. Date'].tolist() if 'Eff. Date' in df_clean.columns else (df_clean['Effective Date'].tolist() if 'Effective Date' in df_clean.columns else [None] * len(df_clean)))
+    mins = df_clean['Minimum'].tolist() if 'Minimum' in df_clean.columns else [None] * len(df_clean)
+    incs = df_clean['Increment'].tolist() if 'Increment' in df_clean.columns else [None] * len(df_clean)
+
+    for i in range(len(df_clean)):
+        dest = str(summaries[i]).strip() if (i < len(summaries) and pd.notna(summaries[i])) else ''
+        c = str(codes[i]).split('.')[0].strip() if (i < len(codes) and pd.notna(codes[i])) else ''
+
+        r_raw = rates[i] if i < len(rates) else None
+        if r_raw is None or pd.isna(r_raw) or float(r_raw) < 0:
+            rate_str = ''
+        else:
+            r_f = float(r_raw)
+            rate_str = f'{r_f:.6f}'.rstrip('0').rstrip('.') if r_f != 0 else '0'
+
+        m_val = mins[i] if i < len(mins) else None
+        m_str = str(int(float(m_val))) if (pd.notna(m_val) and str(m_val).strip() != '') else ''
+
+        inc_val = incs[i] if i < len(incs) else None
+        inc_str = str(int(float(inc_val))) if (pd.notna(inc_val) and str(inc_val).strip() != '') else ''
+
+        d_val = dt_col[i] if i < len(dt_col) else None
+        if pd.notna(d_val):
+            if hasattr(d_val, 'strftime'):
+                d_str = d_val.strftime('%m/%d/%Y')
+            else:
+                try:
+                    d_str = pd.to_datetime(d_val).strftime('%m/%d/%Y')
+                except Exception:
+                    d_str = str(d_val)
+        else:
+            d_str = ''
+
+        writer.writerow([dest, c, rate_str, m_str, inc_str, d_str])
+
+    return output.getvalue().encode('utf-8')
+
+def build_csv_output_filename(base_name):
+    """
+    Builds clean switch-ready CSV filename:
+    Prefixes 'rate_deck_' and replaces spaces with underscores.
+    e.g. 'easyvoipcall letsdial (VEndor CC)' -> 'rate_deck_easyvoipcall_letsdial_(VEndor_CC).csv'
+    """
+    base = str(base_name or '').strip()
+    if not base:
+        base = 'rate_deck'
+
+    base = re.sub(r'^(?:name\s*[-:]?\s*)', '', base, flags=re.I).strip()
+    base = re.sub(r'\.(?:xlsx|xls|csv|xlsm|xlsb)$', '', base, flags=re.I).strip()
+
+    if base.lower().startswith('rate_deck_'):
+        clean_core = base[10:]
+    elif base.lower().startswith('rate_deck'):
+        clean_core = base[9:].lstrip(' _-')
+    else:
+        clean_core = base
+
+    clean_underscored = re.sub(r'\s+', '_', clean_core).strip()
+    return f'rate_deck_{clean_underscored}.csv'
