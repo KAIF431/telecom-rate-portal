@@ -120,16 +120,6 @@ def clear_current_session():
         st.query_params.clear()
     except Exception:
         pass
-    components.html("""
-    <script>
-        try {
-            localStorage.removeItem("kaif_portal_token");
-            const u = new URL(window.parent.location.href);
-            u.searchParams.delete("session_token");
-            window.parent.location.href = u.href;
-        } catch(e) {}
-    </script>
-    """, height=0, width=0)
     try:
         st.query_params.clear()
     except Exception:
@@ -259,31 +249,6 @@ st.markdown("""
 
 # ----------------- AUTHENTICATION CHECK -----------------
 st.session_state.user = authenticate_current_session()
-
-# Seamless LocalStorage Auto-Restore (If user opened portal without query param)
-if st.session_state.user is None and not st.query_params.get("session_token"):
-    components.html("""
-    <script>
-        try {
-            const savedTok = localStorage.getItem("kaif_portal_token");
-            if (savedTok && !window.parent.location.search.includes("session_token")) {
-                const u = new URL(window.parent.location.href);
-                u.searchParams.set("session_token", savedTok);
-                window.parent.location.href = u.href;
-            }
-        } catch(e) {}
-    </script>
-    """, height=0, width=0)
-
-# Seamless LocalStorage Save (Store token in browser so F5 refresh or new tab never logs out)
-if st.session_state.user and st.session_state.get("active_token"):
-    components.html(f"""
-    <script>
-        try {{
-            localStorage.setItem("kaif_portal_token", "{st.session_state.get('active_token')}");
-        }} catch(e) {{}}
-    </script>
-    """, height=0, width=0)
 
 
 if "pending_totp_user" not in st.session_state:
@@ -524,7 +489,7 @@ if is_admin:
                 st.markdown("**📅 Filter History by Date:**")
                 date_filter_mode = st.radio(
                     "Choose Date View:",
-                    ["🌐 All Time (Shuru se ab tak)", "🗓️ Single Date (Kisi ek din ka)", "📆 Date Range (From - To)", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days"],
+                    ["🌐 All Time", "🗓️ Single Date", "📆 Date Range", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days"],
                     horizontal=True,
                     key="hist_date_filter_mode"
                 )
@@ -532,28 +497,28 @@ if is_admin:
                 sel_start_date = None
                 sel_end_date = None
 
-                if date_filter_mode == "🗓️ Single Date (Kisi ek din ka)":
+                if date_filter_mode == "🗓️ Single Date":
                     col_sd1, col_sd2 = st.columns([1.5, 2.5])
                     with col_sd1:
                         target_day = st.date_input(
-                            "Select Date to View:",
+                            "Select Date:",
                             value=max_available_date,
                             key="hist_single_day_input"
                         )
                     sel_start_date = target_day
                     sel_end_date = target_day
 
-                elif date_filter_mode == "📆 Date Range (From - To)":
+                elif date_filter_mode == "📆 Date Range":
                     col_dr1, col_dr2 = st.columns(2)
                     with col_dr1:
                         from_d = st.date_input(
-                            "From Date (Kab se):",
+                            "From Date:",
                             value=min_available_date,
                             key="hist_from_date_input"
                         )
                     with col_dr2:
                         to_d = st.date_input(
-                            "To Date (Kab tak):",
+                            "To Date:",
                             value=today,
                             key="hist_to_date_input"
                         )
@@ -786,16 +751,10 @@ st.write("")
 
 qc_codes = load_qc_exception_codes()
 
-# Auto-restore persistent processed results across F5 refresh
-u_name = current_user.get("username", "kaif")
-if "processed_results" not in st.session_state or st.session_state.processed_results is None:
-    cached_res, cached_time = load_user_processed_cache(u_name)
-    if cached_res:
-        st.session_state.processed_results = cached_res
-        st.session_state.elapsed_time = cached_time
-    else:
-        st.session_state.processed_results = None
-        st.session_state.elapsed_time = None
+# Initialize active session processed results
+if "processed_results" not in st.session_state:
+    st.session_state.processed_results = None
+    st.session_state.elapsed_time = None
 
 # If sheets were just processed, trigger automatic browser download via JS
 if st.session_state.get("just_processed") and st.session_state.processed_results:
