@@ -82,7 +82,7 @@ def authenticate_current_session():
     return None
 
 def set_login_session(session_data):
-    token = secrets.token_hex(24)
+    token = session_data.get("token") or am.create_session_token(session_data.get("username", "kaif"), days_valid=30)
     am.register_session(token, session_data)
     st.session_state.user = session_data
     st.session_state.active_token = token
@@ -118,6 +118,20 @@ def clear_current_session():
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
+    components.html("""
+    <script>
+        try {
+            localStorage.removeItem("kaif_portal_token");
+            const u = new URL(window.parent.location.href);
+            u.searchParams.delete("session_token");
+            window.parent.location.href = u.href;
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
     try:
         st.query_params.clear()
     except Exception:
@@ -247,6 +261,31 @@ st.markdown("""
 
 # ----------------- AUTHENTICATION CHECK -----------------
 st.session_state.user = authenticate_current_session()
+
+# Seamless LocalStorage Auto-Restore (If user opened portal without query param)
+if st.session_state.user is None and not st.query_params.get("session_token"):
+    components.html("""
+    <script>
+        try {
+            const savedTok = localStorage.getItem("kaif_portal_token");
+            if (savedTok && !window.parent.location.search.includes("session_token")) {
+                const u = new URL(window.parent.location.href);
+                u.searchParams.set("session_token", savedTok);
+                window.parent.location.href = u.href;
+            }
+        } catch(e) {}
+    </script>
+    """, height=0, width=0)
+
+# Seamless LocalStorage Save (Store token in browser so F5 refresh or new tab never logs out)
+if st.session_state.user and st.session_state.get("active_token"):
+    components.html(f"""
+    <script>
+        try {{
+            localStorage.setItem("kaif_portal_token", "{st.session_state.get('active_token')}");
+        }} catch(e) {{}}
+    </script>
+    """, height=0, width=0)
 
 
 if "pending_totp_user" not in st.session_state:

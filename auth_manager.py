@@ -20,6 +20,51 @@ ADMIN_EMAIL = "kaifofficial4@gmail.com"
 MASTER_ADMIN_USERNAME = "kaif"
 MASTER_TOTP_SECRET = "XCASLSAZCIRXLXFV"
 
+HMAC_SESSION_SECRET = "KaifTelecomPortal_SuperSecret_HMAC_Key_2026_SecureSession"
+
+def create_session_token(username, days_valid=30):
+    """Generates a cryptographically signed HMAC token valid for 30 days. Never expires on F5 or server restarts."""
+    exp_timestamp = int(time.time()) + (days_valid * 86400)
+    payload = f"{username.strip().lower()}:{exp_timestamp}"
+    sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    token_raw = f"{payload}:{sig}"
+    return base64.urlsafe_b64encode(token_raw.encode()).decode()
+
+def verify_session_token(token_str):
+    """Stateless HMAC verification. Returns user dict if token is authentic and not expired."""
+    if not token_str:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(token_str.encode()).decode()
+        parts = decoded.split(":")
+        if len(parts) != 3:
+            return None
+        username, exp_str, sig = parts
+        exp_timestamp = int(exp_str)
+        if time.time() > exp_timestamp:
+            return None
+        payload = f"{username}:{exp_str}"
+        expected_sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        
+        db = load_db()
+        users = db.get("users", {})
+        u = username.lower()
+        if u in users:
+            u_info = users[u]
+            if u_info.get("status") == "active":
+                return {
+                    "username": u_info["username"],
+                    "name": u_info.get("name", u_info["username"].capitalize()),
+                    "role": u_info.get("role", "user"),
+                    "email": u_info.get("email", ""),
+                    "session_expiry": datetime.datetime.fromtimestamp(exp_timestamp).isoformat()
+                }
+    except Exception:
+        pass
+    return None
+
 # --- Isolated Per-Browser Session Management ---
 def register_session(token, user_info):
     try:
@@ -36,6 +81,12 @@ def register_session(token, user_info):
 def get_session_user(token):
     if not token:
         return None
+    # 1. Stateless cryptographic token verification (100% resilient across F5, reboots & deployments)
+    stateless_user = verify_session_token(token)
+    if stateless_user:
+        return stateless_user
+
+    # 2. Fallback to file-based store
     try:
         if os.path.exists(TOKEN_STORE_FILE):
             with open(TOKEN_STORE_FILE, "r", encoding="utf-8") as f:
@@ -215,8 +266,10 @@ def complete_totp_login(user_info, totp_code):
     
     # Check against master admin secret or user secret
     if verify_totp(master_secret, totp_code) or verify_totp(user_secret, totp_code):
-        expiry = get_next_monday_expiry()
+        token = create_session_token(user_info["username"], days_valid=30)
+        expiry = (datetime.datetime.now() + datetime.timedelta(days=30)).isoformat()
         return True, {
+            "token": token,
             "username": user_info["username"],
             "name": user_info["name"],
             "role": user_info["role"],
