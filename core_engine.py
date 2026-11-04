@@ -113,15 +113,13 @@ def detect_header_row_and_columns(df_raw):
 
             # 2. Destination / Summary with 'name', 'desc', 'location', 'country'
             # (Check BEFORE dial code so 'dst code name', 'dest name', 'code name' are mapped to destination,
-            # BUT do not capture 'country code' / 'county code'!)
-            elif (any(k in v for k in [
-                'dst code name', 'dest code name', 'destination name', 'dest name', 'dst name',
-                'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination',
-                'destination', 'destinations', 'summary', 'location', 'loc name',
-                'national', 'international', 'description', 'destinations name', 'dest summary'
-            ]) or (any(n in v for n in ['name', 'desc', 'summary']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country']))
-               or (any(c in v for c in ['country', 'country name']) and not any(k in v for k in ['code', 'dial', 'prefix', 'digit']))
-            ) and not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode']):
+            # BUT do not capture code columns like 'destination code', 'dest code', 'country code'!)
+            elif (
+                (any(k in v for k in ['destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary'])
+                 or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country']))
+                 or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description'])
+                     and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
+            ) and not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code']):
                 if 'destination' not in mapping:
                     mapping['destination'] = col_idx
                     kw_score += 7
