@@ -386,6 +386,7 @@ if st.session_state.user is None:
 
 # User is authenticated
 current_user = st.session_state.user or {}
+u_name = current_user.get("username", "kaif")
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
 
@@ -798,7 +799,8 @@ if st.session_state.processed_results:
     col_hdr.markdown(f'<div class="badge-success">🎉 {len(results)} Sheet(s) Standardized Successfully! Download below:</div>', unsafe_allow_html=True)
     
     if col_clr.button("🗑️ Clear All / Reset", type="secondary", use_container_width=True, key="top_clear_results_btn"):
-        clear_user_processed_cache(u_name)
+        curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
+        clear_user_processed_cache(curr_u)
         st.session_state.processed_results = None
         st.session_state.elapsed_time = None
         st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
