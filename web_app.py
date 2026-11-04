@@ -12,9 +12,7 @@ import streamlit.components.v1 as components
 import importlib
 
 import auth_manager as am
-importlib.reload(am)
 import core_engine
-importlib.reload(core_engine)
 import secrets
 from config_manager import load_config, add_member, remove_member, set_active_member
 from core_engine import (
@@ -753,28 +751,36 @@ if is_admin:
 
         st.stop()
 
-sample_path = os.path.join(TEMPLATE_DIR, "Vendor Sample sheet.xlsx")
-qc_path = os.path.join(TEMPLATE_DIR, "QC exception Vlookup.xlsx")
+@st.cache_data(show_spinner=False)
+def get_cached_template_file(filename):
+    p = os.path.join(TEMPLATE_DIR, filename)
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return b""
 
-if os.path.exists(sample_path):
-    with open(sample_path, "rb") as f_samp:
-        t_col1.download_button(
-            label="📥 Download Sample Format Sheet",
-            data=f_samp.read(),
-            file_name="Vendor Sample sheet.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
+if sample_bytes:
+    t_col1.download_button(
+        label="📥 Download Sample Format Sheet",
+        data=sample_bytes,
+        file_name="Vendor Sample sheet.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
 
-if os.path.exists(qc_path):
-    with open(qc_path, "rb") as f_qc:
-        t_col2.download_button(
-            label="📥 Download QC Exception Codes",
-            data=f_qc.read(),
-            file_name="QC exception Vlookup.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
+if qc_bytes:
+    t_col2.download_button(
+        label="📥 Download QC Exception Codes",
+        data=qc_bytes,
+        file_name="QC exception Vlookup.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
 
 st.write("")
 

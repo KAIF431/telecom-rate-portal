@@ -57,7 +57,12 @@ DEFAULT_QC_CODES = [
     "4368120875953"
 ]
 
+_CACHED_QC_CODES = None
+
 def load_qc_exception_codes():
+    global _CACHED_QC_CODES
+    if _CACHED_QC_CODES is not None:
+        return _CACHED_QC_CODES
     codes = set(DEFAULT_QC_CODES)
     for p in [DEFAULT_QC_FILE, FALLBACK_QC_FILE]:
         if os.path.exists(p):
@@ -72,6 +77,7 @@ def load_qc_exception_codes():
                 break
             except Exception:
                 pass
+    _CACHED_QC_CODES = codes
     return codes
 
 def detect_header_row_and_columns(df_raw):

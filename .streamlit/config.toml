@@ -5,9 +5,14 @@ enableCORS = false
 enableXsrfProtection = false
 maxUploadSize = 500
 maxMessageSize = 500
+runOnSave = false
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
 
 [client]
 toolbarMode = "minimal"
+
+[runner]
+fastReruns = true
