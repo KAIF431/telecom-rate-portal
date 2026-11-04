@@ -447,7 +447,7 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
             "elapsed_sec": elapsed_sec
         }
         history.insert(0, entry)
-        history = history[:2000]
+        history = history[:100000]
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
     except Exception:

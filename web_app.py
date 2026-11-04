@@ -1,4 +1,5 @@
 import os
+import datetime
 import io
 import re
 import time
@@ -461,20 +462,119 @@ if is_admin:
 
         with a_tab_hist:
             st.subheader("📜 User Processing History & Audit Trail")
-            st.caption("Complete tracking of which user ID processed which vendor sheet, clean row counts, and timestamps.")
+            st.caption("Complete tracking of which user ID processed which vendor sheet from the beginning, with flexible single-day and date-range filters.")
             
             history = am.get_processing_history()
             if not history:
                 st.info("ℹ️ No rate sheets processed yet. As users process files, complete activity records will appear here in real time.")
             else:
-                tot_sheets = len(history)
-                tot_rows = sum(h.get("clean_rows", 0) for h in history)
-                active_users_count = len(set(h.get("username") for h in history if h.get("username")))
+                def extract_entry_date(ts):
+                    if not ts:
+                        return None
+                    try:
+                        s = str(ts).strip()[:10]
+                        return datetime.datetime.strptime(s, "%Y-%m-%d").date()
+                    except Exception:
+                        return None
+
+                today = datetime.date.today()
+                all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
+                valid_dates = [d for d in all_dates if d is not None]
+                min_available_date = min(valid_dates) if valid_dates else today
+                max_available_date = max(valid_dates) if valid_dates else today
+
+                # Date Filter Mode Selector
+                st.markdown("**📅 Filter History by Date:**")
+                date_filter_mode = st.radio(
+                    "Choose Date View:",
+                    ["🌐 All Time (Shuru se ab tak)", "🗓️ Single Date (Kisi ek din ka)", "📆 Date Range (From - To)", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days"],
+                    horizontal=True,
+                    key="hist_date_filter_mode"
+                )
+
+                sel_start_date = None
+                sel_end_date = None
+
+                if date_filter_mode == "🗓️ Single Date (Kisi ek din ka)":
+                    col_sd1, col_sd2 = st.columns([1.5, 2.5])
+                    with col_sd1:
+                        target_day = st.date_input(
+                            "Select Date to View:",
+                            value=max_available_date,
+                            key="hist_single_day_input"
+                        )
+                    sel_start_date = target_day
+                    sel_end_date = target_day
+
+                elif date_filter_mode == "📆 Date Range (From - To)":
+                    col_dr1, col_dr2 = st.columns(2)
+                    with col_dr1:
+                        from_d = st.date_input(
+                            "From Date (Kab se):",
+                            value=min_available_date,
+                            key="hist_from_date_input"
+                        )
+                    with col_dr2:
+                        to_d = st.date_input(
+                            "To Date (Kab tak):",
+                            value=today,
+                            key="hist_to_date_input"
+                        )
+                    sel_start_date = min(from_d, to_d)
+                    sel_end_date = max(from_d, to_d)
+
+                elif date_filter_mode == "⚡ Today":
+                    sel_start_date = today
+                    sel_end_date = today
+
+                elif date_filter_mode == "⚡ Yesterday":
+                    yesterday = today - datetime.timedelta(days=1)
+                    sel_start_date = yesterday
+                    sel_end_date = yesterday
+
+                elif date_filter_mode == "⚡ Last 7 Days":
+                    sel_start_date = today - datetime.timedelta(days=7)
+                    sel_end_date = today
+
+                # Secondary Filters: User ID and Keyword Search
+                fc1, fc2 = st.columns([1.5, 2.5])
+                with fc1:
+                    user_options = ["All Users"] + sorted(list(set(h.get("username", "") for h in history if h.get("username"))))
+                    selected_user = st.selectbox("Filter by User ID:", user_options, key="audit_filter_user")
+                with fc2:
+                    filter_kw = st.text_input("Search by Vendor or File Name:", key="audit_search_kw", placeholder="Type vendor or filename to search...")
+
+                # Filtering logic
+                filtered = []
+                for entry in history:
+                    e_date = extract_entry_date(entry.get("timestamp"))
+                    
+                    if sel_start_date and sel_end_date:
+                        if not e_date or not (sel_start_date <= e_date <= sel_end_date):
+                            continue
+                    
+                    if selected_user != "All Users" and entry.get("username") != selected_user:
+                        continue
+                    
+                    if filter_kw:
+                        kw_low = filter_kw.strip().lower()
+                        v_name = entry.get("vendor_name", "").lower()
+                        out_f = entry.get("output_filename", "").lower()
+                        u_f = entry.get("username", "").lower()
+                        if kw_low not in v_name and kw_low not in out_f and kw_low not in u_f:
+                            continue
+                            
+                    filtered.append(entry)
+
+                # Metrics for filtered view
+                f_sheets = len(filtered)
+                f_rows = sum(h.get("clean_rows", 0) for h in filtered)
+                f_users = len(set(h.get("username") for h in filtered if h.get("username")))
                 
                 m1, m2, m3, m4 = st.columns([1.5, 1.5, 1.5, 1.2])
-                m1.metric("Total Sheets Standardized", f"{tot_sheets:,}")
-                m2.metric("Total Rows Processed", f"{tot_rows:,}")
-                m3.metric("Contributing Users", f"{active_users_count}")
+                m1.metric("Sheets Standardized", f"{f_sheets:,}")
+                m2.metric("Total Rows Processed", f"{f_rows:,}")
+                m3.metric("Contributing Users", f"{f_users}")
                 with m4:
                     st.write("")
                     if st.button("🗑️ Clear Audit Log", key="main_clear_hist_btn", use_container_width=True):
@@ -482,37 +582,38 @@ if is_admin:
                         st.success("Activity log cleared!")
                         time.sleep(0.8)
                         st.rerun()
-                
+
                 st.divider()
-                
-                fc1, fc2 = st.columns([1.5, 2.5])
-                with fc1:
-                    user_options = ["All Users"] + sorted(list(set(h.get("username", "") for h in history if h.get("username"))))
-                    selected_user = st.selectbox("Filter by User ID:", user_options, key="audit_filter_user")
-                with fc2:
-                    filter_kw = st.text_input("Search by Vendor or File Name:", key="audit_search_kw", placeholder="Type vendor or filename to search...")
-                
-                filtered = history
-                if selected_user != "All Users":
-                    filtered = [h for h in filtered if h.get("username") == selected_user]
-                if filter_kw:
-                    kw_low = filter_kw.strip().lower()
-                    filtered = [h for h in filtered if kw_low in h.get("vendor_name", "").lower() or kw_low in h.get("output_filename", "").lower()]
-                
-                table_rows = []
-                for entry in filtered:
-                    table_rows.append({
-                        "Timestamp": entry.get("timestamp"),
-                        "User ID": entry.get("username"),
-                        "User Full Name": entry.get("user_name"),
-                        "Vendor / Trunk Name": entry.get("vendor_name"),
-                        "Standardized File": entry.get("output_filename"),
-                        "Clean Rows": f"{entry.get('clean_rows', 0):,}",
-                        "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
-                        "Speed": f"{entry.get('elapsed_sec', 0)}s"
-                    })
-                
-                st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+
+                if not filtered:
+                    st.warning("⚠️ No processing records found for the selected date / filter criteria.")
+                else:
+                    table_rows = []
+                    for entry in filtered:
+                        table_rows.append({
+                            "Timestamp": entry.get("timestamp"),
+                            "Date": str(entry.get("timestamp"))[:10],
+                            "User ID": entry.get("username"),
+                            "User Full Name": entry.get("user_name"),
+                            "Vendor / Trunk Name": entry.get("vendor_name"),
+                            "Standardized File": entry.get("output_filename"),
+                            "Clean Rows": f"{entry.get('clean_rows', 0):,}",
+                            "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
+                            "Speed": f"{entry.get('elapsed_sec', 0)}s"
+                        })
+                    
+                    df_audit = pd.DataFrame(table_rows)
+                    st.dataframe(df_audit, use_container_width=True, hide_index=True)
+
+                    # Export Audit Log to CSV
+                    csv_data = df_audit.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download This History (CSV)",
+                        data=csv_data,
+                        file_name=f"audit_history_{today.strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        key="btn_download_audit_csv"
+                    )
 
         with a_tab_edit:
             st.subheader("✏️ Edit User Display / Full Name")
