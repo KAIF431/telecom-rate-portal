@@ -58,13 +58,8 @@ def authenticate_current_session():
             st.session_state.user = user_info
             st.session_state.active_token = token
             return user_info
-        else:
-            try:
-                st.query_params.clear()
-            except Exception:
-                pass
 
-    # 3. Check Streamlit Cloud persistent browser cookie (ajs_anonymous_id)
+    # 3. Check Streamlit Cloud browser cookie
     try:
         if hasattr(st, "context") and hasattr(st.context, "cookies"):
             cookie_id = st.context.cookies.get("ajs_anonymous_id")

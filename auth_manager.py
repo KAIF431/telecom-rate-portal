@@ -23,20 +23,37 @@ MASTER_TOTP_SECRET = "XCASLSAZCIRXLXFV"
 HMAC_SESSION_SECRET = "KaifTelecomPortal_SuperSecret_HMAC_Key_2026_SecureSession"
 
 def create_session_token(username, days_valid=30):
-    """Generates a cryptographically signed HMAC token valid for 30 days. Never expires on F5 or server restarts."""
+    """Generates a clean, URL-safe alphanumeric HEX token valid for 30 days. Never has = padding issues."""
     exp_timestamp = int(time.time()) + (days_valid * 86400)
     payload = f"{username.strip().lower()}:{exp_timestamp}"
     sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    token_raw = f"{payload}:{sig}"
-    return base64.urlsafe_b64encode(token_raw.encode()).decode()
+    raw = f"{payload}:{sig}"
+    return raw.encode("utf-8").hex()
 
 def verify_session_token(token_str):
-    """Stateless HMAC verification. Returns user dict if token is authentic and not expired."""
+    """Stateless verification supporting both clean HEX and legacy auto-padded base64 tokens."""
     if not token_str:
         return None
     try:
-        decoded = base64.urlsafe_b64decode(token_str.encode()).decode()
-        parts = decoded.split(":")
+        if isinstance(token_str, (list, tuple)):
+            token_str = token_str[0]
+        token_str = str(token_str).strip()
+        raw = None
+        # 1. Try Hex first
+        try:
+            raw = bytes.fromhex(token_str).decode("utf-8")
+        except Exception:
+            pass
+        # 2. Try Base64 with auto-padding fallback
+        if not raw:
+            try:
+                padded = token_str + "=" * (-len(token_str) % 4)
+                raw = base64.urlsafe_b64decode(padded.encode()).decode("utf-8")
+            except Exception:
+                pass
+        if not raw or ":" not in raw:
+            return None
+        parts = raw.split(":")
         if len(parts) != 3:
             return None
         username, exp_str, sig = parts
