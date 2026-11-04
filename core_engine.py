@@ -275,6 +275,54 @@ def analyze_vendor_comments(df_slice, status_col_idx):
     tag_str = ", ".join(ordered_tags)
     return True, f"Various {tag_str}"
 
+def should_use_dayfirst(series):
+    """
+    Intelligently determines if date parsing should use dayfirst=True:
+    - Dot-separated dates (e.g. 04.11.2026) are European DD.MM.YYYY standard
+    - Dates where the first integer is > 12 (e.g. 21.09.2026, 25/11/2026) indicate DD/MM/YYYY
+    - Dates where the second integer is > 12 (e.g. 11/25/2026) indicate MM/DD/YYYY
+    - ISO formats (YYYY-MM-DD) default to dayfirst=False
+    """
+    has_dot_date = False
+    has_first_gt_12 = False
+    has_second_gt_12 = False
+    has_iso = False
+
+    sample = series.dropna().head(300)
+    for val in sample:
+        if isinstance(val, (datetime.date, datetime.datetime, pd.Timestamp)):
+            continue
+        s = str(val).strip()
+        if not s or s.lower() in ['nan', 'nat', 'none', '', '-']:
+            continue
+
+        if re.match(r'^\d{4}[-/]', s):
+            has_iso = True
+            continue
+
+        if re.match(r'^\d{1,2}\.\d{1,2}\.\d{2,4}', s):
+            has_dot_date = True
+
+        m = re.match(r'^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})', s)
+        if m:
+            n1 = int(m.group(1))
+            n2 = int(m.group(2))
+            if n1 > 12 and n2 <= 12:
+                has_first_gt_12 = True
+            elif n2 > 12 and n1 <= 12:
+                has_second_gt_12 = True
+
+    if has_iso and not has_first_gt_12 and not has_dot_date:
+        return False
+
+    if has_second_gt_12:
+        return False
+
+    if has_first_gt_12 or has_dot_date:
+        return True
+
+    return False
+
 def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     """
     High-speed vectorized data transformation engine (< 2 seconds):
@@ -463,7 +511,8 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     date_objs = []
     date_strs = []
     if date_idx is not None:
-        parsed_dates = pd.to_datetime(df_valid.iloc[:, date_idx], format='mixed', errors='coerce')
+        use_df = should_use_dayfirst(df_valid.iloc[:, date_idx])
+        parsed_dates = pd.to_datetime(df_valid.iloc[:, date_idx], format='mixed', dayfirst=use_df, errors='coerce')
         for dt in parsed_dates:
             if pd.notna(dt):
                 d_val = dt.date()
