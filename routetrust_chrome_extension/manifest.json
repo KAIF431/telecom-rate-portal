@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "RouteTrust Auto-Pilot & Zero-Touch Uploader",
+  "version": "1.1.0",
+  "description": "Zero-touch rate sheet standardizer & auto-uploader for RouteTrust MCM.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://mcm.routetrust.com/*",
+    "https://*.streamlit.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RouteTrust Auto-Pilot"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mcm.routetrust.com/netpro/sub/rateimport/*"
+      ],
+      "js": [
+        "content_routetrust.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.streamlit.app/*"
+      ],
+      "js": [
+        "content_portal.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
