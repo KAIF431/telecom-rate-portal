@@ -710,6 +710,16 @@
     "elapsed_sec": 1.75
   },
   {
+    "timestamp": "2026-11-05 11:27:38",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Teloz Macau (Vendor CC)",
+    "output_filename": "Teloz Macau (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 11:26:41",
     "username": "kaif",
     "user_name": "Kaif",
@@ -800,6 +810,16 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-05 10:42:39",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "MCM (Vendor Prm)",
+    "output_filename": "MCM (Vendor Prm) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 9782,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 10:40:09",
     "username": "kaif",
     "user_name": "Kaif",
@@ -808,6 +828,56 @@
     "clean_rows": 31162,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:16:30",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Ace Peak CLI (Vendor CLI)",
+    "output_filename": "Ace Peak CLI (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 4948,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:15:20",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Ace Peak CC (Vendor CC)",
+    "output_filename": "Ace Peak CC (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 08:47:06",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CLI Gold (Vendor CLI)",
+    "output_filename": "Twiching General CLI Gold (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 06:44:42",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CC (Vendor CC)",
+    "output_filename": "Twiching General CC (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 767,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 06:18:39",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CLI (Vendor CLI)",
+    "output_filename": "Twiching General CLI (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-05 06:06:57",
@@ -920,6 +990,16 @@
     "elapsed_sec": 1.75
   },
   {
+    "timestamp": "2026-11-04 18:08:35",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QUICKCOM (Vendor CC)",
+    "output_filename": "QUICKCOM (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 16780,
+    "qc_excluded": 95,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-04 18:04:05",
     "username": "kaif",
     "user_name": "Kaif",
@@ -948,6 +1028,36 @@
     "clean_rows": 16780,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 18:00:43",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QUICKCOM Standard (Vendor CC)",
+    "output_filename": "QUICKCOM Standard (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 16780,
+    "qc_excluded": 95,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 17:54:29",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Nuetech (Vendor Prm)",
+    "output_filename": "Nuetech (Vendor Prm) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 506,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 17:27:52",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "ROZPER BRAZIL (Vendor CLI)",
+    "output_filename": "ROZPER BRAZIL (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-04 16:51:40",
@@ -1028,6 +1138,16 @@
     "clean_rows": 83972,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-10-23 16:31:20",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Giacom (Vendor CC)",
+    "output_filename": "Giacom (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 83972,
+    "qc_excluded": 2614,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-10-16 15:46:26",

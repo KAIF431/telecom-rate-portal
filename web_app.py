@@ -449,6 +449,54 @@ with top_head_col2:
 # Template Download Buttons Row
 t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
 
+def get_historical_file_bytes(filename):
+    if not filename:
+        return None
+    p = os.path.join(OUTPUT_DIR, filename)
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    dl_p = os.path.join(os.path.expanduser("~"), "Downloads", filename)
+    if os.path.exists(dl_p):
+        try:
+            with open(dl_p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return None
+
+def get_historical_csv_bytes(filename, excel_bytes=None):
+    if not filename:
+        return None, ""
+    base = filename.rsplit(".", 1)[0]
+    csv_fname = base + ".csv"
+    p_csv = os.path.join(OUTPUT_DIR, csv_fname)
+    if os.path.exists(p_csv):
+        try:
+            with open(p_csv, "rb") as f:
+                return f.read(), csv_fname
+        except Exception:
+            pass
+    dl_csv = os.path.join(os.path.expanduser("~"), "Downloads", csv_fname)
+    if os.path.exists(dl_csv):
+        try:
+            with open(dl_csv, "rb") as f:
+                return f.read(), csv_fname
+        except Exception:
+            pass
+    if excel_bytes:
+        try:
+            df = pd.read_excel(io.BytesIO(excel_bytes), engine="openpyxl")
+            buf = io.StringIO()
+            df.to_csv(buf, index=False)
+            return buf.getvalue().encode("utf-8"), csv_fname
+        except Exception:
+            pass
+    return None, csv_fname
+
 if is_admin:
     st.markdown("---")
     admin_nav_mode = st.radio(
@@ -493,8 +541,8 @@ if is_admin:
                 st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
 
         with a_tab_hist:
-            st.subheader("📜 User Processing History & Audit Trail")
-            st.caption("Complete tracking of which user processed which vendor sheet from the beginning, with flexible date and user filters.")
+            st.subheader("📜 User Processing History & Download Center")
+            st.caption("Complete tracking of every rate sheet standardized by all team members (Kaif, Arhama, Aliba) with 1-click Excel and CSV downloads.")
             
             history = am.get_processing_history()
             if not history:
@@ -515,6 +563,24 @@ if is_admin:
                 valid_dates = [d for d in all_dates if d is not None]
                 min_available_date = min(valid_dates) if valid_dates else today
                 max_available_date = max(valid_dates) if valid_dates else today
+
+                total_sheets = len(history)
+                arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+
+                m1, m2, m3, m4 = st.columns([1.5, 1.5, 1.5, 1])
+                m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
+                m2.metric("👩 Standardized by Arhama", f"{arhama_total}")
+                m3.metric("👨 Standardized by Kaif", f"{kaif_total}")
+                with m4:
+                    st.write("")
+                    if st.button("🗑️ Clear Log", key="main_clear_hist_btn", use_container_width=True):
+                        am.clear_processing_history()
+                        st.success("Activity log cleared!")
+                        time.sleep(0.8)
+                        st.rerun()
+
+                st.divider()
 
                 # Date Filter Mode Selector
                 st.markdown("**📅 Filter History by Date:**")
@@ -591,26 +657,50 @@ if is_admin:
                             
                     filtered.append(entry)
 
-                # Metrics: ONLY Sheets count and User count (Clean Rows Processed is removed!)
-                f_sheets = len(filtered)
-                f_users = len(set(h.get("username") for h in filtered if h.get("username")))
-                
-                m1, m2, m3 = st.columns([2, 2, 1.2])
-                m1.metric("Sheets Standardized", f"{f_sheets:,}")
-                m2.metric("Contributing Users", f"{f_users}")
-                with m3:
-                    st.write("")
-                    if st.button("🗑️ Clear Audit Log", key="main_clear_hist_btn", use_container_width=True):
-                        am.clear_processing_history()
-                        st.success("Activity log cleared!")
-                        time.sleep(0.8)
-                        st.rerun()
-
-                st.divider()
+                st.markdown(f"**Showing {len(filtered)} Rate Sheet(s) Matching Filter:**")
 
                 if not filtered:
                     st.warning("⚠️ No processing records found for the selected date / filter criteria.")
                 else:
+                    # 1-Click Instant Sheet Download
+                    st.markdown("#### ⚡ 1-Click Instant Sheet Download")
+                    sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
+                    if sheet_options:
+                        sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key="admin_quick_dl_select")
+                        if sel_sheet:
+                            xl_bytes = get_historical_file_bytes(sel_sheet)
+                            csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
+                            
+                            c_dl1, c_dl2 = st.columns(2)
+                            with c_dl1:
+                                if xl_bytes:
+                                    st.download_button(
+                                        label=f"📊 Download Excel (.xlsx)",
+                                        data=xl_bytes,
+                                        file_name=sel_sheet,
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        key=f"admin_hist_quick_dl_xl_{sel_sheet}",
+                                        type="primary",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True)
+                            with c_dl2:
+                                if csv_b:
+                                    st.download_button(
+                                        label=f"📄 Download CSV (.csv)",
+                                        data=csv_b,
+                                        file_name=csv_fn,
+                                        mime="text/csv",
+                                        key=f"admin_hist_quick_dl_csv_{sel_sheet}",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.button(f"CSV Not in Cache", disabled=True, use_container_width=True)
+
+                    st.markdown("---")
+                    st.markdown("#### 📜 Complete Activity & History Table")
+
                     table_rows = []
                     for entry in filtered:
                         u_disp = entry.get("user_name") or entry.get("username")
