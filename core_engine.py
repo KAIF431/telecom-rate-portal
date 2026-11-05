@@ -392,22 +392,56 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                 best_cand = c_i
         rate_idx = best_cand if (best_cand is not None and best_cand_numeric_count >= 10) else (2 if 2 not in known_indices else 3)
 
-    # Separate min/inc if exists (supports Minimum/Increment, Initial/Recurring, and carrier codes like MC/CI)
-    min_col_idx = None
-    inc_col_idx = None
-    for idx, col_name in enumerate(header_names):
-        c_name = str(col_name).lower().strip()
-        c_clean = re.sub(r'[^a-z0-9]', ' ', c_name).strip()
-        if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or c_clean in ['mc', 'min', 'initial', 'init', 'first', 'min volume']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
-            min_col_idx = idx
-        elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration']) or c_clean in ['ci', 'inc', 'recur', 'next', 'interval', 'step']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
-            inc_col_idx = idx
+    # Check if ANY column contains combined pulse strings (e.g. '1/1', '60/1', '30/6', '0/1/1', '60/60')
+    def is_pulse_string_sample(s):
+        s = str(s).strip().lstrip("'\"").strip()
+        if not s or s.lower() in ['nan', 'none', '']: 
+            return False
+        if '/' in s:
+            parts = s.split('/')
+        elif '-' in s and not re.search(r'\d{4}', s):
+            parts = s.split('-')
+        else:
+            return False
+        if len(parts) in [2, 3]:
+            try:
+                nums = [int(float(p.strip())) for p in parts if p.strip()]
+                if len(nums) == len(parts) and all(0 <= n <= 300 for n in nums):
+                    return True
+            except Exception:
+                return False
+        return False
 
-    # If only one increment or minimum column exists without separate pair, treat as combined pulse column
-    if min_col_idx is None and inc_col_idx is not None and pulse_idx is None:
-        pulse_idx = inc_col_idx
-    elif min_col_idx is not None and inc_col_idx is None and pulse_idx is None:
-        pulse_idx = min_col_idx
+    combined_pulse_col = None
+    for c_i in range(df_data.shape[1]):
+        if c_i in [code_idx, dest_idx, date_idx]:
+            continue
+        sample_vals = df_data.iloc[:50, c_i].dropna().astype(str).tolist()
+        if sum(1 for v in sample_vals if is_pulse_string_sample(v)) >= 3:
+            combined_pulse_col = c_i
+            break
+
+    if combined_pulse_col is not None:
+        pulse_idx = combined_pulse_col
+        min_col_idx = None
+        inc_col_idx = None
+    else:
+        # Separate min/inc if exists (supports Minimum/Increment, Initial/Recurring, and carrier codes like MC/CI)
+        min_col_idx = None
+        inc_col_idx = None
+        for idx, col_name in enumerate(header_names):
+            c_name = str(col_name).lower().strip()
+            c_clean = re.sub(r'[^a-z0-9]', ' ', c_name).strip()
+            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or c_clean in ['mc', 'min', 'initial', 'init', 'first', 'min volume']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
+                min_col_idx = idx
+            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration']) or c_clean in ['ci', 'inc', 'recur', 'next', 'interval', 'step']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
+                inc_col_idx = idx
+
+        # If only one increment or minimum column exists without separate pair, treat as combined pulse column
+        if min_col_idx is None and inc_col_idx is not None and pulse_idx is None:
+            pulse_idx = inc_col_idx
+        elif min_col_idx is not None and inc_col_idx is None and pulse_idx is None:
+            pulse_idx = min_col_idx
 
     # If no pulse/min/inc column was found in table, check header notes (rows 0 to header_row_idx) for default vendor pulse
     default_header_min = None

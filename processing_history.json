@@ -1,1 +1,162 @@
-[]
+[
+  {
+    "timestamp": "2026-11-05 11:35:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mushtech - Teloz NFS (Vendor CC)",
+    "output_filename": "Mushtech - Teloz NFS (Vendor CC) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 16923,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 11:30:33",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MMDSMART TELOZ NFS (Vendor CLI)",
+    "output_filename": "MMDSMART TELOZ NFS (Vendor CLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 64016,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 11:28:06",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MMDSMART TELOZ NFS (Vendor CC)",
+    "output_filename": "MMDSMART TELOZ NFS (Vendor CC) A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 62546,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:55:01",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "9Eons - Meratalk NFS (Vendor CLI)",
+    "output_filename": "9Eons - Meratalk NFS (Vendor CLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 31161,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:50:25",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mobik (Vendor Prm)",
+    "output_filename": "Mobik (Vendor Prm) A to Z Various inc, dec Kaif.xlsx",
+    "clean_rows": 26321,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:43:00",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Sigma (Vendor Prm)",
+    "output_filename": "Sigma (Vendor Prm) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 9782,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:40:09",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "9Eons Limited (Vendor CLI)",
+    "output_filename": "9Eons Limited (Vendor CLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 31162,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 06:06:57",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "EARTHCOMM- Rozper NFS (Vendor NCLI)",
+    "output_filename": "EARTHCOMM- Rozper NFS (Vendor NCLI) A to Z Various inc, dec, new Arhama.xlsx",
+    "clean_rows": 16813,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.45
+  },
+  {
+    "timestamp": "2026-11-04 18:58:19",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CLI)",
+    "output_filename": "GeoNet Telecom - Ajoxi NFS (Vendor CLI) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 148605,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 18:54:42",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CC)",
+    "output_filename": "GeoNet Telecom - Ajoxi NFS (Vendor CC) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 126155,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 18:01:25",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "kaif Testing (VEndor CC)",
+    "output_filename": "kaif Testing (VEndor CC) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 16780,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 16:34:59",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "DID LOGIC - MERATALK LLC NFS (VENDOR CC)A to Z new same arhama",
+    "output_filename": "DID LOGIC - MERATALK LLC NFS (VENDOR CC)A to Z new same arhama.xlsx",
+    "clean_rows": 898,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 13:32:52",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "EasyVoipCall Letsdial (Vendor NCLI)",
+    "output_filename": "EasyVoipCall Letsdial (Vendor NCLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 15216,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 13:32:50",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "EasyVoipCall Letsdial (Vendor CLI)",
+    "output_filename": "EasyVoipCall Letsdial (Vendor CLI) A to Z Various inc, dec, same, new Kaif.xlsx",
+    "clean_rows": 15858,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 13:32:49",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "EasyVoipCall Letsdial (Vendor CC)",
+    "output_filename": "EasyVoipCall Letsdial (Vendor CC) A to Z Various same Kaif.xlsx",
+    "clean_rows": 15199,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 12:56:15",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Digital Wholesale Solution (Vendor Prm)",
+    "output_filename": "Digital Wholesale Solution (Vendor Prm) A to Z Various inc, dec, same Arhama.xlsx",
+    "clean_rows": 83972,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.2
+  }
+]
