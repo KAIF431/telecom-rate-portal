@@ -169,12 +169,28 @@ def detect_header_row_and_columns(df_raw):
                     mapping['rate'] = col_idx
                     kw_score += 7
 
-            # 5. Effective Date keywords (ignore expiry/end dates)
-            elif any(k in v for k in ['effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date', 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from', 'valid from', 'valid date', 'start date']) \
-                and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
-                if 'effective_date' not in mapping or 'effective' in v or 'effectiv' in v:
-                    mapping['effective_date'] = col_idx
-                    kw_score += 5
+            # 5. Effective Date keywords (ignore expiry/end dates, support 'Active' / 'Activation' when containing dates)
+            elif any(k in v for k in [
+                'effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date',
+                'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from',
+                'valid from', 'valid date', 'start date', 'active from', 'active date', 'activation date',
+                'active', 'activation'
+            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
+                is_valid_date_col = True
+                if v in ['active', 'activation']:
+                    sample_check = df_raw.iloc[row_idx + 1 : min(row_idx + 15, len(df_raw)), col_idx].dropna().tolist()
+                    has_date_sample = any(
+                        isinstance(x, (datetime.date, datetime.datetime, pd.Timestamp)) or 
+                        bool(re.search(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', str(x)))
+                        for x in sample_check
+                    )
+                    if not has_date_sample:
+                        is_valid_date_col = False
+
+                if is_valid_date_col:
+                    if 'effective_date' not in mapping or 'effective' in v or 'effectiv' in v:
+                        mapping['effective_date'] = col_idx
+                        kw_score += 5
 
             # 6. Pulse / Billing keywords
             elif any(k in v for k in [
