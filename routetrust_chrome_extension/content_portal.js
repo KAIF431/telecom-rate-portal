@@ -1,106 +1,58 @@
 // content_portal.js - Injected into Telecom Rate Portal
-// Adds "Auto Upload to RouteTrust" button and manages background execution
+// Listens to "Auto Upload to RouteTrust" and coordinates background execution
 
 (function () {
   'use strict';
 
-  console.log('[RouteTrust Auto-Pilot] Portal script initialized.');
+  console.log('[RouteTrust Auto-Pilot] Portal listener active.');
 
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
+  // Listen to inline onclick postMessage from button
+  window.addEventListener('message', function (event) {
+    if (event.data && event.data.action === 'PORTAL_BTN_CLICKED') {
+      const { subName, fileName, b64 } = event.data;
+      console.log('[RouteTrust Auto-Pilot] Button clicked for sub:', subName);
 
-  // Inject Auto Upload Button next to Download Excel button
-  function injectAutoUploadButtons() {
-    const downloadLinks = Array.from(document.querySelectorAll('a[download]'));
-
-    for (const link of downloadLinks) {
-      const downloadAttr = link.getAttribute('download') || '';
-      const href = link.getAttribute('href') || '';
-
-      // Only target cleaned .xlsx files
-      if (!downloadAttr.endsWith('.xlsx')) continue;
-
-      // Check if button already injected for this link
-      const parentContainer = link.closest('[data-testid="column"]') || link.parentElement;
-      if (!parentContainer || parentContainer.querySelector('.rt-injected-container')) continue;
-
-      // Extract Subscription/Vendor Name from filename
-      let subName = downloadAttr.split(' A to Z ')[0].trim();
-      if (!subName || subName.length < 2) {
-        subName = downloadAttr.split('.')[0].trim();
+      try {
+        chrome.runtime.sendMessage({
+          action: 'START_AUTO_UPLOAD',
+          subName: subName,
+          fileName: fileName,
+          fileBase64: b64
+        }, (response) => {
+          console.log('[RouteTrust Auto-Pilot] Background response:', response);
+        });
+      } catch (err) {
+        console.error('[RouteTrust Auto-Pilot] Extension error:', err);
       }
+    }
+  });
 
-      console.log('[RouteTrust Auto-Pilot] Found Excel sheet for sub:', subName);
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'rt-injected-container';
-      wrapper.innerHTML = `
-        <div class="rt-card">
-          <div class="rt-card-header">
-            <span class="rt-badge-target">🎯 Target: <b>${subName}</b></span>
-          </div>
-          <button class="rt-btn-autoupload" data-filename="${downloadAttr}" data-href="${href}" data-subname="${subName}">
-            🚀 Auto Upload to RouteTrust
-          </button>
-          <div class="rt-card-status" style="display:none;"></div>
-        </div>
-      `;
-
-      // Insert right below the download button
-      parentContainer.appendChild(wrapper);
-
-      // Handle Click on Auto Upload
-      const btn = wrapper.querySelector('.rt-btn-autoupload');
-      const statusBox = wrapper.querySelector('.rt-card-status');
-
-      btn.addEventListener('click', async function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        btn.disabled = true;
-        btn.classList.add('rt-loading');
-        btn.innerHTML = `⏳ Uploading to RouteTrust in Background...`;
-        statusBox.style.display = 'block';
-        statusBox.className = 'rt-card-status rt-status-working';
-        statusBox.innerHTML = `⏳ Searching <b>${subName}</b> & uploading rate deck...`;
-
+  // Also bind direct clicks if any
+  function bindClicks() {
+    const buttons = document.querySelectorAll('.rt-btn-autoupload');
+    buttons.forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = 'true';
+      btn.addEventListener('click', function () {
+        const subName = btn.dataset.subname || 'KAMAHIRAF (VENDOR CLI)';
+        const fileName = btn.dataset.filename || 'rates.xlsx';
+        const fileBase64 = btn.dataset.b64 || '';
         try {
-          // Fetch the Excel blob from the download link
-          const res = await fetch(href);
-          const blob = await res.blob();
-          const base64Data = await blobToBase64(blob);
-
           chrome.runtime.sendMessage({
             action: 'START_AUTO_UPLOAD',
             subName: subName,
-            fileName: downloadAttr,
-            fileBase64: base64Data
-          }, (response) => {
-            console.log('[RouteTrust Auto-Pilot] Started background upload:', response);
+            fileName: fileName,
+            fileBase64: fileBase64
           });
-        } catch (err) {
-          console.error('[RouteTrust Auto-Pilot] Error initiating upload:', err);
-          btn.disabled = false;
-          btn.innerHTML = `❌ Upload Failed - Try Again`;
-          statusBox.className = 'rt-card-status rt-status-error';
-          statusBox.innerHTML = `⚠️ Error reading Excel blob: ${err.message}`;
-        }
+        } catch (e) {}
       });
-    }
+    });
   }
+  setInterval(bindClicks, 1000);
 
-  // Listen for Stage Updates and Success from Background
+  // Listen for Live Stage Updates & Success from Background
   chrome.runtime.onMessage.addListener((msg) => {
-    console.log('[RouteTrust Auto-Pilot] Portal message received:', msg);
+    console.log('[RouteTrust Auto-Pilot] Portal stage update:', msg);
 
     const statusBoxes = document.querySelectorAll('.rt-card-status');
     const autoBtns = document.querySelectorAll('.rt-btn-autoupload');
@@ -108,7 +60,9 @@
     if (msg.action === 'PORTAL_UPDATE_STAGE') {
       statusBoxes.forEach(sb => {
         sb.style.display = 'block';
-        sb.className = 'rt-card-status rt-status-working';
+        sb.style.background = 'rgba(245, 158, 11, 0.15)';
+        sb.style.color = '#fbbf24';
+        sb.style.border = '1px solid rgba(245, 158, 11, 0.3)';
         sb.innerHTML = `⏳ ${msg.message}`;
       });
       autoBtns.forEach(btn => {
@@ -119,18 +73,17 @@
     if (msg.action === 'PORTAL_SUCCESS') {
       statusBoxes.forEach(sb => {
         sb.style.display = 'block';
-        sb.className = 'rt-card-status rt-status-success';
+        sb.style.background = 'rgba(34, 197, 94, 0.15)';
+        sb.style.color = '#4ade80';
+        sb.style.border = '1px solid rgba(34, 197, 94, 0.3)';
         sb.innerHTML = `🎉 <b>SUCCESS!</b> Rates Approved & Loaded into RouteTrust (<b>${msg.subName}</b>)!`;
       });
       autoBtns.forEach(btn => {
         btn.disabled = false;
-        btn.classList.remove('rt-loading');
-        btn.classList.add('rt-success');
+        btn.style.background = 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)';
+        btn.style.borderColor = '#22c55e';
         btn.innerHTML = `✅ Rates Approved & Loaded!`;
       });
     }
   });
-
-  // Watch for DOM changes in Streamlit
-  setInterval(injectAutoUploadButtons, 1200);
 })();

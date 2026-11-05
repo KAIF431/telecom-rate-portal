@@ -1,6 +1,5 @@
-// background.js - Full Background Pipeline for RouteTrust Auto-Pilot
+// background.js - Service Worker for RouteTrust Auto-Pilot
 
-// Pre-seeded known subscription IDs mapping
 let subscriptionMap = {
   "KAMAHIRAF (VENDOR CLI)": "29168",
   "KAMAHIRAF": "29168",
@@ -8,7 +7,6 @@ let subscriptionMap = {
   "QUICKCOM TELECOM - ROZPER (VENDOR CC)": "16415"
 };
 
-// Load saved mapping from storage
 chrome.storage.local.get(['sub_mapping'], (res) => {
   if (res.sub_mapping) {
     subscriptionMap = { ...subscriptionMap, ...res.sub_mapping };
@@ -20,12 +18,10 @@ let currentTask = null;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[Background] Message received:', request.action, request);
 
-  // 1. Triggered from Portal (Auto Upload clicked)
   if (request.action === 'START_AUTO_UPLOAD') {
     const rawSubName = (request.subName || '').trim();
     const cleanSubKey = rawSubName.toUpperCase();
 
-    // Check if we already have the ID in our map
     let targetSubId = null;
     for (const [key, id] of Object.entries(subscriptionMap)) {
       if (cleanSubKey.includes(key) || key.includes(cleanSubKey)) {
@@ -34,11 +30,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     }
 
-    // Default fallback to 29168 if Kamahiraf or testing
     if (!targetSubId) {
       if (cleanSubKey.includes('KAMAHIRAF')) targetSubId = '29168';
       else if (cleanSubKey.includes('ROZPER') && cleanSubKey.includes('CC')) targetSubId = '16415';
-      else targetSubId = '29168'; // default test ID
+      else targetSubId = '29168';
     }
 
     currentTask = {
@@ -47,23 +42,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fileName: request.fileName,
       fileBase64: request.fileBase64,
       portalTabId: sender.tab ? sender.tab.id : null,
-      stage: 'INIT',
       rtTabId: null
     };
 
-    console.log('[Background] Starting task for:', rawSubName, '-> Sub ID:', targetSubId);
+    console.log('[Background] Opening RouteTrust for:', rawSubName, '-> Sub ID:', targetSubId);
 
-    // Open RouteTrust upload page in a background tab (active: false so it doesn't interrupt Kaif)
+    // Open RouteTrust tab actively so Kaif can watch the magic live!
     const uploadUrl = `https://mcm.routetrust.com/netpro/sub/rateimport/upload/id/${targetSubId}`;
-    chrome.tabs.create({ url: uploadUrl, active: false }, (tab) => {
+    chrome.tabs.create({ url: uploadUrl, active: true }, (tab) => {
       currentTask.rtTabId = tab.id;
       sendResponse({ status: 'STARTED', subId: targetSubId, subName: rawSubName });
     });
 
-    return true; // async
+    return true;
   }
 
-  // 2. RouteTrust upload page requesting file
   if (request.action === 'GET_RT_FILE') {
     if (currentTask && currentTask.fileBase64) {
       sendResponse({
@@ -79,7 +72,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // 3. Stage updates from RouteTrust
   if (request.action === 'UPDATE_STAGE') {
     console.log('[Background] Stage update:', request.stage, request.message);
     if (currentTask && currentTask.portalTabId) {
@@ -91,9 +83,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 
-  // 4. Completed! Rates loaded
   if (request.action === 'RT_COMPLETED') {
-    console.log('[Background] RouteTrust pipeline finished successfully for ID:', request.subId);
+    console.log('[Background] Pipeline finished successfully for ID:', request.subId);
     if (currentTask && currentTask.portalTabId) {
       chrome.tabs.sendMessage(currentTask.portalTabId, {
         action: 'PORTAL_SUCCESS',
@@ -103,22 +94,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }).catch(() => {});
     }
 
-    // Close the background RouteTrust tab after 2 seconds
-    if (currentTask && currentTask.rtTabId) {
-      setTimeout(() => {
-        chrome.tabs.remove(currentTask.rtTabId).catch(() => {});
-        currentTask = null;
-      }, 2500);
-    }
-
     sendResponse({ status: 'DONE' });
     return true;
-  }
-
-  // 5. Save a new mapping (e.g. from popup or search)
-  if (request.action === 'SAVE_SUB_MAPPING') {
-    subscriptionMap[request.subName.toUpperCase()] = request.subId;
-    chrome.storage.local.set({ sub_mapping: subscriptionMap });
-    sendResponse({ status: 'SAVED' });
   }
 });
