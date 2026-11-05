@@ -1,5 +1,15 @@
 [
   {
+    "timestamp": "2026-11-05 15:39:56",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Harmony Telecom (Vendor CC)",
+    "output_filename": "Harmony Telecom (Vendor CC) A to Z Various new Kaif.xlsx",
+    "clean_rows": 3904,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.82
+  },
+  {
     "timestamp": "2026-11-05 15:27:10",
     "username": "v_arhama",
     "user_name": "Arhama",

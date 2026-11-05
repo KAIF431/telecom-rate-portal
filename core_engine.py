@@ -197,8 +197,8 @@ def detect_header_row_and_columns(df_raw):
                 'increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing',
                 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc',
                 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
-                'interval', 'intervals', 'billing interval'
-            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step']:
+                'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc'
+            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     kw_score += 4
@@ -399,6 +399,8 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
             return False
         if '/' in s:
             parts = s.split('/')
+        elif '+' in s:
+            parts = s.split('+')
         elif '-' in s and not re.search(r'\d{4}', s):
             parts = s.split('-')
         else:
