@@ -98,77 +98,29 @@ def load_csv_safely(f_content, nrows=None):
     return pd.DataFrame(padded)
 
 
-# Persistent Secure Session Handlers (Safe Refresh Persistence across Cloud Iframes)
+# Strict In-Memory Session Handlers (Requires Login in every new tab / incognito window)
 def authenticate_current_session():
-    # 1. Check in-memory session first
+    # Only authenticated if user object exists in current session state
     if st.session_state.get("user"):
         return st.session_state.get("user")
-    
-    # 2. Check query param for session token (persists across direct F5 refresh)
-    token = st.query_params.get("session_token")
-    if token:
-        user_info = am.get_session_user(token)
-        if user_info:
-            st.session_state.user = user_info
-            st.session_state.active_token = token
-            return user_info
-
-    # 3. Check Streamlit Cloud browser cookie
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies"):
-            cookie_id = st.context.cookies.get("ajs_anonymous_id")
-            if cookie_id:
-                user_info = am.get_session_user(cookie_id)
-                if user_info:
-                    st.session_state.user = user_info
-                    st.session_state.active_token = cookie_id
-                    return user_info
-    except Exception:
-        pass
-
     return None
 
 def set_login_session(session_data):
-    token = session_data.get("token") or am.create_session_token(session_data.get("username", "kaif"), days_valid=30)
-    am.register_session(token, session_data)
     st.session_state.user = session_data
-    st.session_state.active_token = token
+    st.session_state.active_token = session_data.get("token")
+    # Clean query parameters so session tokens never leak in the address bar
     try:
-        st.query_params["session_token"] = token
-    except Exception:
-        pass
-
-    # Bind session to browser cookie so F5 refresh preserves login in iframe
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies"):
-            cookie_id = st.context.cookies.get("ajs_anonymous_id")
-            if cookie_id:
-                am.register_session(cookie_id, session_data)
-                st.session_state.cookie_id = cookie_id
+        st.query_params.clear()
     except Exception:
         pass
 
 def clear_current_session():
-    tok = st.session_state.get("active_token") or st.query_params.get("session_token")
-    if tok:
-        am.destroy_session(tok)
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies"):
-            cookie_id = st.context.cookies.get("ajs_anonymous_id")
-            if cookie_id:
-                am.destroy_session(cookie_id)
-    except Exception:
-        pass
     st.session_state.user = None
     st.session_state.active_token = None
     st.session_state.cookie_id = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
-    try:
-        st.query_params.clear()
-    except Exception:
-        pass
     try:
         st.query_params.clear()
     except Exception:
@@ -528,334 +480,329 @@ def get_historical_csv_bytes(filename, excel_bytes=None):
             pass
     return None, csv_fname
 
-nav_options = ["⚡ Rate Deck Standardizer", "📜 Rate Sheet History & Downloads"]
 if is_admin:
-    nav_options.append("👑 Admin Management Panel")
+    st.markdown("---")
+    admin_nav_mode = st.radio(
+        "Navigation Mode:",
+        ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
+        horizontal=True,
+        key="main_admin_nav_toggle"
+    )
+    st.markdown("---")
 
-st.markdown("---")
-portal_nav_mode = st.radio(
-    "Navigation Mode:",
-    nav_options,
-    horizontal=True,
-    key="portal_nav_mode_toggle"
-)
-st.markdown("---")
-
-if portal_nav_mode == "📜 Rate Sheet History & Downloads":
-    st.markdown("## 📜 Uploaded Rate Sheets History & Download Center")
-    st.caption("Complete tracking of every rate sheet standardized across all team members (Kaif, Arhama, Aliba) with 1-click Excel and CSV downloads.")
-    
-    history = am.get_processing_history()
-    if not history:
-        st.info("ℹ️ No rate sheets processed yet.")
-    else:
-        # Metrics
-        total_sheets = len(history)
-        total_clean_rows = sum(h.get("clean_rows", 0) for h in history)
-        arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-        kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
-        m2.metric("📊 Clean Rows Processed", f"{total_clean_rows:,}")
-        m3.metric("👩 Standardized by Arhama", f"{arhama_total}")
-        m4.metric("👨 Standardized by Kaif", f"{kaif_total}")
-
-        st.markdown("---")
-
-        # Filters
-        f_col1, f_col2 = st.columns([1.8, 2.5])
-        with f_col1:
-            user_filter = st.selectbox(
-                "👤 Filter by Team Member:",
-                ["🌐 All Team Members (Everyone)", "👩 Arhama", "👨 Kaif", "👩 Aliba"],
-                key="hist_team_filter"
-            )
-        with f_col2:
-            search_kw = st.text_input(
-                "🔍 Search Vendor or File Name:",
-                placeholder="Type vendor or filename (e.g. QC Globe, Meratalk, Earthcomm)...",
-                key="hist_search_box"
-            )
-
-        date_mode = st.radio(
-            "📅 Date Filter:",
-            ["🌐 All Time", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days", "🗓️ Single Date", "📆 Date Range"],
-            horizontal=True,
-            key="hist_date_radio"
-        )
-
-        def extract_entry_date(ts):
-            if not ts:
-                return None
-            try:
-                return datetime.datetime.strptime(str(ts).strip()[:10], "%Y-%m-%d").date()
-            except Exception:
-                return None
-
-        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-        today_ist = now_ist.date()
-
-        all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
-        valid_dates = [d for d in all_dates if d is not None]
-        min_d = min(valid_dates) if valid_dates else today_ist
-        max_d = max(valid_dates) if valid_dates else today_ist
-
-        s_date, e_date = None, None
-        if date_mode == "🗓️ Single Date":
-            sd = st.date_input("Select Date:", value=max_d, key="hist_sd_input")
-            s_date, e_date = sd, sd
-        elif date_mode == "📆 Date Range":
-            dr1, dr2 = st.columns(2)
-            with dr1:
-                fd = st.date_input("From Date:", value=min_d, key="hist_fd_input")
-            with dr2:
-                td = st.date_input("To Date:", value=today_ist, key="hist_td_input")
-            s_date, e_date = min(fd, td), max(fd, td)
-        elif date_mode == "⚡ Today":
-            s_date, e_date = today_ist, today_ist
-        elif date_mode == "⚡ Yesterday":
-            yest = today_ist - datetime.timedelta(days=1)
-            s_date, e_date = yest, yest
-        elif date_mode == "⚡ Last 7 Days":
-            s_date = today_ist - datetime.timedelta(days=7)
-            e_date = today_ist
-
-        filtered = []
-        for h in history:
-            if s_date and e_date:
-                ed = extract_entry_date(h.get("timestamp"))
-                if not ed or not (s_date <= ed <= e_date):
-                    continue
-
-            if user_filter == "👩 Arhama":
-                match_arhama = "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                if not match_arhama:
-                    continue
-            elif user_filter == "👨 Kaif":
-                match_kaif = "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                if not match_kaif:
-                    continue
-            elif user_filter == "👩 Aliba":
-                match_aliba = "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                if not match_aliba:
-                    continue
-
-            if search_kw:
-                kw = search_kw.strip().lower()
-                comb = (str(h.get("vendor_name", "")) + str(h.get("output_filename", "")) + str(h.get("user_name", ""))).lower()
-                if kw not in comb:
-                    continue
-
-            filtered.append(h)
-
-        st.markdown(f"**Found {len(filtered)} Rate Sheet(s) Matching Criteria:**")
-
-        if not filtered:
-            st.warning("⚠️ No sheets found matching this filter criteria. Try selecting '🌐 All Time' or '🌐 All Team Members'.")
-        else:
-            st.markdown("#### ⚡ 1-Click Instant Sheet Download")
-            sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
-            if sheet_options:
-                sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key="quick_dl_select")
-                if sel_sheet:
-                    xl_bytes = get_historical_file_bytes(sel_sheet)
-                    csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
-                    
-                    c_dl1, c_dl2 = st.columns(2)
-                    with c_dl1:
-                        if xl_bytes:
-                            st.download_button(
-                                label=f"📊 Download Excel (.xlsx)",
-                                data=xl_bytes,
-                                file_name=sel_sheet,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key=f"hist_quick_dl_xl_{sel_sheet}",
-                                type="primary",
-                                use_container_width=True
-                            )
-                        else:
-                            st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True)
-                    with c_dl2:
-                        if csv_b:
-                            st.download_button(
-                                label=f"📄 Download CSV (.csv)",
-                                data=csv_b,
-                                file_name=csv_fn,
-                                mime="text/csv",
-                                key=f"hist_quick_dl_csv_{sel_sheet}",
-                                use_container_width=True
-                            )
-                        else:
-                            st.button(f"CSV Not in Cache", disabled=True, use_container_width=True)
-
-            st.markdown("---")
-            st.markdown("#### 📜 Complete Activity & History Table")
-
-            table_rows = []
-            for entry in filtered:
-                u_display = entry.get("user_name") or entry.get("username")
-                if "arhama" in str(u_display).lower():
-                    u_display = "👩 Arhama"
-                elif "kaif" in str(u_display).lower():
-                    u_display = "👨 Kaif"
-                elif "aliba" in str(u_display).lower():
-                    u_display = "👩 Aliba"
-
-                table_rows.append({
-                    "Timestamp (IST)": entry.get("timestamp"),
-                    "Uploaded By": u_display,
-                    "Vendor / Trunk Name": entry.get("vendor_name"),
-                    "Standardized File Name": entry.get("output_filename"),
-                    "Clean Rows": f"{entry.get('clean_rows', 0):,}",
-                    "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
-                    "Speed": f"{entry.get('elapsed_sec', 0)}s"
+    if admin_nav_mode == "👑 Admin Management Panel":
+        st.markdown("## 👑 Admin Control Panel")
+        st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & downloads.")
+        
+        a_tab1, a_tab_hist, a_tab_edit, a_tab2, a_tab3, a_tab4 = st.tabs([
+            "👥 All Users (IDs & Passwords)",
+            "📜 User Activity & Processing History",
+            "✏️ Edit User Names",
+            "➕ Create New User",
+            "🔑 Reset Passwords",
+            "🔔 Pending Reset Requests"
+        ])
+        
+        with a_tab1:
+            st.subheader("👥 Registered Users Master Table")
+            st.caption(f"🔑 **Shared Master Authy Key:** `{am.get_master_totp_secret()}` (All accounts authenticate using this key on Admin's device)")
+            all_u = am.get_all_users()
+            u_data = []
+            for uk, uv in all_u.items():
+                u_data.append({
+                    "Username": uk,
+                    "Name": uv.get("name"),
+                    "Password": uv.get("password"),
+                    "Role": uv.get("role", "user").upper(),
+                    "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
+                    "Created At": uv.get("created_at")
                 })
+            st.dataframe(pd.DataFrame(u_data), use_container_width=True, hide_index=True)
+            
+            act_otp = getattr(am, 'get_last_active_otp', lambda: None)()
+            if act_otp:
+                st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
 
-            df_audit = pd.DataFrame(table_rows)
-            st.dataframe(df_audit, use_container_width=True, hide_index=True)
-
-            csv_log = df_audit.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download This Table as CSV",
-                data=csv_log,
-                file_name=f"audit_log_{today_ist.strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                key="btn_download_full_audit_csv"
-            )
-
-    st.stop()
-
-if portal_nav_mode == "👑 Admin Management Panel" and is_admin:
-    st.markdown("## 👑 Admin Control Panel")
-    st.caption("Master controls: Manage all users, view IDs & passwords, reset credentials, review requests.")
-    
-    a_tab1, a_tab_edit, a_tab2, a_tab3, a_tab4 = st.tabs([
-        "👥 All Users (IDs & Passwords)",
-        "✏️ Edit User Names",
-        "➕ Create New User",
-        "🔑 Reset Passwords",
-        "🔔 Pending Reset Requests"
-    ])
-    
-    with a_tab1:
-        st.subheader("👥 Registered Users Master Table")
-        st.caption(f"🔑 **Shared Master Authy Key:** `{am.get_master_totp_secret()}` (All accounts authenticate using this key on Admin's device)")
-        all_u = am.get_all_users()
-        u_data = []
-        for uk, uv in all_u.items():
-            u_data.append({
-                "Username": uk,
-                "Name": uv.get("name"),
-                "Password": uv.get("password"),
-                "Role": uv.get("role", "user").upper(),
-                "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
-                "Created At": uv.get("created_at")
-            })
-        st.dataframe(pd.DataFrame(u_data), use_container_width=True, hide_index=True)
-        
-        act_otp = getattr(am, 'get_last_active_otp', lambda: None)()
-        if act_otp:
-            st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
-
-    with a_tab_edit:
-        st.subheader("✏️ Edit User Display / Full Name")
-        st.caption("Change the full name of Admin (yourself) or any user. The updated name reflects immediately across the portal and generated filenames.")
-        all_users_dict = am.get_all_users()
-        selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="main_edit_u_select")
-        u_info = all_users_dict[selected_edit_u]
-        
-        st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
-        
-        new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"main_input_edit_name_{selected_edit_u}")
-        if st.button("💾 Save Updated Name", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
-            if new_name_val and new_name_val.strip():
-                ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
-                if ok_n:
-                    if selected_edit_u == current_user.get("username"):
-                        current_user["name"] = new_name_val.strip()
-                        st.session_state.user["name"] = new_name_val.strip()
-                    st.success(msg_n)
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error(msg_n)
+        with a_tab_hist:
+            st.subheader("📜 User Processing History & Download Center")
+            st.caption("Complete tracking of every rate sheet standardized by all team members (Kaif, Arhama, Aliba) with 1-click Excel and CSV downloads.")
+            
+            history = am.get_processing_history()
+            if not history:
+                st.info("ℹ️ No rate sheets processed yet.")
             else:
-                st.warning("Name cannot be empty.")
+                total_sheets = len(history)
+                total_clean_rows = sum(h.get("clean_rows", 0) for h in history)
+                arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
 
-    with a_tab2:
-        st.subheader("➕ Create New User")
-        st.caption(f"ℹ️ New user account will automatically use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
-        cu_col1, cu_col2 = st.columns(2)
-        with cu_col1:
-            nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. rahul")
-            nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. Rahul Sharma")
-        with cu_col2:
-            nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. rahul123")
-            nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
-        nu_email = st.text_input("Email (Optional)", key="main_nu_email")
-        
-        if st.button("🚀 Create User Account Now", type="primary", use_container_width=True):
-            if nu_uname and nu_pw:
-                ok_cu, msg_cu = am.create_user(nu_uname, nu_name, nu_pw, nu_role, nu_email)
-                if ok_cu:
-                    st.success(msg_cu)
-                    time.sleep(1)
-                    st.rerun()
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
+                m2.metric("📊 Clean Rows Processed", f"{total_clean_rows:,}")
+                m3.metric("👩 Standardized by Arhama", f"{arhama_total}")
+                m4.metric("👨 Standardized by Kaif", f"{kaif_total}")
+
+                st.markdown("---")
+
+                # Filters
+                f_col1, f_col2 = st.columns([1.8, 2.5])
+                with f_col1:
+                    user_filter = st.selectbox(
+                        "👤 Filter by Team Member:",
+                        ["🌐 All Team Members (Everyone)", "👩 Arhama", "👨 Kaif", "👩 Aliba"],
+                        key="admin_hist_team_filter"
+                    )
+                with f_col2:
+                    search_kw = st.text_input(
+                        "🔍 Search Vendor or File Name:",
+                        placeholder="Type vendor or filename (e.g. QC Globe, Meratalk, Earthcomm, Harmony)...",
+                        key="admin_hist_search_box"
+                    )
+
+                date_mode = st.radio(
+                    "📅 Date Filter:",
+                    ["🌐 All Time", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days", "🗓️ Single Date", "📆 Date Range"],
+                    horizontal=True,
+                    key="admin_hist_date_radio"
+                )
+
+                def extract_entry_date(ts):
+                    if not ts:
+                        return None
+                    try:
+                        return datetime.datetime.strptime(str(ts).strip()[:10], "%Y-%m-%d").date()
+                    except Exception:
+                        return None
+
+                now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+                today_ist = now_ist.date()
+
+                all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
+                valid_dates = [d for d in all_dates if d is not None]
+                min_d = min(valid_dates) if valid_dates else today_ist
+                max_d = max(valid_dates) if valid_dates else today_ist
+
+                s_date, e_date = None, None
+                if date_mode == "🗓️ Single Date":
+                    sd = st.date_input("Select Date:", value=max_d, key="admin_hist_sd_input")
+                    s_date, e_date = sd, sd
+                elif date_mode == "📆 Date Range":
+                    dr1, dr2 = st.columns(2)
+                    with dr1:
+                        fd = st.date_input("From Date:", value=min_d, key="admin_hist_fd_input")
+                    with dr2:
+                        td = st.date_input("To Date:", value=today_ist, key="admin_hist_td_input")
+                    s_date, e_date = min(fd, td), max(fd, td)
+                elif date_mode == "⚡ Today":
+                    s_date, e_date = today_ist, today_ist
+                elif date_mode == "⚡ Yesterday":
+                    yest = today_ist - datetime.timedelta(days=1)
+                    s_date, e_date = yest, yest
+                elif date_mode == "⚡ Last 7 Days":
+                    s_date = today_ist - datetime.timedelta(days=7)
+                    e_date = today_ist
+
+                filtered = []
+                for h in history:
+                    if s_date and e_date:
+                        ed = extract_entry_date(h.get("timestamp"))
+                        if not ed or not (s_date <= ed <= e_date):
+                            continue
+
+                    if user_filter == "👩 Arhama":
+                        match_arhama = "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
+                        if not match_arhama:
+                            continue
+                    elif user_filter == "👨 Kaif":
+                        match_kaif = "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
+                        if not match_kaif:
+                            continue
+                    elif user_filter == "👩 Aliba":
+                        match_aliba = "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
+                        if not match_aliba:
+                            continue
+
+                    if search_kw:
+                        kw = search_kw.strip().lower()
+                        comb = (str(h.get("vendor_name", "")) + str(h.get("output_filename", "")) + str(h.get("user_name", ""))).lower()
+                        if kw not in comb:
+                            continue
+
+                    filtered.append(h)
+
+                st.markdown(f"**Found {len(filtered)} Rate Sheet(s) Matching Criteria:**")
+
+                if not filtered:
+                    st.warning("⚠️ No sheets found matching this filter criteria. Try selecting '🌐 All Time' or '🌐 All Team Members'.")
                 else:
-                    st.error(msg_cu)
-            else:
-                st.warning("Both Username and Password are required.")
+                    st.markdown("#### ⚡ 1-Click Instant Sheet Download")
+                    sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
+                    if sheet_options:
+                        sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key="admin_quick_dl_select")
+                        if sel_sheet:
+                            xl_bytes = get_historical_file_bytes(sel_sheet)
+                            csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
+                            
+                            c_dl1, c_dl2 = st.columns(2)
+                            with c_dl1:
+                                if xl_bytes:
+                                    st.download_button(
+                                        label=f"📊 Download Excel (.xlsx)",
+                                        data=xl_bytes,
+                                        file_name=sel_sheet,
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        key=f"admin_hist_quick_dl_xl_{sel_sheet}",
+                                        type="primary",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True)
+                            with c_dl2:
+                                if csv_b:
+                                    st.download_button(
+                                        label=f"📄 Download CSV (.csv)",
+                                        data=csv_b,
+                                        file_name=csv_fn,
+                                        mime="text/csv",
+                                        key=f"admin_hist_quick_dl_csv_{sel_sheet}",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.button(f"CSV Not in Cache", disabled=True, use_container_width=True)
 
-    with a_tab3:
-        st.subheader("🔑 Reset Any User's Password")
-        all_u = am.get_all_users()
-        sel_u = st.selectbox("Select User Account:", list(all_u.keys()), key="main_sel_reset_u")
-        st.info(f"Selected: **{sel_u}** | Current Password: `{all_u[sel_u].get('password', '')}` | Authy Key: `{all_u[sel_u].get('totp_secret', am.get_master_totp_secret())}`")
-        new_pw_main = st.text_input("Enter New Password to Set:", key=f"main_new_pw_input_{sel_u}")
-        if st.button("💾 Save New Password", type="primary", use_container_width=True, key=f"main_btn_save_pw_{sel_u}"):
-            if new_pw_main:
-                ok_up, msg_up = am.update_password(sel_u, new_pw_main)
-                if ok_up:
-                    st.success(msg_up)
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error(msg_up)
-            else:
-                st.warning("Password cannot be blank.")
+                    st.markdown("---")
+                    st.markdown("#### 📜 Complete Activity & History Table")
 
-    with a_tab4:
-        st.subheader("🔔 Password Reset Requests from Users")
-        p_reqs = am.get_pending_reset_requests()
-        if not p_reqs:
-            st.success("✅ No pending reset requests. Everything is up to date!")
-        else:
-            for rq in p_reqs:
-                st.markdown(f"""
-                <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
-                    <b>User:</b> {rq['username']} ({rq['name']})<br>
-                    <b>Current Password:</b> <code>{rq.get('current_password', '')}</code><br>
-                    <b>Note:</b> {rq.get('note', 'No note')}<br>
-                    <small style="color: #78350F;">Requested: {rq.get('requested_at', '')}</small>
-                </div>
-                """, unsafe_allow_html=True)
-                new_pw_for_rq = st.text_input(f"New Password for {rq['username']}:", key=f"main_rq_pw_{rq['username']}")
-                rq_c1, rq_c2 = st.columns(2)
-                if rq_c1.button(f"Update Password for {rq['username']}", key=f"main_btn_set_{rq['username']}", type="primary", use_container_width=True):
-                    if new_pw_for_rq:
-                        am.update_password(rq['username'], new_pw_for_rq)
-                        st.success(f"Password updated for {rq['username']}!")
+                    table_rows = []
+                    for entry in filtered:
+                        u_display = entry.get("user_name") or entry.get("username")
+                        if "arhama" in str(u_display).lower():
+                            u_display = "👩 Arhama"
+                        elif "kaif" in str(u_display).lower():
+                            u_display = "👨 Kaif"
+                        elif "aliba" in str(u_display).lower():
+                            u_display = "👩 Aliba"
+
+                        table_rows.append({
+                            "Timestamp (IST)": entry.get("timestamp"),
+                            "Uploaded By": u_display,
+                            "Vendor / Trunk Name": entry.get("vendor_name"),
+                            "Standardized File Name": entry.get("output_filename"),
+                            "Clean Rows": f"{entry.get('clean_rows', 0):,}",
+                            "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
+                            "Speed": f"{entry.get('elapsed_sec', 0)}s"
+                        })
+
+                    df_audit = pd.DataFrame(table_rows)
+                    st.dataframe(df_audit, use_container_width=True, hide_index=True)
+
+                    csv_log = df_audit.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download This Table as CSV",
+                        data=csv_log,
+                        file_name=f"audit_log_{today_ist.strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        key="btn_admin_download_full_audit_csv"
+                    )
+
+        with a_tab_edit:
+            st.subheader("✏️ Edit User Display / Full Name")
+            st.caption("Change the full name of Admin (yourself) or any user. The updated name reflects immediately across the portal and generated filenames.")
+            all_users_dict = am.get_all_users()
+            selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="main_edit_u_select")
+            u_info = all_users_dict[selected_edit_u]
+            
+            st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
+            
+            new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"main_input_edit_name_{selected_edit_u}")
+            if st.button("💾 Save Updated Name", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
+                if new_name_val and new_name_val.strip():
+                    ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
+                    if ok_n:
+                        if selected_edit_u == current_user.get("username"):
+                            current_user["name"] = new_name_val.strip()
+                            st.session_state.user["name"] = new_name_val.strip()
+                        st.success(msg_n)
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.warning("Please enter a new password.")
-                if rq_c2.button(f"Dismiss Request", key=f"main_btn_dism_{rq['username']}", use_container_width=True):
-                    am.dismiss_reset_request(rq['username'])
-                    st.rerun()
-                st.divider()
+                        st.error(msg_n)
+                else:
+                    st.warning("Name cannot be empty.")
 
-    st.stop()
+        with a_tab2:
+            st.subheader("➕ Create New User")
+            st.caption(f"ℹ️ New user account will automatically use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
+            cu_col1, cu_col2 = st.columns(2)
+            with cu_col1:
+                nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. rahul")
+                nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. Rahul Sharma")
+            with cu_col2:
+                nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. rahul123")
+                nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
+            nu_email = st.text_input("Email (Optional)", key="main_nu_email")
+            
+            if st.button("🚀 Create User Account Now", type="primary", use_container_width=True):
+                if nu_uname and nu_pw:
+                    ok_cu, msg_cu = am.create_user(nu_uname, nu_name, nu_pw, nu_role, nu_email)
+                    if ok_cu:
+                        st.success(msg_cu)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(msg_cu)
+                else:
+                    st.warning("Both Username and Password are required.")
+
+        with a_tab3:
+            st.subheader("🔑 Reset Any User's Password")
+            all_u = am.get_all_users()
+            sel_u = st.selectbox("Select User Account:", list(all_u.keys()), key="main_sel_reset_u")
+            st.info(f"Selected: **{sel_u}** | Current Password: `{all_u[sel_u].get('password', '')}` | Authy Key: `{all_u[sel_u].get('totp_secret', am.get_master_totp_secret())}`")
+            new_pw_main = st.text_input("Enter New Password to Set:", key=f"main_new_pw_input_{sel_u}")
+            if st.button("💾 Save New Password", type="primary", use_container_width=True, key=f"main_btn_save_pw_{sel_u}"):
+                if new_pw_main:
+                    ok_up, msg_up = am.update_password(sel_u, new_pw_main)
+                    if ok_up:
+                        st.success(msg_up)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(msg_up)
+                else:
+                    st.warning("Password cannot be blank.")
+
+        with a_tab4:
+            st.subheader("🔔 Password Reset Requests from Users")
+            p_reqs = am.get_pending_reset_requests()
+            if not p_reqs:
+                st.success("✅ No pending reset requests. Everything is up to date!")
+            else:
+                for rq in p_reqs:
+                    st.markdown(f"""
+                    <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
+                        <b>User:</b> {rq['username']} ({rq['name']})<br>
+                        <b>Current Password:</b> <code>{rq.get('current_password', '')}</code><br>
+                        <b>Note:</b> {rq.get('note', 'No note')}<br>
+                        <small style="color: #78350F;">Requested: {rq.get('requested_at', '')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    new_pw_for_rq = st.text_input(f"New Password for {rq['username']}:", key=f"main_rq_pw_{rq['username']}")
+                    rq_c1, rq_c2 = st.columns(2)
+                    if rq_c1.button(f"Update Password for {rq['username']}", key=f"main_btn_set_{rq['username']}", type="primary", use_container_width=True):
+                        if new_pw_for_rq:
+                            am.update_password(rq['username'], new_pw_for_rq)
+                            st.success(f"Password updated for {rq['username']}!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.warning("Please enter a new password.")
+                    if rq_c2.button(f"Dismiss Request", key=f"main_btn_dism_{rq['username']}", use_container_width=True):
+                        am.dismiss_reset_request(rq['username'])
+                        st.rerun()
+                    st.divider()
+
+        st.stop()
 
 @st.cache_data(show_spinner=False)
 def get_cached_template_file(filename):
