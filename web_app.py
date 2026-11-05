@@ -1,6 +1,7 @@
 import os
 import datetime
 import io
+import csv
 import re
 import time
 import json
@@ -45,6 +46,57 @@ def load_excel_safely(f_content, fname):
     except Exception:
         f_content.seek(0)
         return pd.ExcelFile(f_content)
+
+def load_csv_safely(f_content, nrows=None):
+    """
+    Safely loads any CSV file, including ragged vendor sheets with multi-line metadata headers,
+    inconsistent column counts, or unusual delimiters (comma, semicolon, tab, pipe).
+    """
+    f_content.seek(0)
+    raw = f_content.read()
+    if isinstance(raw, bytes):
+        try:
+            text = raw.decode('utf-8')
+        except Exception:
+            text = raw.decode('latin-1', errors='ignore')
+    else:
+        text = str(raw)
+
+    f_content.seek(0)
+
+    try:
+        return pd.read_csv(io.StringIO(text), header=None, low_memory=False, nrows=nrows)
+    except Exception:
+        pass
+
+    for sep in [',', ';', '\t', '|']:
+        try:
+            reader = csv.reader(io.StringIO(text), delimiter=sep)
+            rows = []
+            for i, r in enumerate(reader):
+                if nrows and i >= nrows:
+                    break
+                rows.append(r)
+            if rows:
+                max_cols = max(len(r) for r in rows)
+                if max_cols > 1:
+                    padded = [r + [''] * (max_cols - len(r)) for r in rows]
+                    return pd.DataFrame(padded)
+        except Exception:
+            pass
+
+    reader = csv.reader(io.StringIO(text))
+    rows = []
+    for i, r in enumerate(reader):
+        if nrows and i >= nrows:
+            break
+        rows.append(r)
+    if not rows:
+        return pd.DataFrame()
+    max_cols = max(len(r) for r in rows)
+    padded = [r + [''] * (max_cols - len(r)) for r in rows]
+    return pd.DataFrame(padded)
+
 
 # Persistent Secure Session Handlers (Safe Refresh Persistence across Cloud Iframes)
 def authenticate_current_session():
@@ -1008,11 +1060,7 @@ if uploaded_files:
                     target_sheet = best_sheet if best_sheet is not None else 0
                     df_raw = xl.parse(target_sheet, header=None)
                 elif fname.lower().endswith('.csv'):
-                    try:
-                        df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=100)
-                    except Exception:
-                        f_content.seek(0)
-                        df_sample = pd.read_csv(f_content, sep=None, engine='python', header=None, nrows=100, encoding='latin-1')
+                    df_sample = load_csv_safely(f_content, nrows=100)
                     h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
                     _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
                     preview_tag = p_tag
@@ -1070,15 +1118,7 @@ if uploaded_files:
                             best_df = temp_df
                     df_raw = best_df if best_df is not None else xl.parse(0, header=None)
                 elif fname.lower().endswith('.csv'):
-                    try:
-                        df_raw = pd.read_csv(f_content, sep=None, engine='python', header=None)
-                    except Exception:
-                        f_content.seek(0)
-                        try:
-                            df_raw = pd.read_csv(f_content, sep=None, engine='python', header=None, encoding='latin-1')
-                        except Exception:
-                            f_content.seek(0)
-                            df_raw = pd.read_csv(f_content, header=None, encoding='latin-1', low_memory=False)
+                    df_raw = load_csv_safely(f_content)
             except Exception as e:
                 st.error(f"Could not parse file '{fname}': {e}")
                 continue
