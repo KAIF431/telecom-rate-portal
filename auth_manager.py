@@ -507,7 +507,7 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
                 history = []
         
         entry = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M:%S"),
             "username": username,
             "user_name": user_name,
             "vendor_name": vendor_name,

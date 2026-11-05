@@ -1,5 +1,405 @@
 [
   {
+    "timestamp": "2026-11-05 15:27:10",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QC Globe (Vendor Dialer)",
+    "output_filename": "QC Globe (Vendor Dialer) A to Z Various inc, dec, same, delete, new Arhama.xlsx",
+    "clean_rows": 16876,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:49:42",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Nalia Global CLI",
+    "output_filename": "Name - Nalia Global CLI A to Z Full Rate Sheet 11-5-2026 3 Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 15495,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:12",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR PLATINUM",
+    "output_filename": "IDT AJOXI VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:12",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR SPACIAL",
+    "output_filename": "IDT AJOXI VENDOR SPACIAL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR GOLD",
+    "output_filename": "IDT AJOXI VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR INSTANT",
+    "output_filename": "IDT AJOXI VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:02",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR DIALER",
+    "output_filename": "IDT AJOXI VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:07:25",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT LETSDIAL VENDOR SPACIAL",
+    "output_filename": "IDT LETSDIAL VENDOR SPACIAL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:07:23",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT LETSDIAL VENDOR PLATINUM",
+    "output_filename": "IDT LETSDIAL VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:07:22",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT LETSDIAL VENDOR INSTANT",
+    "output_filename": "IDT LETSDIAL VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:07:21",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT LETSDIAL VENDOR GOLD",
+    "output_filename": "IDT LETSDIAL VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:07:19",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT LETSDIAL VENDOR DIALER",
+    "output_filename": "IDT LETSDIAL VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:00:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT SOFTTOP VENDOR INSTANT",
+    "output_filename": "IDT SOFTTOP VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:00:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT SOFTTOP VENDOR PLATINUM",
+    "output_filename": "IDT SOFTTOP VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:00:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT SOFTTOP VENDOR SPCAIL",
+    "output_filename": "IDT SOFTTOP VENDOR SPCAIL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:00:34",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT SOFTTOP VENDOR GOLD",
+    "output_filename": "IDT SOFTTOP VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:00:22",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT SOFTTOP VENDOR DIALER",
+    "output_filename": "IDT SOFTTOP VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:50:51",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT TKOS VENDOR PLATINUM",
+    "output_filename": "IDT TKOS VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:50:51",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT TKOS VENDOR SPACIAL",
+    "output_filename": "IDT TKOS VENDOR SPACIAL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:50:44",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT TKOS VENDOR GOLD",
+    "output_filename": "IDT TKOS VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:50:44",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT TKOS VENDOR INSTANT",
+    "output_filename": "IDT TKOS VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:50:42",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT TKOS VENDOR DIALER",
+    "output_filename": "IDT TKOS VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:44:23",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TWICHING IDT VENDOR SPACIAL",
+    "output_filename": "TWICHING IDT VENDOR SPACIAL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:44:21",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TWICHING IDT VENDOR PLATINUM",
+    "output_filename": "TWICHING IDT VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:44:18",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TWICHING IDT VENDOR INSTANT",
+    "output_filename": "TWICHING IDT VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:44:17",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TWICHING IDT VENDOR GOLD",
+    "output_filename": "TWICHING IDT VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:44:14",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TWICHING IDT VENDOR DIALER",
+    "output_filename": "TWICHING IDT VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:42:12",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "ACE IDT VENDOR SPACIAL",
+    "output_filename": "ACE IDT VENDOR SPACIAL A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:42:10",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "ACE IDT VENDOR PLATINUM",
+    "output_filename": "ACE IDT VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:42:08",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "ACE IDT VENDOR INSTANT",
+    "output_filename": "ACE IDT VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:42:07",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "ACE IDT VENDOR GOLD",
+    "output_filename": "ACE IDT VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:42:04",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "ACE IDT VENDOR DIALER",
+    "output_filename": "ACE IDT VENDOR DIALER A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:08:50",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Devotel NFS (Vendor CC)",
+    "output_filename": "Name - Devotel NFS (Vendor CC) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 20324,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:04:22",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI)",
+    "output_filename": "Name - Ricochet global NFS (Vendor NCLI) A to Z Various inc, same Kaif (1).xlsx",
+    "clean_rows": 36758,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:01:58",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI)",
+    "output_filename": "Name - Ricochet global NFS (Vendor NCLI) A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 36758,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 11:52:40",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT Express Spacial",
+    "output_filename": "IDT Express Spacial A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 11:52:38",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT Express Platinum",
+    "output_filename": "IDT Express Platinum A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 11:52:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT Express Instant",
+    "output_filename": "IDT Express Instant A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 11:52:33",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT Express Gold",
+    "output_filename": "IDT Express Gold A to Z Various inc, same, delete Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 11:52:30",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT Express Dialer",
+    "output_filename": "IDT Express Dialer A to Z Various same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
     "timestamp": "2026-11-05 11:35:05",
     "username": "kaif",
     "user_name": "Kaif",
@@ -80,6 +480,26 @@
     "elapsed_sec": 1.45
   },
   {
+    "timestamp": "2026-11-04 19:01:58",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CLI)",
+    "output_filename": "GeoNet Telecom - Ajoxi NFS (Vendor CLI) A to Z UPdated Kaif (1).xlsx",
+    "clean_rows": 148606,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-04 18:59:24",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CC)",
+    "output_filename": "GeoNet Telecom - Ajoxi NFS (Vendor CC) A to Z UPdated Kaif (1).xlsx",
+    "clean_rows": 126157,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
     "timestamp": "2026-11-04 18:58:19",
     "username": "kaif",
     "user_name": "Kaif",
@@ -158,5 +578,35 @@
     "clean_rows": 83972,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-10-16 15:46:26",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Teleinx GSD 10.12.2026",
+    "output_filename": "Name - Teleinx GSD 10.12.2026 A to Z UPdated Arhama.xlsx",
+    "clean_rows": 0,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.65
+  },
+  {
+    "timestamp": "2026-10-13 17:27:02",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Blue Dragon-Twiching(Customer CC) various inc arhama.xlsx",
+    "output_filename": "Blue Dragon-Twiching(Customer CC) various inc arhama.xlsx",
+    "clean_rows": 25687,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.65
+  },
+  {
+    "timestamp": "2026-10-13 17:20:18",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "AlkaIP Twiching (Customer CLI) brazil inc arhama.xlsx",
+    "output_filename": "AlkaIP Twiching (Customer CLI) brazil inc arhama.xlsx",
+    "clean_rows": 28455,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.65
   }
 ]
