@@ -432,54 +432,6 @@ with top_head_col2:
 # Template Download Buttons Row
 t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
 
-def get_historical_file_bytes(filename):
-    if not filename:
-        return None
-    p = os.path.join(OUTPUT_DIR, filename)
-    if os.path.exists(p):
-        try:
-            with open(p, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
-    dl_p = os.path.join(os.path.expanduser("~"), "Downloads", filename)
-    if os.path.exists(dl_p):
-        try:
-            with open(dl_p, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
-    return None
-
-def get_historical_csv_bytes(filename, excel_bytes=None):
-    if not filename:
-        return None, ""
-    base = filename.rsplit(".", 1)[0]
-    csv_fname = base + ".csv"
-    p_csv = os.path.join(OUTPUT_DIR, csv_fname)
-    if os.path.exists(p_csv):
-        try:
-            with open(p_csv, "rb") as f:
-                return f.read(), csv_fname
-        except Exception:
-            pass
-    dl_csv = os.path.join(os.path.expanduser("~"), "Downloads", csv_fname)
-    if os.path.exists(dl_csv):
-        try:
-            with open(dl_csv, "rb") as f:
-                return f.read(), csv_fname
-        except Exception:
-            pass
-    if excel_bytes:
-        try:
-            df = pd.read_excel(io.BytesIO(excel_bytes), engine="openpyxl")
-            buf = io.StringIO()
-            df.to_csv(buf, index=False)
-            return buf.getvalue().encode("utf-8"), csv_fname
-        except Exception:
-            pass
-    return None, csv_fname
-
 if is_admin:
     st.markdown("---")
     admin_nav_mode = st.radio(
@@ -492,7 +444,7 @@ if is_admin:
 
     if admin_nav_mode == "👑 Admin Management Panel":
         st.markdown("## 👑 Admin Control Panel")
-        st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & downloads.")
+        st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & audit trail.")
         
         a_tab1, a_tab_hist, a_tab_edit, a_tab2, a_tab3, a_tab4 = st.tabs([
             "👥 All Users (IDs & Passwords)",
@@ -524,183 +476,149 @@ if is_admin:
                 st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
 
         with a_tab_hist:
-            st.subheader("📜 User Processing History & Download Center")
-            st.caption("Complete tracking of every rate sheet standardized by all team members (Kaif, Arhama, Aliba) with 1-click Excel and CSV downloads.")
+            st.subheader("📜 User Processing History & Audit Trail")
+            st.caption("Complete tracking of which user processed which vendor sheet from the beginning, with flexible date and user filters.")
             
             history = am.get_processing_history()
             if not history:
-                st.info("ℹ️ No rate sheets processed yet.")
+                st.info("ℹ️ No rate sheets processed yet. As users process files, complete activity records will appear here in real time.")
             else:
-                total_sheets = len(history)
-                arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-                kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-
-                m1, m2, m3 = st.columns(3)
-                m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
-                m2.metric("👩 Standardized by Arhama", f"{arhama_total}")
-                m3.metric("👨 Standardized by Kaif", f"{kaif_total}")
-
-                st.markdown("---")
-
-                # Filters
-                f_col1, f_col2 = st.columns([1.8, 2.5])
-                with f_col1:
-                    user_filter = st.selectbox(
-                        "👤 Filter by Team Member:",
-                        ["🌐 All Team Members (Everyone)", "👩 Arhama", "👨 Kaif", "👩 Aliba"],
-                        key="admin_hist_team_filter"
-                    )
-                with f_col2:
-                    search_kw = st.text_input(
-                        "🔍 Search Vendor or File Name:",
-                        placeholder="Type vendor or filename (e.g. QC Globe, Meratalk, Earthcomm, Harmony)...",
-                        key="admin_hist_search_box"
-                    )
-
-                date_mode = st.radio(
-                    "📅 Date Filter:",
-                    ["🌐 All Time", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days", "🗓️ Single Date", "📆 Date Range"],
-                    horizontal=True,
-                    key="admin_hist_date_radio"
-                )
-
                 def extract_entry_date(ts):
                     if not ts:
                         return None
                     try:
-                        return datetime.datetime.strptime(str(ts).strip()[:10], "%Y-%m-%d").date()
+                        s = str(ts).strip()[:10]
+                        return datetime.datetime.strptime(s, "%Y-%m-%d").date()
                     except Exception:
                         return None
 
                 now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-                today_ist = now_ist.date()
-
+                today = now_ist.date()
                 all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
                 valid_dates = [d for d in all_dates if d is not None]
-                min_d = min(valid_dates) if valid_dates else today_ist
-                max_d = max(valid_dates) if valid_dates else today_ist
+                min_available_date = min(valid_dates) if valid_dates else today
+                max_available_date = max(valid_dates) if valid_dates else today
 
-                s_date, e_date = None, None
-                if date_mode == "🗓️ Single Date":
-                    sd = st.date_input("Select Date:", value=max_d, key="admin_hist_sd_input")
-                    s_date, e_date = sd, sd
-                elif date_mode == "📆 Date Range":
-                    dr1, dr2 = st.columns(2)
-                    with dr1:
-                        fd = st.date_input("From Date:", value=min_d, key="admin_hist_fd_input")
-                    with dr2:
-                        td = st.date_input("To Date:", value=today_ist, key="admin_hist_td_input")
-                    s_date, e_date = min(fd, td), max(fd, td)
-                elif date_mode == "⚡ Today":
-                    s_date, e_date = today_ist, today_ist
-                elif date_mode == "⚡ Yesterday":
-                    yest = today_ist - datetime.timedelta(days=1)
-                    s_date, e_date = yest, yest
-                elif date_mode == "⚡ Last 7 Days":
-                    s_date = today_ist - datetime.timedelta(days=7)
-                    e_date = today_ist
+                # Date Filter Mode Selector
+                st.markdown("**📅 Filter History by Date:**")
+                date_filter_mode = st.radio(
+                    "Choose Date View:",
+                    ["🌐 All Time", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days", "🗓️ Single Date", "📆 Date Range"],
+                    horizontal=True,
+                    key="hist_date_filter_mode"
+                )
 
+                sel_start_date = None
+                sel_end_date = None
+
+                if date_filter_mode == "🗓️ Single Date":
+                    col_sd1, col_sd2 = st.columns([1.5, 2.5])
+                    with col_sd1:
+                        target_day = st.date_input("Select Date:", value=max_available_date, key="hist_single_day_input")
+                    sel_start_date = target_day
+                    sel_end_date = target_day
+
+                elif date_filter_mode == "📆 Date Range":
+                    col_dr1, col_dr2 = st.columns(2)
+                    with col_dr1:
+                        from_d = st.date_input("From Date:", value=min_available_date, key="hist_from_date_input")
+                    with col_dr2:
+                        to_d = st.date_input("To Date:", value=today, key="hist_to_date_input")
+                    sel_start_date = min(from_d, to_d)
+                    sel_end_date = max(from_d, to_d)
+
+                elif date_filter_mode == "⚡ Today":
+                    sel_start_date = today
+                    sel_end_date = today
+
+                elif date_filter_mode == "⚡ Yesterday":
+                    yesterday = today - datetime.timedelta(days=1)
+                    sel_start_date = yesterday
+                    sel_end_date = yesterday
+
+                elif date_filter_mode == "⚡ Last 7 Days":
+                    sel_start_date = today - datetime.timedelta(days=7)
+                    sel_end_date = today
+
+                # Secondary Filters: User and Keyword Search
+                fc1, fc2 = st.columns([1.5, 2.5])
+                with fc1:
+                    user_options = ["All Users", "Arhama", "Kaif", "Aliba"]
+                    selected_user = st.selectbox("Filter by User:", user_options, key="audit_filter_user")
+                with fc2:
+                    filter_kw = st.text_input("Search by Vendor or File Name:", key="audit_search_kw", placeholder="Type vendor or filename to search...")
+
+                # Filtering logic
                 filtered = []
-                for h in history:
-                    if s_date and e_date:
-                        ed = extract_entry_date(h.get("timestamp"))
-                        if not ed or not (s_date <= ed <= e_date):
+                for entry in history:
+                    e_date = extract_entry_date(entry.get("timestamp"))
+                    
+                    if sel_start_date and sel_end_date:
+                        if not e_date or not (sel_start_date <= e_date <= sel_end_date):
                             continue
+                    
+                    if selected_user != "All Users":
+                        u_match = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
+                        f_match = str(entry.get("output_filename", "")).lower()
+                        sel_low = selected_user.lower()
+                        if sel_low not in u_match and sel_low not in f_match:
+                            continue
+                    
+                    if filter_kw:
+                        kw_low = filter_kw.strip().lower()
+                        v_name = str(entry.get("vendor_name", "")).lower()
+                        out_f = str(entry.get("output_filename", "")).lower()
+                        u_f = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
+                        if kw_low not in v_name and kw_low not in out_f and kw_low not in u_f:
+                            continue
+                            
+                    filtered.append(entry)
 
-                    if user_filter == "👩 Arhama":
-                        match_arhama = "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                        if not match_arhama:
-                            continue
-                    elif user_filter == "👨 Kaif":
-                        match_kaif = "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                        if not match_kaif:
-                            continue
-                    elif user_filter == "👩 Aliba":
-                        match_aliba = "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower()
-                        if not match_aliba:
-                            continue
+                # Metrics: ONLY Sheets count and User count (Clean Rows Processed is removed!)
+                f_sheets = len(filtered)
+                f_users = len(set(h.get("username") for h in filtered if h.get("username")))
+                
+                m1, m2, m3 = st.columns([2, 2, 1.2])
+                m1.metric("Sheets Standardized", f"{f_sheets:,}")
+                m2.metric("Contributing Users", f"{f_users}")
+                with m3:
+                    st.write("")
+                    if st.button("🗑️ Clear Audit Log", key="main_clear_hist_btn", use_container_width=True):
+                        am.clear_processing_history()
+                        st.success("Activity log cleared!")
+                        time.sleep(0.8)
+                        st.rerun()
 
-                    if search_kw:
-                        kw = search_kw.strip().lower()
-                        comb = (str(h.get("vendor_name", "")) + str(h.get("output_filename", "")) + str(h.get("user_name", ""))).lower()
-                        if kw not in comb:
-                            continue
-
-                    filtered.append(h)
-
-                st.markdown(f"**Found {len(filtered)} Rate Sheet(s) Matching Criteria:**")
+                st.divider()
 
                 if not filtered:
-                    st.warning("⚠️ No sheets found matching this filter criteria. Try selecting '🌐 All Time' or '🌐 All Team Members'.")
+                    st.warning("⚠️ No processing records found for the selected date / filter criteria.")
                 else:
-                    st.markdown("#### ⚡ 1-Click Instant Sheet Download")
-                    sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
-                    if sheet_options:
-                        sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key="admin_quick_dl_select")
-                        if sel_sheet:
-                            xl_bytes = get_historical_file_bytes(sel_sheet)
-                            csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
-                            
-                            c_dl1, c_dl2 = st.columns(2)
-                            with c_dl1:
-                                if xl_bytes:
-                                    st.download_button(
-                                        label=f"📊 Download Excel (.xlsx)",
-                                        data=xl_bytes,
-                                        file_name=sel_sheet,
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        key=f"admin_hist_quick_dl_xl_{sel_sheet}",
-                                        type="primary",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True)
-                            with c_dl2:
-                                if csv_b:
-                                    st.download_button(
-                                        label=f"📄 Download CSV (.csv)",
-                                        data=csv_b,
-                                        file_name=csv_fn,
-                                        mime="text/csv",
-                                        key=f"admin_hist_quick_dl_csv_{sel_sheet}",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.button(f"CSV Not in Cache", disabled=True, use_container_width=True)
-
-                    st.markdown("---")
-                    st.markdown("#### 📜 Complete Activity & History Table")
-
                     table_rows = []
                     for entry in filtered:
-                        u_display = entry.get("user_name") or entry.get("username")
-                        if "arhama" in str(u_display).lower():
-                            u_display = "👩 Arhama"
-                        elif "kaif" in str(u_display).lower():
-                            u_display = "👨 Kaif"
-                        elif "aliba" in str(u_display).lower():
-                            u_display = "👩 Aliba"
-
+                        u_disp = entry.get("user_name") or entry.get("username")
                         table_rows.append({
                             "Timestamp (IST)": entry.get("timestamp"),
-                            "Uploaded By": u_display,
+                            "Date": str(entry.get("timestamp"))[:10],
+                            "User": u_disp,
                             "Vendor / Trunk Name": entry.get("vendor_name"),
-                            "Standardized File Name": entry.get("output_filename"),
+                            "Standardized File": entry.get("output_filename"),
                             "Clean Rows": f"{entry.get('clean_rows', 0):,}",
                             "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
                             "Speed": f"{entry.get('elapsed_sec', 0)}s"
                         })
-
+                    
                     df_audit = pd.DataFrame(table_rows)
                     st.dataframe(df_audit, use_container_width=True, hide_index=True)
 
-                    csv_log = df_audit.to_csv(index=False).encode('utf-8')
+                    # Export Audit Log to CSV
+                    csv_data = df_audit.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        label="📥 Download This Table as CSV",
-                        data=csv_log,
-                        file_name=f"audit_log_{today_ist.strftime('%Y%m%d')}.csv",
+                        label="📥 Download This History (CSV)",
+                        data=csv_data,
+                        file_name=f"audit_history_{today.strftime('%Y%m%d')}.csv",
                         mime="text/csv",
-                        key="btn_admin_download_full_audit_csv"
+                        key="btn_download_audit_csv"
                     )
 
         with a_tab_edit:
