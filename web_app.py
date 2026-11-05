@@ -844,6 +844,11 @@ if st.session_state.processed_results:
         qc_ex = stats.get('qc_excluded', 0)
         nanp_ex = stats.get('nanp_excluded', 0)
         minus1_ex = stats.get('rates_minus1_count', 0)
+        future_eff = stats.get('future_eff_date')
+
+        future_badge = ""
+        if future_eff:
+            future_badge = f' &nbsp;|&nbsp; <span style="background-color: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.88rem;">📅 Eff. Date: {future_eff}</span>'
 
         st.markdown(f"""
         <div class="auto-dl-banner" style="margin-bottom: 8px;">
@@ -852,7 +857,7 @@ if st.session_state.processed_results:
                 Clean Rows: <b>{clean_rows_display:,}</b> &nbsp;|&nbsp; 
                 QC Excluded: <b>{qc_ex:,}</b> &nbsp;|&nbsp; 
                 USA/Canada/PR Excluded: <b>{nanp_ex:,}</b> &nbsp;|&nbsp;
-                Rates to -1: <b>{minus1_ex:,}</b>
+                Rates to -1: <b>{minus1_ex:,}</b>{future_badge}
             </span>
         </div>
         """, unsafe_allow_html=True)

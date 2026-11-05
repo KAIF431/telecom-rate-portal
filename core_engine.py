@@ -644,6 +644,13 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     total_excluded = int(is_excluded_mask.sum())
     verification_passed = (initial_row_count - total_excluded == final_row_count)
 
+    # Calculate Last Effective Date (only if future date exists)
+    today = datetime.date.today()
+    valid_dates = [d for d in date_objs if d is not None and isinstance(d, (datetime.date, datetime.datetime))]
+    future_dates = [d.date() if isinstance(d, datetime.datetime) else d for d in valid_dates if (d.date() if isinstance(d, datetime.datetime) else d) > today]
+    last_future_date = max(future_dates) if future_dates else None
+    future_eff_date_str = last_future_date.strftime('%m-%d-%y') if last_future_date else None
+
     summary_stats = {
         'source_file': source_filename,
         'initial_rows': initial_row_count,
@@ -653,7 +660,8 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         'final_clean_rows': final_row_count,
         'verification_passed': verification_passed,
         'has_comments': has_comments,
-        'comments_tag': comments_tag
+        'comments_tag': comments_tag,
+        'future_eff_date': future_eff_date_str
     }
 
     return df_clean, df_excluded, summary_stats
