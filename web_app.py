@@ -914,7 +914,8 @@ if st.session_state.processed_results:
         </div>
         """, unsafe_allow_html=True)
 
-        col_dl_excel, col_dl_csv = st.columns(2)
+        v_name_clean = item.get("vendor_name", "").strip() or out_name.split(" A to Z ")[0].strip()
+        col_dl_excel, col_dl_csv, col_dl_rt = st.columns([1, 1, 1.2])
         with col_dl_excel:
             st.download_button(
                 label="📊 Download Excel (.xlsx)",
@@ -937,46 +938,27 @@ if st.session_state.processed_results:
                 type="primary",
                 use_container_width=True
             )
+        with col_dl_rt:
+            rt_clicked = st.button(
+                "🚀 Auto Upload to RouteTrust",
+                key=f"btn_rt_auto_{idx}",
+                help=f"Automatically uploads and approves rate deck into RouteTrust for {v_name_clean}",
+                use_container_width=True
+            )
 
-        # RouteTrust Zero-Touch Auto-Upload Option
-        v_name_clean = item.get("vendor_name", "").strip() or out_name.split(" A to Z ")[0].strip()
-        b64_xl = base64.b64encode(out_bytes).decode("utf-8")
-        st.markdown(f"""
-        <div class="rt-injected-container" style="margin-top: 10px; margin-bottom: 14px;">
-            <div class="rt-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15); font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 13px; color: #94a3b8;">
-                        🎯 RouteTrust Subscription: <b style="color: #38bdf8; font-size: 14px;">{v_name_clean}</b>
-                    </span>
-                    <span style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 8px; border-radius: 10px; font-weight: 600;">⚡ Zero-Touch Auto-Pilot</span>
-                </div>
-                <button class="rt-btn-autoupload" id="rt-btn-{idx}" data-filename="{out_name}" data-subname="{v_name_clean}" data-b64="{b64_xl}"
-                        onclick="
-                            this.disabled = true;
-                            this.innerHTML = '⏳ Auto-Pilot Active: Uploading to RouteTrust...';
-                            this.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)';
-                            var sb = document.getElementById('rt-status-{idx}');
-                            if (sb) {{
-                                sb.style.display = 'block';
-                                sb.style.background = 'rgba(245, 158, 11, 0.15)';
-                                sb.style.color = '#fbbf24';
-                                sb.style.border = '1px solid rgba(245, 158, 11, 0.3)';
-                                sb.innerHTML = '⏳ Connecting to RouteTrust for <b>{v_name_clean}</b>...';
-                            }}
-                            window.postMessage({{
-                                action: 'PORTAL_BTN_CLICKED',
-                                subName: '{v_name_clean}',
-                                fileName: '{out_name}',
-                                b64: '{b64_xl}'
-                            }}, '*');
-                        "
-                        style="width: 100%; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff !important; border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    🚀 Auto Upload to RouteTrust
-                </button>
-                <div class="rt-card-status" id="rt-status-{idx}" style="display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 1.4;"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        if rt_clicked:
+            st.info(f"⏳ **Auto-Pilot Active:** Uploading **{out_name}** to RouteTrust ({v_name_clean})... Check RouteTrust tab!")
+            b64_xl = base64.b64encode(out_bytes).decode("utf-8")
+            components.html(f"""
+            <script>
+                window.parent.postMessage({{
+                    action: 'START_AUTO_UPLOAD',
+                    subName: '{v_name_clean}',
+                    fileName: '{out_name}',
+                    fileBase64: '{b64_xl}'
+                }}, '*');
+            </script>
+            """, height=0)
 
     if len(results) > 1:
         st.write("")
