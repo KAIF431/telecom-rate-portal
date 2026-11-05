@@ -532,15 +532,13 @@ if is_admin:
                 st.info("ℹ️ No rate sheets processed yet.")
             else:
                 total_sheets = len(history)
-                total_clean_rows = sum(h.get("clean_rows", 0) for h in history)
                 arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
                 kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
 
-                m1, m2, m3, m4 = st.columns(4)
+                m1, m2, m3 = st.columns(3)
                 m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
-                m2.metric("📊 Clean Rows Processed", f"{total_clean_rows:,}")
-                m3.metric("👩 Standardized by Arhama", f"{arhama_total}")
-                m4.metric("👨 Standardized by Kaif", f"{kaif_total}")
+                m2.metric("👩 Standardized by Arhama", f"{arhama_total}")
+                m3.metric("👨 Standardized by Kaif", f"{kaif_total}")
 
                 st.markdown("---")
 

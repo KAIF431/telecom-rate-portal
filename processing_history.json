@@ -1,5 +1,165 @@
 [
   {
+    "timestamp": "2026-11-05 16:36:43",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Link-It - Teloz NFS (Vendor CC)",
+    "output_filename": "Link-It - Teloz NFS (Vendor CC) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:35:18",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Link It   Teloz  Vendor CC",
+    "output_filename": "rate_deck_Link_It___Teloz__Vendor_CC__.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:34:34",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Teloz 05 November 2026 Macau All Mobile CC (777999).xlsx",
+    "output_filename": "Teloz 05 November 2026 Macau All Mobile CC (777999).xlsx",
+    "clean_rows": 11,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:26:03",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Harmony Twiching (Vendor CLI)",
+    "output_filename": "Harmony Twiching (Vendor CLI) A to Z Various new Kaif.xlsx",
+    "clean_rows": 3,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:24:14",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Aovatalk Twiching NFS (Vendor CLI)",
+    "output_filename": "rate_deck_Aovatalk_Twiching_NFS_(Vendor_CLI).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:24:03",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Aovatalk Twiching NFS (Vendor CLI)",
+    "output_filename": "Aovatalk Twiching NFS (Vendor CLI) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:19:46",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Aovatalk Twiching NFS (Vendor CC)",
+    "output_filename": "rate_deck_Aovatalk_Twiching_NFS_(Vendor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:19:45",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Aovatalk Twiching NFS (Vendor CC)",
+    "output_filename": "Aovatalk Twiching NFS (Vendor CC) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 767,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:17:16",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mushtech - Twiching NFS (Vendor CC) A to Z Various inc, dec, same Kaif",
+    "output_filename": "rate_deck_Mushtech_-_Twiching_NFS_(Vendor_CC)_A_to_Z_Various_inc,_dec,_same_Kaif.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:16:16",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mushtech - Twiching NFS (Vendor CC)",
+    "output_filename": "Mushtech - Twiching NFS (Vendor CC) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 16923,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 16:15:08",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Rovex Telecom Limited- Twiching (Vendor CC)",
+    "output_filename": "Rovex Telecom Limited- Twiching (Vendor CC) A to Z UPdated Kaif.xlsx",
+    "clean_rows": 12476,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 15:52:37",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI) (2)",
+    "output_filename": "rate_deck_Ricochet_global_NFS_(Vendor_NCLI) (2).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 15:52:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI)",
+    "output_filename": "Name - Ricochet global NFS (Vendor NCLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 36758,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 15:48:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mushtech (Vendor CC)",
+    "output_filename": "Name- Mushtech (Vendor CC) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 16923,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 15:48:34",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "9ENOS (Vendor CLI)",
+    "output_filename": "Name - 9ENOS (Vendor CLI) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 31162,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 15:48:07",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "NALIA GLOBAL (Vendor Prm)",
+    "output_filename": "NAME - NALIA GLOBAL (Vendor Prm) A to Z Various inc, dec, same Kaif.xlsx",
+    "clean_rows": 15495,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 15:39:56",
     "username": "kaif",
     "user_name": "Kaif",
@@ -20,22 +180,42 @@
     "elapsed_sec": 1.85
   },
   {
+    "timestamp": "2026-11-05 14:27:12",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "QC Globe  Vendor CC",
+    "output_filename": "rate_deck_QC_Globe__Vendor_CC_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 14:27:07",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QUICKCOM  Vendor CC    1   1",
+    "output_filename": "rate_deck_QUICKCOM__Vendor_CC____1___1_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 14:26:56",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "QC Globe  Vendor Prm",
+    "output_filename": "rate_deck_QC_Globe__Vendor_Prm_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 13:49:42",
     "username": "kaif",
     "user_name": "Kaif",
     "vendor_name": "Nalia Global CLI",
     "output_filename": "Name - Nalia Global CLI A to Z Full Rate Sheet 11-5-2026 3 Various inc, dec, same Kaif.xlsx",
     "clean_rows": 15495,
-    "qc_excluded": 0,
-    "elapsed_sec": 1.85
-  },
-  {
-    "timestamp": "2026-11-05 13:09:12",
-    "username": "kaif",
-    "user_name": "Kaif",
-    "vendor_name": "IDT AJOXI VENDOR PLATINUM",
-    "output_filename": "IDT AJOXI VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
-    "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
   },
@@ -50,11 +230,11 @@
     "elapsed_sec": 1.85
   },
   {
-    "timestamp": "2026-11-05 13:09:05",
+    "timestamp": "2026-11-05 13:09:12",
     "username": "kaif",
     "user_name": "Kaif",
-    "vendor_name": "IDT AJOXI VENDOR GOLD",
-    "output_filename": "IDT AJOXI VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "vendor_name": "IDT AJOXI VENDOR PLATINUM",
+    "output_filename": "IDT AJOXI VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -65,6 +245,16 @@
     "user_name": "Kaif",
     "vendor_name": "IDT AJOXI VENDOR INSTANT",
     "output_filename": "IDT AJOXI VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "clean_rows": 122556,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 13:09:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "IDT AJOXI VENDOR GOLD",
+    "output_filename": "IDT AJOXI VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -143,8 +333,8 @@
     "timestamp": "2026-11-05 13:00:35",
     "username": "kaif",
     "user_name": "Kaif",
-    "vendor_name": "IDT SOFTTOP VENDOR PLATINUM",
-    "output_filename": "IDT SOFTTOP VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
+    "vendor_name": "IDT SOFTTOP VENDOR SPCAIL",
+    "output_filename": "IDT SOFTTOP VENDOR SPCAIL A to Z Various same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -153,8 +343,8 @@
     "timestamp": "2026-11-05 13:00:35",
     "username": "kaif",
     "user_name": "Kaif",
-    "vendor_name": "IDT SOFTTOP VENDOR SPCAIL",
-    "output_filename": "IDT SOFTTOP VENDOR SPCAIL A to Z Various same Kaif.xlsx",
+    "vendor_name": "IDT SOFTTOP VENDOR PLATINUM",
+    "output_filename": "IDT SOFTTOP VENDOR PLATINUM A to Z Various inc, same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -203,8 +393,8 @@
     "timestamp": "2026-11-05 12:50:44",
     "username": "kaif",
     "user_name": "Kaif",
-    "vendor_name": "IDT TKOS VENDOR GOLD",
-    "output_filename": "IDT TKOS VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
+    "vendor_name": "IDT TKOS VENDOR INSTANT",
+    "output_filename": "IDT TKOS VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -213,8 +403,8 @@
     "timestamp": "2026-11-05 12:50:44",
     "username": "kaif",
     "user_name": "Kaif",
-    "vendor_name": "IDT TKOS VENDOR INSTANT",
-    "output_filename": "IDT TKOS VENDOR INSTANT A to Z Various inc, same Kaif.xlsx",
+    "vendor_name": "IDT TKOS VENDOR GOLD",
+    "output_filename": "IDT TKOS VENDOR GOLD A to Z Various inc, same Kaif.xlsx",
     "clean_rows": 122556,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
@@ -330,6 +520,16 @@
     "elapsed_sec": 1.85
   },
   {
+    "timestamp": "2026-11-05 12:09:54",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Devotel NFS (Vendor CC)",
+    "output_filename": "rate_deck_Devotel_NFS_(Vendor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 12:08:50",
     "username": "kaif",
     "user_name": "Kaif",
@@ -340,6 +540,16 @@
     "elapsed_sec": 1.85
   },
   {
+    "timestamp": "2026-11-05 12:04:23",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI) (1)",
+    "output_filename": "rate_deck_Ricochet_global_NFS_(Vendor_NCLI) (1).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 12:04:22",
     "username": "kaif",
     "user_name": "Kaif",
@@ -348,6 +558,16 @@
     "clean_rows": 36758,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-05 12:02:26",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Ricochet global NFS (Vendor NCLI)",
+    "output_filename": "rate_deck_Ricochet_global_NFS_(Vendor_NCLI).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-05 12:01:58",
@@ -414,10 +634,30 @@
     "username": "kaif",
     "user_name": "Kaif",
     "vendor_name": "Mushtech - Teloz NFS (Vendor CC)",
+    "output_filename": "rate_deck_Mushtech_-_Teloz_NFS_(Vendor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 11:35:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Mushtech - Teloz NFS (Vendor CC)",
     "output_filename": "Mushtech - Teloz NFS (Vendor CC) A to Z Various inc, dec, same Kaif.xlsx",
     "clean_rows": 16923,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 11:30:41",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MMDSMART TELOZ NFS (Vendor CLI)",
+    "output_filename": "rate_deck_MMDSMART_TELOZ_NFS_(Vendor_CLI).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-05 11:30:33",
@@ -430,6 +670,26 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-05 11:29:17",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Teloz_Limited_USD_CLI_202611041442_TASK4208320 (1).xlsx",
+    "output_filename": "Teloz_Limited_USD_CLI_202611041442_TASK4208320 (1).xlsx",
+    "clean_rows": 6,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 11:28:18",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MMDSMART TELOZ NFS (Vendor CC)",
+    "output_filename": "rate_deck_MMDSMART_TELOZ_NFS_(Vendor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 11:28:06",
     "username": "kaif",
     "user_name": "Kaif",
@@ -440,6 +700,56 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-05 11:27:38",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Teloz_Limited_USD_Call_Center_202611041422_TASK4208176.xlsx",
+    "output_filename": "Teloz_Limited_USD_Call_Center_202611041422_TASK4208176.xlsx",
+    "clean_rows": 6,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 11:27:38",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Teloz Macau (Vendor CC)",
+    "output_filename": "Teloz Macau (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 11:26:41",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MMDSMART TELOZ  Vendor CC",
+    "output_filename": "rate_deck_MMDSMART_TELOZ__Vendor_CC_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:57:00",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Teloz_Limited_USD_CLI_202611041442_TASK4208320.xlsx",
+    "output_filename": "Teloz_Limited_USD_CLI_202611041442_TASK4208320.xlsx",
+    "clean_rows": 6,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:55:02",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "9Eons - Meratalk NFS (Vendor CLI)",
+    "output_filename": "rate_deck_9Eons_-_Meratalk_NFS_(Vendor_CLI).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 10:55:01",
     "username": "kaif",
     "user_name": "Kaif",
@@ -448,6 +758,36 @@
     "clean_rows": 31161,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-05 10:54:35",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "9Eons_CR_Meratalk LLC_04 11 2026 16.45.csv",
+    "output_filename": "9Eons_CR_Meratalk LLC_04 11 2026 16.45.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:52:52",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "ALKAIP - MERATALK NFS (VENDOR CC)",
+    "output_filename": "rate_deck_ALKAIP_-_MERATALK_NFS_(VENDOR_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:51:52",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "R_A_MERATALK LLC_110426.xlsx",
+    "output_filename": "R_A_MERATALK LLC_110426.xlsx",
+    "clean_rows": 169034,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-05 10:50:25",
@@ -470,6 +810,16 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-05 10:42:39",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "MCM (Vendor Prm)",
+    "output_filename": "MCM (Vendor Prm) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 9782,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-05 10:40:09",
     "username": "kaif",
     "user_name": "Kaif",
@@ -480,14 +830,64 @@
     "elapsed_sec": 1.2
   },
   {
-    "timestamp": "2026-11-05 06:06:57",
+    "timestamp": "2026-11-05 10:16:30",
     "username": "v_arhama",
     "user_name": "Arhama",
-    "vendor_name": "EARTHCOMM- Rozper NFS (Vendor NCLI)",
-    "output_filename": "EARTHCOMM- Rozper NFS (Vendor NCLI) A to Z Various inc, dec, new Arhama.xlsx",
-    "clean_rows": 16813,
+    "vendor_name": "Ace Peak CLI (Vendor CLI)",
+    "output_filename": "Ace Peak CLI (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 4948,
     "qc_excluded": 0,
-    "elapsed_sec": 1.45
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 10:15:20",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Ace Peak CC (Vendor CC)",
+    "output_filename": "Ace Peak CC (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 08:47:06",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CLI Gold (Vendor CLI)",
+    "output_filename": "Twiching General CLI Gold (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 06:44:42",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CC (Vendor CC)",
+    "output_filename": "Twiching General CC (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 767,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-05 06:18:39",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching General CLI (Vendor CLI)",
+    "output_filename": "Twiching General CLI (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 2,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 19:30:46",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Shori Telecom Teloz  Customer CC    1",
+    "output_filename": "rate_deck_Shori_Telecom_Teloz__Customer_CC____1_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-04 19:01:58",
@@ -500,6 +900,26 @@
     "elapsed_sec": 1.85
   },
   {
+    "timestamp": "2026-11-04 19:01:57",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CLI) (1)",
+    "output_filename": "rate_deck_GeoNet_Telecom_-_Ajoxi_NFS_(Vendor_CLI) (1).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 18:59:24",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CC) (1)",
+    "output_filename": "rate_deck_GeoNet_Telecom_-_Ajoxi_NFS_(Vendor_CC) (1).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-04 18:59:24",
     "username": "kaif",
     "user_name": "Kaif",
@@ -508,6 +928,16 @@
     "clean_rows": 126157,
     "qc_excluded": 0,
     "elapsed_sec": 1.85
+  },
+  {
+    "timestamp": "2026-11-04 18:58:20",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CLI)",
+    "output_filename": "rate_deck_GeoNet_Telecom_-_Ajoxi_NFS_(Vendor_CLI).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-04 18:58:19",
@@ -520,6 +950,16 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-04 18:54:52",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet Telecom - Ajoxi NFS (Vendor CC)",
+    "output_filename": "rate_deck_GeoNet_Telecom_-_Ajoxi_NFS_(Vendor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-04 18:54:42",
     "username": "kaif",
     "user_name": "Kaif",
@@ -528,6 +968,46 @@
     "clean_rows": 126155,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 18:54:19",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "GeoNet_A_Z_CC_INTL_Term_Rate_Deck_Upload_Eff_2026.10.29.csv",
+    "output_filename": "GeoNet_A_Z_CC_INTL_Term_Rate_Deck_Upload_Eff_2026.10.29.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 18:08:35",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QUICKCOM (Vendor CC)",
+    "output_filename": "QUICKCOM (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 16780,
+    "qc_excluded": 95,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 18:04:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "kaif Testing  VEndor CC",
+    "output_filename": "rate_deck_kaif_Testing__VEndor_CC_.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 18:01:31",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "kaif Testing (VEndor CC)",
+    "output_filename": "rate_deck_kaif_Testing_(VEndor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-04 18:01:25",
@@ -540,6 +1020,56 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-11-04 18:00:43",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "QUICKCOM Standard (Vendor CC)",
+    "output_filename": "QUICKCOM Standard (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 16780,
+    "qc_excluded": 95,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 17:54:29",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Nuetech (Vendor Prm)",
+    "output_filename": "Nuetech (Vendor Prm) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 506,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 17:27:52",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "ROZPER BRAZIL (Vendor CLI)",
+    "output_filename": "ROZPER BRAZIL (Vendor CLI) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 1,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 16:51:40",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "easyvoipcall letsdial (VEndor CC)",
+    "output_filename": "rate_deck_easyvoipcall_letsdial_(VEndor_CC).csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-11-04 16:35:18",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "DID LOGIC    Meratalk Vendor CC",
+    "output_filename": "rate_deck_DID_LOGIC____Meratalk_Vendor_CC.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-11-04 16:34:59",
     "username": "v_arhama",
     "user_name": "Arhama",
@@ -548,6 +1078,16 @@
     "clean_rows": 898,
     "qc_excluded": 0,
     "elapsed_sec": 1.2
+  },
+  {
+    "timestamp": "2026-11-04 15:34:30",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "DID_Logic__Meratalk_Vendor_CC.csv",
+    "output_filename": "DID_Logic__Meratalk_Vendor_CC.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-11-04 13:32:52",
@@ -590,6 +1130,16 @@
     "elapsed_sec": 1.2
   },
   {
+    "timestamp": "2026-10-23 16:31:20",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Giacom (Vendor CC)",
+    "output_filename": "Giacom (Vendor CC) A to Z Various inc, dec Arhama.xlsx",
+    "clean_rows": 83972,
+    "qc_excluded": 2614,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-10-16 15:46:26",
     "username": "v_arhama",
     "user_name": "Arhama",
@@ -600,6 +1150,136 @@
     "elapsed_sec": 1.65
   },
   {
+    "timestamp": "2026-10-14 15:19:30",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "MY COUNTRY MOBILE IDT_Instant 1900_Oct-14-2026 184511980.csv",
+    "output_filename": "MY COUNTRY MOBILE IDT_Instant 1900_Oct-14-2026 184511980.csv",
+    "clean_rows": 15000,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:06",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching Quickcom (Customer Premium) Billing change kaif (1) iraq billing chage kaif.xlsx",
+    "output_filename": "Twiching Quickcom (Customer Premium) Billing change kaif (1) iraq billing chage kaif.xlsx",
+    "clean_rows": 4806,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:06",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching Quickcom (Customer Premium) iraq billing chage kaif.xlsx",
+    "output_filename": "Twiching Quickcom (Customer Premium) iraq billing chage kaif.xlsx",
+    "clean_rows": 4806,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:06",
+    "username": "v_aliba",
+    "user_name": "Aliba",
+    "vendor_name": "Twiching LEXICO (Customer CC) Various Inc Dec Aliba iraq billing chage kaif.xlsx",
+    "output_filename": "Twiching LEXICO (Customer CC) Various Inc Dec Aliba iraq billing chage kaif.xlsx",
+    "clean_rows": 22861,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:05",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "Twiching LEXICO (Customer CC) iraq billing chage kaif.xlsx",
+    "output_filename": "Twiching LEXICO (Customer CC) iraq billing chage kaif.xlsx",
+    "clean_rows": 22861,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:03",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TERMSAT - Twiching (Customer CC) Billing change kaif iraq billing chage kaif.xlsx",
+    "output_filename": "TERMSAT - Twiching (Customer CC) Billing change kaif iraq billing chage kaif.xlsx",
+    "clean_rows": 26325,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:02",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TERMSAT - Twiching (Customer CC) iraq billing chage kaif.xlsx",
+    "output_filename": "TERMSAT - Twiching (Customer CC) iraq billing chage kaif.xlsx",
+    "clean_rows": 26325,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:00",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Blue Dragon-Twiching(Customer CC) various inc arhama iraq billing chage kaif.xlsx",
+    "output_filename": "Blue Dragon-Twiching(Customer CC) various inc arhama iraq billing chage kaif.xlsx",
+    "clean_rows": 25687,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:28:00",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Blue Dragon-Twiching(Customer CC) iraq billing chage kaif.xlsx",
+    "output_filename": "Blue Dragon-Twiching(Customer CC) iraq billing chage kaif.xlsx",
+    "clean_rows": 25687,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:27:58",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "AlkaIP Twiching (Customer CLI) brazil inc arhama iraq billing chage kaif.xlsx",
+    "output_filename": "AlkaIP Twiching (Customer CLI) brazil inc arhama iraq billing chage kaif.xlsx",
+    "clean_rows": 28455,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 18:27:57",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "AlkaIP Twiching (Customer CLI) iraq billing chage kaif.xlsx",
+    "output_filename": "AlkaIP Twiching (Customer CLI) iraq billing chage kaif.xlsx",
+    "clean_rows": 28455,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 17:27:04",
+    "username": "v_aliba",
+    "user_name": "Aliba",
+    "vendor_name": "Twiching LEXICO (Customer CC) Various Inc Dec Aliba.xlsx",
+    "output_filename": "Twiching LEXICO (Customer CC) Various Inc Dec Aliba.xlsx",
+    "clean_rows": 22861,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
+    "timestamp": "2026-10-13 17:27:04",
+    "username": "v_arhama",
+    "user_name": "Arhama",
+    "vendor_name": "Twiching Quickcom (Customer Premium) Billing change kaif (1).xlsx",
+    "output_filename": "Twiching Quickcom (Customer Premium) Billing change kaif (1).xlsx",
+    "clean_rows": 4806,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
+  },
+  {
     "timestamp": "2026-10-13 17:27:02",
     "username": "v_arhama",
     "user_name": "Arhama",
@@ -608,6 +1288,16 @@
     "clean_rows": 25687,
     "qc_excluded": 0,
     "elapsed_sec": 1.65
+  },
+  {
+    "timestamp": "2026-10-13 17:27:02",
+    "username": "kaif",
+    "user_name": "Kaif",
+    "vendor_name": "TERMSAT - Twiching (Customer CC) Billing change kaif.xlsx",
+    "output_filename": "TERMSAT - Twiching (Customer CC) Billing change kaif.xlsx",
+    "clean_rows": 26325,
+    "qc_excluded": 0,
+    "elapsed_sec": 1.75
   },
   {
     "timestamp": "2026-10-13 17:20:18",
