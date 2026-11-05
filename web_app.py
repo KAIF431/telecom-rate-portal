@@ -98,23 +98,40 @@ def load_csv_safely(f_content, nrows=None):
     return pd.DataFrame(padded)
 
 
-# Strict In-Memory Session Handlers (Requires Login in every new tab / incognito window)
+# Session Handlers (Maintains login on F5 refresh in active tab; strictly prompts login in fresh tab/incognito)
 def authenticate_current_session():
-    # Only authenticated if user object exists in current session state
+    # 1. In-memory session check
     if st.session_state.get("user"):
         return st.session_state.get("user")
+    
+    # 2. Query param session token (maintains active session on F5 refresh)
+    try:
+        token = st.query_params.get("session_token")
+        if token:
+            user_info = am.get_session_user(token)
+            if user_info:
+                st.session_state.user = user_info
+                st.session_state.active_token = token
+                return user_info
+    except Exception:
+        pass
+
     return None
 
 def set_login_session(session_data):
+    token = session_data.get("token") or am.create_session_token(session_data.get("username", "kaif"), days_valid=30)
+    am.register_session(token, session_data)
     st.session_state.user = session_data
-    st.session_state.active_token = session_data.get("token")
-    # Clean query parameters so session tokens never leak in the address bar
+    st.session_state.active_token = token
     try:
-        st.query_params.clear()
+        st.query_params["session_token"] = token
     except Exception:
         pass
 
 def clear_current_session():
+    tok = st.session_state.get("active_token") or st.query_params.get("session_token")
+    if tok:
+        am.destroy_session(tok)
     st.session_state.user = None
     st.session_state.active_token = None
     st.session_state.cookie_id = None
