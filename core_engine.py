@@ -169,13 +169,13 @@ def detect_header_row_and_columns(df_raw):
                     mapping['rate'] = col_idx
                     kw_score += 7
 
-            # 5. Effective Date keywords (ignore expiry/end dates, support 'Active' / 'Activation' when containing dates)
+            # 5. Effective Date keywords (strictly ignore expiry/end/to dates, support 'Active' / 'Activation' when containing dates)
             elif any(k in v for k in [
                 'effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date',
                 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from',
                 'valid from', 'valid date', 'start date', 'active from', 'active date', 'activation date',
                 'active', 'activation'
-            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination']):
+            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to', 'valid to', 'eff to'])                and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
                 is_valid_date_col = True
                 if v in ['active', 'activation']:
                     sample_check = df_raw.iloc[row_idx + 1 : min(row_idx + 15, len(df_raw)), col_idx].dropna().tolist()
@@ -188,7 +188,8 @@ def detect_header_row_and_columns(df_raw):
                         is_valid_date_col = False
 
                 if is_valid_date_col:
-                    if 'effective_date' not in mapping or 'effective' in v or 'effectiv' in v:
+                    is_explicit_from = any(k in v for k in ['from', 'start', 'begin', 'eff date', 'effective date', 'eff. date', 'eff_date'])
+                    if 'effective_date' not in mapping or is_explicit_from:
                         mapping['effective_date'] = col_idx
                         kw_score += 5
 
@@ -733,7 +734,17 @@ def generate_target_excel_bytes(df_clean):
     ws = wb.active
     ws.title = "Rate_Amendment"
 
-    headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
+    mins = df_clean['Minimum'].tolist() if 'Minimum' in df_clean.columns else [None] * len(df_clean)
+    incs = df_clean['Increment'].tolist() if 'Increment' in df_clean.columns else [None] * len(df_clean)
+
+    has_billing = any(pd.notna(m) and str(m).strip() not in ['', 'None', 'nan'] for m in mins) or \
+                  any(pd.notna(inc) and str(inc).strip() not in ['', 'None', 'nan'] for inc in incs)
+
+    if has_billing:
+        headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
+    else:
+        headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date']
+
     ws.append(headers)
 
     fill_22 = PatternFill(fill_type='solid', start_color=Color(indexed=22), end_color=Color(indexed=22))
@@ -751,28 +762,31 @@ def generate_target_excel_bytes(df_clean):
     codes = df_clean['Dial Code'].tolist()
     sums = df_clean['Summary'].tolist()
     rates = df_clean['New Rate'].tolist()
-    mins = df_clean['Minimum'].tolist()
-    incs = df_clean['Increment'].tolist()
 
     for i in range(len(df_clean)):
         c = codes[i]
         s = sums[i]
         r = float(rates[i])
         d = dt_list[i] if (i < len(dt_list) and dt_list[i] is not None) else None
-        m = mins[i] if (i < len(mins) and mins[i] is not None and pd.notna(mins[i])) else None
-        inc = incs[i] if (i < len(incs) and incs[i] is not None and pd.notna(incs[i])) else None
         
-        ws.append([c, s, r, d, m, inc])
+        if has_billing:
+            m = mins[i] if (i < len(mins) and mins[i] is not None and pd.notna(mins[i])) else None
+            inc = incs[i] if (i < len(incs) and incs[i] is not None and pd.notna(incs[i])) else None
+            ws.append([c, s, r, d, m, inc])
+        else:
+            ws.append([c, s, r, d])
+
         if d is not None:
             ws.cell(row=i + 2, column=4).number_format = 'mm-dd-yy'
 
-    # Exact column widths matching Vendor Sample sheet.xlsx
+    # Column widths matching template
     ws.column_dimensions['A'].width = 11.0
     ws.column_dimensions['B'].width = 44.0
     ws.column_dimensions['C'].width = 14.5
     ws.column_dimensions['D'].width = 13.0
-    ws.column_dimensions['E'].width = 10.0
-    ws.column_dimensions['F'].width = 10.5
+    if has_billing:
+        ws.column_dimensions['E'].width = 10.0
+        ws.column_dimensions['F'].width = 10.5
 
     wb.save(output)
     output.seek(0)
