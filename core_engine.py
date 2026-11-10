@@ -455,18 +455,20 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                 cell_s = str(cell_val).strip()
                 if re.search(r'\b(?:billing\s+increment|pulse|interval|billing)\b', cell_s, re.I):
                     nums_hdr = re.findall(r'\d+(?:\.\d+)?', cell_s)
-                    if len(nums_hdr) >= 3:
-                        n1 = int(float(nums_hdr[1]))
-                        n2 = int(float(nums_hdr[2]))
-                        default_header_min = max(n1, n2)
-                        default_header_inc = min(n1, n2)
-                        break
-                    elif len(nums_hdr) == 2:
-                        n1 = int(float(nums_hdr[0]))
-                        n2 = int(float(nums_hdr[1]))
-                        default_header_min = max(n1, n2)
-                        default_header_inc = min(n1, n2)
-                        break
+                    if nums_hdr:
+                        int_hdr = [int(float(x)) for x in nums_hdr]
+                        if len(int_hdr) >= 3:
+                            nz = [x for x in int_hdr if x > 0]
+                            if len(nz) >= 2:
+                                default_header_min = max(nz[0], nz[1])
+                                default_header_inc = min(nz[0], nz[1])
+                            elif len(nz) == 1:
+                                default_header_min, default_header_inc = nz[0], nz[0]
+                            break
+                        elif len(int_hdr) == 2:
+                            default_header_min = max(int_hdr[0], int_hdr[1])
+                            default_header_inc = min(int_hdr[0], int_hdr[1])
+                            break
             if default_header_min is not None:
                 break
 
@@ -630,21 +632,24 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                 incs.append(None)
                 continue
             try:
-                if len(nums) >= 3:
-                    # e.g. 0/60/1, 0/1/60, 0-60-1 -> min=60, inc=1
-                    n1 = int(float(nums[1]))
-                    n2 = int(float(nums[2]))
-                    m = max(n1, n2)
-                    i = min(n1, n2)
-                elif len(nums) == 2:
-                    # e.g. 60/1, 1/60, 30/6, 6/30 -> Telecom Minimum is always >= Increment
-                    n1 = int(float(nums[0]))
-                    n2 = int(float(nums[1]))
-                    m = max(n1, n2)
-                    i = min(n1, n2)
-                elif len(nums) == 1:
+                int_nums = [int(float(x)) for x in nums]
+                if len(int_nums) >= 3:
+                    # e.g. 1/1/0, 60/1/0, 60/60/0 (Initial/Subsequent/Grace) OR 0/60/1, 0/1/1 (Grace/Initial/Subsequent)
+                    non_zeros = [x for x in int_nums if x > 0]
+                    if len(non_zeros) >= 2:
+                        m = max(non_zeros[0], non_zeros[1])
+                        i = min(non_zeros[0], non_zeros[1])
+                    elif len(non_zeros) == 1:
+                        m, i = non_zeros[0], non_zeros[0]
+                    else:
+                        m, i = int_nums[0], int_nums[1]
+                elif len(int_nums) == 2:
+                    # e.g. 60/1, 1/60, 30/6, 1+1, 60+1 -> Telecom Minimum is always >= Increment
+                    m = max(int_nums[0], int_nums[1])
+                    i = min(int_nums[0], int_nums[1])
+                elif len(int_nums) == 1:
                     # e.g. 1 or 60
-                    v = int(float(nums[0]))
+                    v = int_nums[0]
                     m, i = v, v
                 else:
                     m, i = None, None
