@@ -110,28 +110,29 @@ def load_csv_safely(f_content, nrows=None):
 
 
 def get_client_context():
-    ip = ""
     ua = ""
     try:
-        if hasattr(st, "context"):
-            if hasattr(st.context, "ip_address") and st.context.ip_address:
-                ip = str(st.context.ip_address).strip()
-            if hasattr(st.context, "headers") and st.context.headers:
-                if not ip:
-                    ip = st.context.headers.get("x-forwarded-for", "").split(",")[0].strip() or st.context.headers.get("x-real-ip", "").strip()
-                ua = st.context.headers.get("user-agent", "").strip()
+        if hasattr(st, "context") and hasattr(st.context, "headers") and st.context.headers:
+            h = st.context.headers
+            for k, v in h.items():
+                if str(k).lower() == "user-agent":
+                    ua = str(v).strip()
+                    break
     except Exception:
         pass
-    return ip, ua
+    return ua
 
-# Strictly enforce authentication: device-bound token + tab-scoped sessionStorage/cookie
+# Strictly enforce authentication: platform-bound token + tab-scoped sessionStorage/cookie
 def authenticate_current_session():
+    if st.session_state.get("auth_logged_out"):
+        return None
+
     # 1. Existing verified session in current memory execution
     user = st.session_state.get("user")
     if user:
         return user
 
-    client_ip, user_agent = get_client_context()
+    user_agent = get_client_context()
     token = None
 
     # 2. HTTP Cookie - Automatically sent on browser F5 reload
@@ -150,21 +151,25 @@ def authenticate_current_session():
 
     # Validate token if found
     if token:
-        valid_user = am.get_session_user(token, client_ip=client_ip, user_agent=user_agent)
+        valid_user = am.get_session_user(token, user_agent=user_agent)
         if valid_user:
             st.session_state.user = valid_user
             st.session_state.active_token = token
             try:
-                if st.query_params:
-                    st.query_params.clear()
+                if "_auth_sync" in st.query_params:
+                    del st.query_params["_auth_sync"]
+                if "session_token" in st.query_params:
+                    del st.query_params["session_token"]
             except Exception:
                 pass
             return valid_user
 
     # Clean URL: strip any old/stray query parameters so browser address bar remains 100% clean
     try:
-        if st.query_params:
-            st.query_params.clear()
+        if "session_token" in st.query_params:
+            del st.query_params["session_token"]
+        if "_auth_sync" in st.query_params:
+            del st.query_params["_auth_sync"]
     except Exception:
         pass
 
@@ -176,8 +181,10 @@ def set_login_session(session_data):
     st.session_state.active_token = token
     st.session_state.auth_logged_out = False
     try:
-        if st.query_params:
-            st.query_params.clear()
+        if "_auth_sync" in st.query_params:
+            del st.query_params["_auth_sync"]
+        if "session_token" in st.query_params:
+            del st.query_params["session_token"]
     except Exception:
         pass
 
@@ -202,8 +209,10 @@ def clear_current_session():
     st.session_state.auth_logged_out = True
     gc.collect()
     try:
-        if st.query_params:
-            st.query_params.clear()
+        if "_auth_sync" in st.query_params:
+            del st.query_params["_auth_sync"]
+        if "session_token" in st.query_params:
+            del st.query_params["session_token"]
     except Exception:
         pass
 
@@ -347,16 +356,14 @@ if st.session_state.user is None:
         (function() {
             try {
                 window.parent.sessionStorage.removeItem("kaif_auth_token");
-                window.parent.sessionStorage.removeItem("_auth_sync_attempted");
-                window.parent.document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+                window.parent.document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax";
                 if (window.parent.location.search) {
                     window.parent.history.replaceState({}, '', window.parent.location.pathname);
                 }
             } catch(e) {
                 try {
                     sessionStorage.removeItem("kaif_auth_token");
-                    sessionStorage.removeItem("_auth_sync_attempted");
-                    document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+                    document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax";
                 } catch(e2) {}
             }
         })();
@@ -376,18 +383,14 @@ if st.session_state.user is None:
                 try { tok = sessionStorage.getItem("kaif_auth_token"); } catch(e) {}
             }
             if (tok && tok.length > 20) {
-                let attempted = false;
                 try {
-                    attempted = window.parent.sessionStorage.getItem("_auth_sync_attempted") === "1";
-                } catch(e) {}
-                if (!attempted) {
-                    try {
-                        window.parent.sessionStorage.setItem("_auth_sync_attempted", "1");
+                    const searchParams = new URLSearchParams(window.parent.location.search);
+                    if (!searchParams.has("_auth_sync")) {
                         const url = new URL(window.parent.location.href);
                         url.searchParams.set("_auth_sync", tok);
                         window.parent.location.replace(url.toString());
-                    } catch(e) {}
-                }
+                    }
+                } catch(e) {}
             }
         })();
         </script>
@@ -418,8 +421,8 @@ if st.session_state.user is None:
             c_btn1, c_btn2 = st.columns([1.5, 1])
             if c_btn1.button("🚀 Verify & Log In", type="primary", use_container_width=True):
                 if totp_input and len(totp_input.strip()) == 6:
-                    client_ip, user_agent = get_client_context()
-                    ok_t, session_data = am.complete_totp_login(pending, totp_input, client_ip=client_ip, user_agent=user_agent)
+                    user_agent = get_client_context()
+                    ok_t, session_data = am.complete_totp_login(pending, totp_input, user_agent=user_agent)
                     if ok_t:
                         set_login_session(session_data)
                         st.session_state.pending_totp_user = None
@@ -526,16 +529,14 @@ if tok_to_persist:
     (function() {{
         try {{
             window.parent.sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
-            window.parent.sessionStorage.removeItem("_auth_sync_attempted");
-            window.parent.document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; SameSite=Lax";
+            window.parent.document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; Secure; SameSite=Lax";
             if (window.parent.location.search) {{
                 window.parent.history.replaceState({{}}, '', window.parent.location.pathname);
             }}
         }} catch(e) {{
             try {{
                 sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
-                sessionStorage.removeItem("_auth_sync_attempted");
-                document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; SameSite=Lax";
+                document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; Secure; SameSite=Lax";
             }} catch(e2) {{}}
         }}
     }})();

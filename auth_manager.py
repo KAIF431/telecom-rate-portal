@@ -15,6 +15,19 @@ OTP_CACHE_FILE = os.path.join(os.path.dirname(__file__), "email_otp_cache.json")
 SMTP_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "smtp_config.json")
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "processing_history.json")
 TOKEN_STORE_FILE = os.path.join(os.path.dirname(__file__), "session_tokens.json")
+REVOKED_TOKENS_FILE = os.path.join(os.path.dirname(__file__), "revoked_tokens.json")
+
+def is_token_revoked(token):
+    if not token:
+        return False
+    try:
+        if os.path.exists(REVOKED_TOKENS_FILE):
+            with open(REVOKED_TOKENS_FILE, "r", encoding="utf-8") as f:
+                revoked = json.load(f)
+            return str(token).strip() in revoked
+    except Exception:
+        pass
+    return False
 
 ADMIN_EMAIL = "kaifofficial4@gmail.com"
 MASTER_ADMIN_USERNAME = "kaif"
@@ -22,33 +35,24 @@ MASTER_TOTP_SECRET = "XCASLSAZCIRXLXFV"
 
 HMAC_SESSION_SECRET = "KaifTelecomPortal_SuperSecret_HMAC_Key_2026_SecureSession"
 
-def get_device_fingerprint(client_ip="", user_agent=""):
-    ip_part = ""
-    if client_ip:
-        ip_clean = str(client_ip).split(",")[0].strip()
-        if "." in ip_clean:
-            octets = ip_clean.split(".")
-            if len(octets) >= 2:
-                ip_part = ".".join(octets[:2])
-        elif ":" in ip_clean:
-            hextets = ip_clean.split(":")
-            if len(hextets) >= 3:
-                ip_part = ":".join(hextets[:3])
-    ua_part = str(user_agent).strip()[:60]
-    return hashlib.sha256(f"{ip_part}|{ua_part}".encode()).hexdigest()[:16]
+def get_device_fingerprint(user_agent=""):
+    ua_part = str(user_agent).strip()[:80]
+    return hashlib.sha256(ua_part.encode()).hexdigest()[:16]
 
-def create_session_token(username, client_ip="", user_agent="", days_valid=30):
-    """Generates a clean, URL-safe alphanumeric HEX token cryptographically locked to client IP subnet and User-Agent."""
+def create_session_token(username, user_agent="", client_ip="", days_valid=30):
+    """Generates a clean, URL-safe alphanumeric HEX token cryptographically locked to browser User-Agent."""
     exp_timestamp = int(time.time()) + (days_valid * 86400)
-    fp_hash = get_device_fingerprint(client_ip, user_agent)
+    fp_hash = get_device_fingerprint(user_agent)
     payload = f"{username.strip().lower()}:{exp_timestamp}:{fp_hash}"
     sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     raw = f"{payload}:{sig}"
     return raw.encode("utf-8").hex()
 
-def verify_session_token(token_str, client_ip="", user_agent=""):
-    """Stateless verification with strict device fingerprint validation (blocks access from other devices)."""
+def verify_session_token(token_str, user_agent="", client_ip=""):
+    """Stateless verification with strict browser platform validation (blocks access from other devices)."""
     if not token_str:
+        return None
+    if is_token_revoked(token_str):
         return None
     try:
         if isinstance(token_str, (list, tuple)):
@@ -81,9 +85,9 @@ def verify_session_token(token_str, client_ip="", user_agent=""):
             expected_sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(sig, expected_sig):
                 return None
-            # Validate device fingerprint if client context is present
-            if client_ip or user_agent:
-                cur_fp = get_device_fingerprint(client_ip, user_agent)
+            # Validate device fingerprint if user_agent is present
+            if user_agent:
+                cur_fp = get_device_fingerprint(user_agent)
                 if not hmac.compare_digest(fp_hash, cur_fp):
                     return None
         # Legacy 3-part token
@@ -129,11 +133,11 @@ def register_session(token, user_info):
     except Exception:
         pass
 
-def get_session_user(token, client_ip="", user_agent=""):
+def get_session_user(token, user_agent="", client_ip=""):
     if not token:
         return None
-    # 1. Stateless cryptographic token verification with device binding
-    stateless_user = verify_session_token(token, client_ip=client_ip, user_agent=user_agent)
+    # 1. Stateless cryptographic token verification with platform binding
+    stateless_user = verify_session_token(token, user_agent=user_agent, client_ip=client_ip)
     if stateless_user:
         return stateless_user
 
@@ -156,6 +160,18 @@ def get_session_user(token, client_ip="", user_agent=""):
 def destroy_session(token):
     if not token:
         return
+    try:
+        revoked = {}
+        if os.path.exists(REVOKED_TOKENS_FILE):
+            with open(REVOKED_TOKENS_FILE, "r", encoding="utf-8") as f:
+                revoked = json.load(f)
+        revoked[str(token).strip()] = int(time.time())
+        now = int(time.time())
+        revoked = {k: v for k, v in revoked.items() if now - v < 35 * 86400}
+        with open(REVOKED_TOKENS_FILE, "w", encoding="utf-8") as f:
+            json.dump(revoked, f)
+    except Exception:
+        pass
     try:
         if os.path.exists(TOKEN_STORE_FILE):
             with open(TOKEN_STORE_FILE, "r", encoding="utf-8") as f:
