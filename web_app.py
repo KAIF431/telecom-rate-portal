@@ -384,24 +384,6 @@ if st.session_state.user is None:
         </script>
         """, height=0)
         st.session_state.auth_logged_out = False
-    else:
-        # Invisible recovery bridge: ensures cookie is set if tab has tp_sid in sessionStorage
-        components.html("""
-        <script>
-        (function() {
-            try {
-                var sid = parent.sessionStorage.getItem("tp_sid");
-                if (sid && sid.length >= 20) {
-                    if (!parent.document.cookie.includes("tp_sid=")) {
-                        var sec = window.location.protocol === "https:" ? "; Secure" : "";
-                        parent.document.cookie = "tp_sid=" + sid + "; path=/" + sec + "; SameSite=Lax";
-                        parent.location.replace(parent.location.pathname);
-                    }
-                }
-            } catch(e) {}
-        })();
-        </script>
-        """, height=0)
 
     # Render Login Page (Centered Box)
     login_c1, login_c2, login_c3 = st.columns([1, 1.8, 1])
@@ -434,28 +416,7 @@ if st.session_state.user is None:
                         set_login_session(session_data)
                         st.session_state.pending_totp_user = None
                         st.session_state.auth_logged_out = False
-                        
-                        # Set cookie over WebSocket controller (8 hours TTL = 28800 seconds)
-                        try:
-                            controller.set("tp_sid", new_sid, max_age=28800, path="/", same_site="lax")
-                        except Exception:
-                            pass
-                        
-                        components.html("""
-                        <script>
-                        setTimeout(function() {
-                            try {
-                                parent.window.location.reload();
-                            } catch(e) {
-                                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-                            }
-                        }, 200);
-                        </script>
-                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
-                            ✅ 2FA Verified! Initializing secure session...
-                        </div>
-                        """, height=75)
-                        st.stop()
+                        st.rerun()
                     else:
                         st.error(session_data)
                 else:
@@ -548,6 +509,24 @@ current_user = st.session_state.user or {}
 u_name = current_user.get("username", "kaif")
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
+
+# Ensure persistent session cookie is saved in browser for F5 reload persistence (background sync)
+active_tok = st.session_state.get("active_token")
+if active_tok and controller.get("tp_sid") != active_tok:
+    try:
+        controller.set("tp_sid", active_tok, max_age=28800, path="/")
+    except Exception:
+        pass
+    components.html(f"""
+    <script>
+    (function() {{
+        var sec = window.location.protocol === "https:" ? "; Secure; SameSite=None" : "; SameSite=Lax";
+        var cVal = "tp_sid={active_tok}; path=/; max-age=28800" + sec;
+        try {{ parent.document.cookie = cVal; }} catch(e) {{ document.cookie = cVal; }}
+        try {{ parent.sessionStorage.setItem("tp_sid", "{active_tok}"); }} catch(e) {{}}
+    }})();
+    </script>
+    """, height=0)
 
 # ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
 with st.sidebar:
