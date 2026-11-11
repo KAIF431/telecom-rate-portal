@@ -420,7 +420,12 @@ if st.session_state.user is None:
                         components.html(f"""
                         <script>
                         (function() {{
-                            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+                            var sec = "; Secure";
+                            try {{
+                                if (parent.location.protocol === "http:" || location.protocol === "http:") {{
+                                    sec = "";
+                                }}
+                            }} catch(e) {{}}
                             try {{
                                 parent.document.cookie = "tp_sid={new_sid}; path=/" + sec + "; SameSite=Lax";
                             }} catch(e) {{
@@ -431,11 +436,11 @@ if st.session_state.user is None:
                             }} catch(e) {{}}
                             setTimeout(function() {{
                                 try {{
-                                    parent.window.eval("window.location.reload()");
+                                    parent.location.reload();
                                 }} catch(e) {{
-                                    try {{ parent.location.reload(); }} catch(e2) {{}}
+                                    window.location.reload();
                                 }}
-                            }}, 150);
+                            }}, 400);
                         }})();
                         </script>
                         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
@@ -542,7 +547,12 @@ if tok_to_persist:
     components.html(f"""
     <script>
     (function() {{
-        var sec = window.location.protocol === "https:" ? "; Secure" : "";
+        var sec = "; Secure";
+        try {{
+            if (parent.location.protocol === "http:" || location.protocol === "http:") {{
+                sec = "";
+            }}
+        }} catch(e) {{}}
         try {{
             parent.document.cookie = "tp_sid={tok_to_persist}; path=/" + sec + "; SameSite=Lax";
         }} catch(e) {{
@@ -576,7 +586,12 @@ with st.sidebar:
         components.html("""
         <script>
         (function() {
-            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+            var sec = "; Secure";
+            try {
+                if (parent.location.protocol === "http:" || location.protocol === "http:") {
+                    sec = "";
+                }
+            } catch(e) {}
             try {
                 parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
                 parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
@@ -589,11 +604,11 @@ with st.sidebar:
             } catch(e) {}
             setTimeout(function() {
                 try {
-                    parent.window.eval("window.location.reload()");
+                    parent.location.reload();
                 } catch(e) {
-                    try { parent.location.reload(); } catch(e2) {}
+                    window.location.reload();
                 }
-            }, 150);
+            }, 400);
         })();
         </script>
         <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
@@ -621,7 +636,12 @@ with top_head_col2:
         components.html("""
         <script>
         (function() {
-            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+            var sec = "; Secure";
+            try {
+                if (parent.location.protocol === "http:" || location.protocol === "http:") {
+                    sec = "";
+                }
+            } catch(e) {}
             try {
                 parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
                 parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
@@ -634,11 +654,11 @@ with top_head_col2:
             } catch(e) {}
             setTimeout(function() {
                 try {
-                    parent.window.eval("window.location.reload()");
+                    parent.location.reload();
                 } catch(e) {
-                    try { parent.location.reload(); } catch(e2) {}
+                    window.location.reload();
                 }
-            }, 150);
+            }, 400);
         })();
         </script>
         <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
