@@ -205,6 +205,53 @@ def clear_current_session():
     except Exception:
         pass
 
+def set_session_cookie_and_reload(token):
+    """Sets tp_sid session cookie via parent.document.cookie, verifies write, then reloads parent."""
+    components.html(f"""
+    <script>
+    (function() {{
+        var sec = "; Secure";
+        try {{
+            if (parent.location.protocol === "http:" || location.protocol === "http:") {{
+                sec = "";
+            }}
+        }} catch(e) {{}}
+        var cookieStr = "tp_sid={token}; path=/" + sec + "; SameSite=Lax";
+        try {{
+            parent.document.cookie = cookieStr;
+        }} catch(e) {{
+            document.cookie = cookieStr;
+        }}
+        try {{
+            parent.sessionStorage.setItem("tp_sid", "{token}");
+        }} catch(e) {{}}
+
+        var retries = 0;
+        function checkAndReload() {{
+            var c = "";
+            try {{ c = parent.document.cookie || ""; }} catch(e) {{ c = document.cookie || ""; }}
+            if (c.indexOf("tp_sid=") !== -1 || retries >= 10) {{
+                setTimeout(function() {{
+                    try {{
+                        parent.window.location.reload();
+                    }} catch(e) {{
+                        try {{ parent.location.reload(); }} catch(e2) {{ window.location.reload(); }}
+                    }}
+                }}, 250);
+            }} else {{
+                retries++;
+                setTimeout(checkAndReload, 50);
+            }}
+        }}
+        checkAndReload();
+    }})();
+    </script>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
+        ✅ 2FA Verified! Initializing secure session...
+    </div>
+    """, height=75)
+    st.stop()
+
 def save_user_processed_cache(username, results, elapsed_time):
     try:
         cache_file = os.path.join(OUTPUT_DIR, f"last_results_{username}.json")
@@ -269,6 +316,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Temporary debug for cookie visibility
+try:
+    if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
+        st.sidebar.write("cookies seen:", list(st.context.cookies.keys()))
+    else:
+        st.sidebar.write("cookies seen: []")
+except Exception as _e_c:
+    st.sidebar.write("cookies seen err:", str(_e_c))
 
 # Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
 st.markdown("""
@@ -415,39 +471,8 @@ if st.session_state.user is None:
                         st.session_state.pending_totp_user = None
                         st.session_state.auth_logged_out = False
                         
-                        # Set session cookie tp_sid (no Expires/Max-Age, true session cookie)
-                        # Do NOT call st.rerun() in the same run as cookie write!
-                        components.html(f"""
-                        <script>
-                        (function() {{
-                            var sec = "; Secure";
-                            try {{
-                                if (parent.location.protocol === "http:" || location.protocol === "http:") {{
-                                    sec = "";
-                                }}
-                            }} catch(e) {{}}
-                            try {{
-                                parent.document.cookie = "tp_sid={new_sid}; path=/" + sec + "; SameSite=Lax";
-                            }} catch(e) {{
-                                document.cookie = "tp_sid={new_sid}; path=/" + sec + "; SameSite=Lax";
-                            }}
-                            try {{
-                                parent.sessionStorage.setItem("tp_sid", "{new_sid}");
-                            }} catch(e) {{}}
-                            setTimeout(function() {{
-                                try {{
-                                    parent.location.reload();
-                                }} catch(e) {{
-                                    window.location.reload();
-                                }}
-                            }}, 400);
-                        }})();
-                        </script>
-                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
-                            ✅ 2FA Verified! Initializing secure session...
-                        </div>
-                        """, height=75)
-                        st.stop()
+                        # Set session cookie tp_sid and reload parent via set_session_cookie_and_reload
+                        set_session_cookie_and_reload(new_sid)
                     else:
                         st.error(session_data)
                 else:
