@@ -12,6 +12,10 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import importlib
+from streamlit_cookies_controller import CookieController
+
+# Initialize controller early in script execution
+controller = CookieController()
 
 import auth_manager as am
 import core_engine
@@ -125,13 +129,20 @@ def authenticate_current_session():
     if user:
         return user
 
-    # 2. Read tp_sid session cookie from HTTP headers
+    # 2. Read tp_sid session cookie via WebSocket CookieController
     token = None
     try:
-        if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
-            token = st.context.cookies.get("tp_sid") or st.context.cookies.get("kaif_auth_token")
+        token = controller.get("tp_sid")
     except Exception:
         pass
+
+    # Fallback to HTTP context cookies if available
+    if not token:
+        try:
+            if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
+                token = st.context.cookies.get("tp_sid") or st.context.cookies.get("kaif_auth_token")
+        except Exception:
+            pass
 
     if token:
         token_str = str(token).strip()
@@ -175,6 +186,11 @@ def set_login_session(session_data):
 
 def clear_current_session():
     tok = st.session_state.get("active_token")
+    if not tok:
+        try:
+            tok = controller.get("tp_sid")
+        except Exception:
+            pass
     if tok:
         am.delete_server_session(tok)
         am.destroy_session(tok)
@@ -182,6 +198,10 @@ def clear_current_session():
         th = am.hash_token(tok)
         if th in cache:
             del cache[th]
+    try:
+        controller.remove("tp_sid", path="/")
+    except Exception:
+        pass
     for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
         z_p = st.session_state.get(z_key)
         if z_p and os.path.exists(z_p):
@@ -204,53 +224,6 @@ def clear_current_session():
                 del st.query_params[k]
     except Exception:
         pass
-
-def set_session_cookie_and_reload(token: str):
-    """Sets tp_sid session cookie via parent.document.cookie, verifies write, then reloads parent."""
-    js_code = f"""
-    <script>
-    (function() {{
-        const cookieName = "tp_sid";
-        const cookieValue = "{token}";
-        var isHttp = false;
-        try {{
-            if (parent.location.protocol === "http:" || location.protocol === "http:") {{
-                isHttp = true;
-            }}
-        }} catch(e) {{}}
-
-        // SameSite=None + Secure Streamlit Cloud iframe context ke liye zaroori hai
-        if (isHttp) {{
-            parent.document.cookie = cookieName + "=" + cookieValue + "; path=/; SameSite=Lax";
-        }} else {{
-            parent.document.cookie = cookieName + "=" + cookieValue + "; path=/; Secure; SameSite=None";
-        }}
-        try {{
-            parent.sessionStorage.setItem("tp_sid", cookieValue);
-        }} catch(e) {{}}
-
-        let retries = 0;
-        const checkAndReload = setInterval(() => {{
-            var c = "";
-            try {{ c = parent.document.cookie || ""; }} catch(e) {{ c = document.cookie || ""; }}
-            if (c.indexOf(cookieName + "=" + cookieValue) !== -1 || retries > 10) {{
-                clearInterval(checkAndReload);
-                try {{
-                    parent.window.location.reload();
-                }} catch(e) {{
-                    try {{ parent.location.reload(); }} catch(e2) {{ window.location.reload(); }}
-                }}
-            }}
-            retries++;
-        }}, 50);
-    }})();
-    </script>
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
-        ✅ 2FA Verified! Initializing secure session...
-    </div>
-    """
-    components.html(js_code, height=75)
-    st.stop()
 
 def save_user_processed_cache(username, results, elapsed_time):
     try:
@@ -316,15 +289,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Temporary debug for cookie visibility
-try:
-    if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
-        st.sidebar.write("cookies seen:", list(st.context.cookies.keys()))
-    else:
-        st.sidebar.write("cookies seen: []")
-except Exception as _e_c:
-    st.sidebar.write("cookies seen err:", str(_e_c))
 
 # Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
 st.markdown("""
@@ -471,8 +435,27 @@ if st.session_state.user is None:
                         st.session_state.pending_totp_user = None
                         st.session_state.auth_logged_out = False
                         
-                        # Set session cookie tp_sid and reload parent via set_session_cookie_and_reload
-                        set_session_cookie_and_reload(new_sid)
+                        # Set cookie over WebSocket controller (8 hours TTL = 28800 seconds)
+                        try:
+                            controller.set("tp_sid", new_sid, max_age=28800, path="/", same_site="lax")
+                        except Exception:
+                            pass
+                        
+                        components.html("""
+                        <script>
+                        setTimeout(function() {
+                            try {
+                                parent.window.location.reload();
+                            } catch(e) {
+                                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+                            }
+                        }, 200);
+                        </script>
+                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
+                            ✅ 2FA Verified! Initializing secure session...
+                        </div>
+                        """, height=75)
+                        st.stop()
                     else:
                         st.error(session_data)
                 else:
@@ -566,36 +549,6 @@ u_name = current_user.get("username", "kaif")
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
 
-# Synchronize session to browser cookie and tab-scoped sessionStorage, and guarantee clean URL
-tok_to_persist = st.session_state.get("active_token", "")
-if tok_to_persist:
-    components.html(f"""
-    <script>
-    (function() {{
-        var isHttp = false;
-        try {{
-            if (parent.location.protocol === "http:" || location.protocol === "http:") {{
-                isHttp = true;
-            }}
-        }} catch(e) {{}}
-        var cookieStr = isHttp ? "tp_sid={tok_to_persist}; path=/; SameSite=Lax" : "tp_sid={tok_to_persist}; path=/; Secure; SameSite=None";
-        try {{
-            parent.document.cookie = cookieStr;
-        }} catch(e) {{
-            document.cookie = cookieStr;
-        }}
-        try {{
-            parent.sessionStorage.setItem("tp_sid", "{tok_to_persist}");
-        }} catch(e) {{}}
-        try {{
-            if (parent.location.search) {{
-                parent.history.replaceState({{}}, '', parent.location.pathname);
-            }}
-        }} catch(e) {{}}
-    }})();
-    </script>
-    """, height=0)
-
 # ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
 with st.sidebar:
     st.markdown(f"""
@@ -611,33 +564,13 @@ with st.sidebar:
         clear_current_session()
         components.html("""
         <script>
-        (function() {
-            var isHttp = false;
+        setTimeout(function() {
             try {
-                if (parent.location.protocol === "http:" || location.protocol === "http:") {
-                    isHttp = true;
-                }
-            } catch(e) {}
-            var cStr1 = isHttp ? "tp_sid=; path=/; Max-Age=0; SameSite=Lax" : "tp_sid=; path=/; Max-Age=0; Secure; SameSite=None";
-            var cStr2 = isHttp ? "kaif_auth_token=; path=/; Max-Age=0; SameSite=Lax" : "kaif_auth_token=; path=/; Max-Age=0; Secure; SameSite=None";
-            try {
-                parent.document.cookie = cStr1;
-                parent.document.cookie = cStr2;
+                parent.window.location.reload();
             } catch(e) {
-                document.cookie = cStr1;
+                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
             }
-            try {
-                parent.sessionStorage.removeItem("tp_sid");
-                parent.sessionStorage.removeItem("kaif_auth_token");
-            } catch(e) {}
-            setTimeout(function() {
-                try {
-                    parent.location.reload();
-                } catch(e) {
-                    window.location.reload();
-                }
-            }, 400);
-        })();
+        }, 150);
         </script>
         <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
         """, height=50)
@@ -663,33 +596,13 @@ with top_head_col2:
         clear_current_session()
         components.html("""
         <script>
-        (function() {
-            var isHttp = false;
+        setTimeout(function() {
             try {
-                if (parent.location.protocol === "http:" || location.protocol === "http:") {
-                    isHttp = true;
-                }
-            } catch(e) {}
-            var cStr1 = isHttp ? "tp_sid=; path=/; Max-Age=0; SameSite=Lax" : "tp_sid=; path=/; Max-Age=0; Secure; SameSite=None";
-            var cStr2 = isHttp ? "kaif_auth_token=; path=/; Max-Age=0; SameSite=Lax" : "kaif_auth_token=; path=/; Max-Age=0; Secure; SameSite=None";
-            try {
-                parent.document.cookie = cStr1;
-                parent.document.cookie = cStr2;
+                parent.window.location.reload();
             } catch(e) {
-                document.cookie = cStr1;
+                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
             }
-            try {
-                parent.sessionStorage.removeItem("tp_sid");
-                parent.sessionStorage.removeItem("kaif_auth_token");
-            } catch(e) {}
-            setTimeout(function() {
-                try {
-                    parent.location.reload();
-                } catch(e) {
-                    window.location.reload();
-                }
-            }, 400);
-        })();
+        }, 150);
         </script>
         <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
         """, height=50)
