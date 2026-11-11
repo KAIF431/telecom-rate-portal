@@ -5,6 +5,7 @@ import hmac
 import struct
 import base64
 import random
+import secrets
 import smtplib
 import hashlib
 import datetime
@@ -16,6 +17,94 @@ SMTP_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "smtp_config.json")
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "processing_history.json")
 TOKEN_STORE_FILE = os.path.join(os.path.dirname(__file__), "session_tokens.json")
 REVOKED_TOKENS_FILE = os.path.join(os.path.dirname(__file__), "revoked_tokens.json")
+SERVER_SESSION_FILE = os.path.join(os.path.dirname(__file__), "server_sessions.json")
+USED_TOTP_FILE = os.path.join(os.path.dirname(__file__), "used_totp.json")
+
+def hash_token(token):
+    return hashlib.sha256(str(token).strip().encode("utf-8")).hexdigest()
+
+def save_server_session(token, user_info, ttl_seconds=8*3600):
+    if not token or not user_info:
+        return
+    th = hash_token(token)
+    exp = time.time() + ttl_seconds
+    try:
+        data = {}
+        if os.path.exists(SERVER_SESSION_FILE):
+            with open(SERVER_SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        now = time.time()
+        # Clean expired sessions
+        data = {k: v for k, v in data.items() if v.get("exp", 0) > now}
+        data[th] = {"user": user_info, "exp": exp}
+        with open(SERVER_SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+def get_server_session_user(token):
+    if not token:
+        return None
+    th = hash_token(token)
+    try:
+        if os.path.exists(SERVER_SESSION_FILE):
+            with open(SERVER_SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            entry = data.get(th)
+            if entry:
+                if time.time() < entry.get("exp", 0):
+                    return entry.get("user")
+                else:
+                    del data[th]
+                    with open(SERVER_SESSION_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2)
+    except Exception:
+        pass
+    # Fallback to stateless HMAC verification if legacy token
+    return verify_session_token(token)
+
+def delete_server_session(token):
+    if not token:
+        return
+    th = hash_token(token)
+    try:
+        if os.path.exists(SERVER_SESSION_FILE):
+            with open(SERVER_SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if th in data:
+                del data[th]
+                with open(SERVER_SESSION_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+def is_totp_replayed(username, code):
+    try:
+        if os.path.exists(USED_TOTP_FILE):
+            with open(USED_TOTP_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            key = f"{str(username).lower()}:{str(code).strip()}"
+            ts = data.get(key, 0)
+            if time.time() - ts < 35:
+                return True
+    except Exception:
+        pass
+    return False
+
+def mark_totp_used(username, code):
+    try:
+        data = {}
+        if os.path.exists(USED_TOTP_FILE):
+            with open(USED_TOTP_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        now = time.time()
+        # Clean older than 5 minutes
+        data = {k: v for k, v in data.items() if now - v < 300}
+        data[f"{str(username).lower()}:{str(code).strip()}"] = now
+        with open(USED_TOTP_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
 
 def is_token_revoked(token):
     if not token:
@@ -341,14 +430,22 @@ def verify_credentials(username, password):
         return False, "Incorrect password. Please try again."
 
 def complete_totp_login(user_info, totp_code, client_ip="", user_agent=""):
+    username = user_info["username"].lower()
+    clean_code = str(totp_code).strip()
+    
+    # 1. Reject replayed TOTP codes
+    if is_totp_replayed(username, clean_code):
+        return False, "This 2FA code was already used. Please wait for the next 30-second code on Authy."
+
     master_secret = get_master_totp_secret()
     user_secret = user_info.get("totp_secret") or master_secret
     
     # Check against master admin secret or user secret
-    if verify_totp(master_secret, totp_code) or verify_totp(user_secret, totp_code):
-        token = create_session_token(user_info["username"], client_ip=client_ip, user_agent=user_agent, days_valid=30)
-        expiry = (datetime.datetime.now() + datetime.timedelta(days=30)).isoformat()
-        return True, {
+    if verify_totp(master_secret, clean_code) or verify_totp(user_secret, clean_code):
+        mark_totp_used(username, clean_code)
+        token = secrets.token_urlsafe(32)
+        expiry = (datetime.datetime.now() + datetime.timedelta(hours=8)).isoformat()
+        session_data = {
             "token": token,
             "username": user_info["username"],
             "name": user_info["name"],
@@ -356,6 +453,9 @@ def complete_totp_login(user_info, totp_code, client_ip="", user_agent=""):
             "email": user_info.get("email", ""),
             "session_expiry": expiry
         }
+        # Store in server store: sha256(token) -> {user, exp} TTL 8h
+        save_server_session(token, session_data, ttl_seconds=8*3600)
+        return True, session_data
     else:
         return False, "Invalid 6-digit Authy code. Please check Admin's Authy app."
 

@@ -109,67 +109,56 @@ def load_csv_safely(f_content, nrows=None):
     return pd.DataFrame(padded)
 
 
-def get_client_context():
-    ua = ""
-    try:
-        if hasattr(st, "context") and hasattr(st.context, "headers") and st.context.headers:
-            h = st.context.headers
-            for k, v in h.items():
-                if str(k).lower() == "user-agent":
-                    ua = str(v).strip()
-                    break
-    except Exception:
-        pass
-    return ua
+# ----------------- SESSION STORE (TTL 8H, SERVER-SIDE + IN-MEMORY) -----------------
+@st.cache_resource
+def get_session_cache():
+    """In-memory cache mapping sha256(token) -> {user, exp}. Fast lookups across runs."""
+    return {}
 
-# Strictly enforce authentication: platform-bound token + tab-scoped sessionStorage/cookie
+# Strictly enforce authentication: session cookie + server store (no URL tokens)
 def authenticate_current_session():
     if st.session_state.get("auth_logged_out"):
         return None
 
-    # 1. Existing verified session in current memory execution
+    # 1. Active memory user in current WebSocket session
     user = st.session_state.get("user")
     if user:
         return user
 
-    user_agent = get_client_context()
+    # 2. Read tp_sid session cookie from HTTP headers
     token = None
-
-    # 2. HTTP Cookie - Automatically sent on browser F5 reload
     try:
         if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
-            token = st.context.cookies.get("kaif_auth_token")
+            token = st.context.cookies.get("tp_sid") or st.context.cookies.get("kaif_auth_token")
     except Exception:
         pass
 
-    # 3. Tab-scoped sessionStorage recovery bridge (_auth_sync)
-    if not token:
-        try:
-            token = st.query_params.get("_auth_sync")
-        except Exception:
-            pass
-
-    # Validate token if found
     if token:
-        valid_user = am.get_session_user(token, user_agent=user_agent)
+        token_str = str(token).strip()
+        cache = get_session_cache()
+        th = am.hash_token(token_str)
+        now = time.time()
+        
+        valid_user = None
+        # Check fast in-memory cache
+        if th in cache and cache[th].get("exp", 0) > now:
+            valid_user = cache[th].get("user")
+        else:
+            # Fallback to server store
+            valid_user = am.get_server_session_user(token_str)
+            if valid_user:
+                cache[th] = {"user": valid_user, "exp": now + 8 * 3600}
+
         if valid_user:
             st.session_state.user = valid_user
-            st.session_state.active_token = token
-            try:
-                if "_auth_sync" in st.query_params:
-                    del st.query_params["_auth_sync"]
-                if "session_token" in st.query_params:
-                    del st.query_params["session_token"]
-            except Exception:
-                pass
+            st.session_state.active_token = token_str
             return valid_user
 
-    # Clean URL: strip any old/stray query parameters so browser address bar remains 100% clean
+    # Never expose tokens in st.query_params - scrub any stray query params
     try:
-        if "session_token" in st.query_params:
-            del st.query_params["session_token"]
-        if "_auth_sync" in st.query_params:
-            del st.query_params["_auth_sync"]
+        for k in ["tp_sid", "session_token", "_auth_sync"]:
+            if k in st.query_params:
+                del st.query_params[k]
     except Exception:
         pass
 
@@ -180,18 +169,19 @@ def set_login_session(session_data):
     token = session_data.get("token")
     st.session_state.active_token = token
     st.session_state.auth_logged_out = False
-    try:
-        if "_auth_sync" in st.query_params:
-            del st.query_params["_auth_sync"]
-        if "session_token" in st.query_params:
-            del st.query_params["session_token"]
-    except Exception:
-        pass
+    cache = get_session_cache()
+    if token:
+        cache[am.hash_token(token)] = {"user": session_data, "exp": time.time() + 8 * 3600}
 
 def clear_current_session():
     tok = st.session_state.get("active_token")
     if tok:
+        am.delete_server_session(tok)
         am.destroy_session(tok)
+        cache = get_session_cache()
+        th = am.hash_token(tok)
+        if th in cache:
+            del cache[th]
     for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
         z_p = st.session_state.get(z_key)
         if z_p and os.path.exists(z_p):
@@ -209,10 +199,9 @@ def clear_current_session():
     st.session_state.auth_logged_out = True
     gc.collect()
     try:
-        if "_auth_sync" in st.query_params:
-            del st.query_params["_auth_sync"]
-        if "session_token" in st.query_params:
-            del st.query_params["session_token"]
+        for k in ["tp_sid", "session_token", "_auth_sync"]:
+            if k in st.query_params:
+                del st.query_params[k]
     except Exception:
         pass
 
@@ -349,49 +338,47 @@ if "email_otp_sent_for" not in st.session_state:
     st.session_state.email_otp_sent_for = None
 
 if st.session_state.user is None:
-    # Client-side session bridge
+    # Client-side session cookie management
     if st.session_state.get("auth_logged_out"):
         components.html("""
         <script>
         (function() {
+            var sec = window.location.protocol === "https:" ? "; Secure" : "";
             try {
-                window.parent.sessionStorage.removeItem("kaif_auth_token");
-                window.parent.document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax";
-                if (window.parent.location.search) {
-                    window.parent.history.replaceState({}, '', window.parent.location.pathname);
-                }
+                parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
             } catch(e) {
-                try {
-                    sessionStorage.removeItem("kaif_auth_token");
-                    document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax";
-                } catch(e2) {}
+                document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
             }
+            try {
+                parent.sessionStorage.removeItem("tp_sid");
+                parent.sessionStorage.removeItem("kaif_auth_token");
+            } catch(e) {}
+            try {
+                if (parent.location.search) {
+                    parent.history.replaceState({}, '', parent.location.pathname);
+                }
+            } catch(e) {}
         })();
         </script>
         """, height=0)
         st.session_state.auth_logged_out = False
     else:
-        # Invisible recovery bridge for active tabs on browser refresh
+        # Invisible recovery bridge: ensures cookie is set if tab has tp_sid in sessionStorage
         components.html("""
         <script>
         (function() {
-            let tok = null;
             try {
-                tok = window.parent.sessionStorage.getItem("kaif_auth_token");
-            } catch(e) {}
-            if (!tok) {
-                try { tok = sessionStorage.getItem("kaif_auth_token"); } catch(e) {}
-            }
-            if (tok && tok.length > 20) {
-                try {
-                    const searchParams = new URLSearchParams(window.parent.location.search);
-                    if (!searchParams.has("_auth_sync")) {
-                        const url = new URL(window.parent.location.href);
-                        url.searchParams.set("_auth_sync", tok);
-                        window.parent.location.replace(url.toString());
+                var sid = parent.sessionStorage.getItem("tp_sid");
+                if (sid && sid.length >= 20) {
+                    if (!parent.document.cookie.includes("tp_sid=")) {
+                        var sec = window.location.protocol === "https:" ? "; Secure" : "";
+                        parent.document.cookie = "tp_sid=" + sid + "; path=/" + sec + "; SameSite=Lax";
+                        parent.location.replace(parent.location.pathname);
                     }
-                } catch(e) {}
-            }
+                }
+            } catch(e) {}
         })();
         </script>
         """, height=0)
@@ -421,13 +408,41 @@ if st.session_state.user is None:
             c_btn1, c_btn2 = st.columns([1.5, 1])
             if c_btn1.button("🚀 Verify & Log In", type="primary", use_container_width=True):
                 if totp_input and len(totp_input.strip()) == 6:
-                    user_agent = get_client_context()
-                    ok_t, session_data = am.complete_totp_login(pending, totp_input, user_agent=user_agent)
+                    ok_t, session_data = am.complete_totp_login(pending, totp_input)
                     if ok_t:
+                        new_sid = session_data["token"]
                         set_login_session(session_data)
                         st.session_state.pending_totp_user = None
-                        st.success(f"Login successful! Welcome back, {session_data['name']}!")
-                        st.rerun()
+                        st.session_state.auth_logged_out = False
+                        
+                        # Set session cookie tp_sid (no Expires/Max-Age, true session cookie)
+                        # Do NOT call st.rerun() in the same run as cookie write!
+                        components.html(f"""
+                        <script>
+                        (function() {{
+                            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+                            try {{
+                                parent.document.cookie = "tp_sid={new_sid}; path=/" + sec + "; SameSite=Lax";
+                            }} catch(e) {{
+                                document.cookie = "tp_sid={new_sid}; path=/" + sec + "; SameSite=Lax";
+                            }}
+                            try {{
+                                parent.sessionStorage.setItem("tp_sid", "{new_sid}");
+                            }} catch(e) {{}}
+                            setTimeout(function() {{
+                                try {{
+                                    parent.window.eval("window.location.reload()");
+                                }} catch(e) {{
+                                    try {{ parent.location.reload(); }} catch(e2) {{}}
+                                }}
+                            }}, 150);
+                        }})();
+                        </script>
+                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
+                            ✅ 2FA Verified! Initializing secure session...
+                        </div>
+                        """, height=75)
+                        st.stop()
                     else:
                         st.error(session_data)
                 else:
@@ -527,18 +542,20 @@ if tok_to_persist:
     components.html(f"""
     <script>
     (function() {{
+        var sec = window.location.protocol === "https:" ? "; Secure" : "";
         try {{
-            window.parent.sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
-            window.parent.document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; Secure; SameSite=Lax";
-            if (window.parent.location.search) {{
-                window.parent.history.replaceState({{}}, '', window.parent.location.pathname);
-            }}
+            parent.document.cookie = "tp_sid={tok_to_persist}; path=/" + sec + "; SameSite=Lax";
         }} catch(e) {{
-            try {{
-                sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
-                document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; Secure; SameSite=Lax";
-            }} catch(e2) {{}}
+            document.cookie = "tp_sid={tok_to_persist}; path=/" + sec + "; SameSite=Lax";
         }}
+        try {{
+            parent.sessionStorage.setItem("tp_sid", "{tok_to_persist}");
+        }} catch(e) {{}}
+        try {{
+            if (parent.location.search) {{
+                parent.history.replaceState({{}}, '', parent.location.pathname);
+            }}
+        }} catch(e) {{}}
     }})();
     </script>
     """, height=0)
@@ -556,7 +573,32 @@ with st.sidebar:
 
     if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
         clear_current_session()
-        st.rerun()
+        components.html("""
+        <script>
+        (function() {
+            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+            try {
+                parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+            } catch(e) {
+                document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+            }
+            try {
+                parent.sessionStorage.removeItem("tp_sid");
+                parent.sessionStorage.removeItem("kaif_auth_token");
+            } catch(e) {}
+            setTimeout(function() {
+                try {
+                    parent.window.eval("window.location.reload()");
+                } catch(e) {
+                    try { parent.location.reload(); } catch(e2) {}
+                }
+            }, 150);
+        })();
+        </script>
+        <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
+        """, height=50)
+        st.stop()
 
 # ----------------- MAIN PORTAL -----------------
 top_head_col1, top_head_col2 = st.columns([3, 1.2])
@@ -576,7 +618,32 @@ with top_head_col2:
     
     if st.button("🚪 Log Out", key="top_logout_btn", use_container_width=True, type="secondary"):
         clear_current_session()
-        st.rerun()
+        components.html("""
+        <script>
+        (function() {
+            var sec = window.location.protocol === "https:" ? "; Secure" : "";
+            try {
+                parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+            } catch(e) {
+                document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+            }
+            try {
+                parent.sessionStorage.removeItem("tp_sid");
+                parent.sessionStorage.removeItem("kaif_auth_token");
+            } catch(e) {}
+            setTimeout(function() {
+                try {
+                    parent.window.eval("window.location.reload()");
+                } catch(e) {
+                    try { parent.location.reload(); } catch(e2) {}
+                }
+            }, 150);
+        })();
+        </script>
+        <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
+        """, height=50)
+        st.stop()
 
 # Template Download Buttons Row
 t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
