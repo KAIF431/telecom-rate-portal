@@ -22,16 +22,32 @@ MASTER_TOTP_SECRET = "XCASLSAZCIRXLXFV"
 
 HMAC_SESSION_SECRET = "KaifTelecomPortal_SuperSecret_HMAC_Key_2026_SecureSession"
 
-def create_session_token(username, days_valid=30):
-    """Generates a clean, URL-safe alphanumeric HEX token valid for 30 days. Never has = padding issues."""
+def get_device_fingerprint(client_ip="", user_agent=""):
+    ip_part = ""
+    if client_ip:
+        ip_clean = str(client_ip).split(",")[0].strip()
+        if "." in ip_clean:
+            octets = ip_clean.split(".")
+            if len(octets) >= 2:
+                ip_part = ".".join(octets[:2])
+        elif ":" in ip_clean:
+            hextets = ip_clean.split(":")
+            if len(hextets) >= 3:
+                ip_part = ":".join(hextets[:3])
+    ua_part = str(user_agent).strip()[:60]
+    return hashlib.sha256(f"{ip_part}|{ua_part}".encode()).hexdigest()[:16]
+
+def create_session_token(username, client_ip="", user_agent="", days_valid=30):
+    """Generates a clean, URL-safe alphanumeric HEX token cryptographically locked to client IP subnet and User-Agent."""
     exp_timestamp = int(time.time()) + (days_valid * 86400)
-    payload = f"{username.strip().lower()}:{exp_timestamp}"
+    fp_hash = get_device_fingerprint(client_ip, user_agent)
+    payload = f"{username.strip().lower()}:{exp_timestamp}:{fp_hash}"
     sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     raw = f"{payload}:{sig}"
     return raw.encode("utf-8").hex()
 
-def verify_session_token(token_str):
-    """Stateless verification supporting both clean HEX and legacy auto-padded base64 tokens."""
+def verify_session_token(token_str, client_ip="", user_agent=""):
+    """Stateless verification with strict device fingerprint validation (blocks access from other devices)."""
     if not token_str:
         return None
     try:
@@ -44,7 +60,7 @@ def verify_session_token(token_str):
             raw = bytes.fromhex(token_str).decode("utf-8")
         except Exception:
             pass
-        # 2. Try Base64 with auto-padding fallback
+        # 2. Try Base64 fallback
         if not raw:
             try:
                 padded = token_str + "=" * (-len(token_str) % 4)
@@ -54,15 +70,33 @@ def verify_session_token(token_str):
         if not raw or ":" not in raw:
             return None
         parts = raw.split(":")
-        if len(parts) != 3:
-            return None
-        username, exp_str, sig = parts
-        exp_timestamp = int(exp_str)
-        if time.time() > exp_timestamp:
-            return None
-        payload = f"{username}:{exp_str}"
-        expected_sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected_sig):
+        
+        # 4-part device-locked token
+        if len(parts) == 4:
+            username, exp_str, fp_hash, sig = parts
+            exp_timestamp = int(exp_str)
+            if time.time() > exp_timestamp:
+                return None
+            payload = f"{username}:{exp_str}:{fp_hash}"
+            expected_sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected_sig):
+                return None
+            # Validate device fingerprint if client context is present
+            if client_ip or user_agent:
+                cur_fp = get_device_fingerprint(client_ip, user_agent)
+                if not hmac.compare_digest(fp_hash, cur_fp):
+                    return None
+        # Legacy 3-part token
+        elif len(parts) == 3:
+            username, exp_str, sig = parts
+            exp_timestamp = int(exp_str)
+            if time.time() > exp_timestamp:
+                return None
+            payload = f"{username}:{exp_str}"
+            expected_sig = hmac.new(HMAC_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected_sig):
+                return None
+        else:
             return None
         
         db = load_db()
@@ -95,11 +129,11 @@ def register_session(token, user_info):
     except Exception:
         pass
 
-def get_session_user(token):
+def get_session_user(token, client_ip="", user_agent=""):
     if not token:
         return None
-    # 1. Stateless cryptographic token verification (100% resilient across F5, reboots & deployments)
-    stateless_user = verify_session_token(token)
+    # 1. Stateless cryptographic token verification with device binding
+    stateless_user = verify_session_token(token, client_ip=client_ip, user_agent=user_agent)
     if stateless_user:
         return stateless_user
 
@@ -290,13 +324,13 @@ def verify_credentials(username, password):
     else:
         return False, "Incorrect password. Please try again."
 
-def complete_totp_login(user_info, totp_code):
+def complete_totp_login(user_info, totp_code, client_ip="", user_agent=""):
     master_secret = get_master_totp_secret()
     user_secret = user_info.get("totp_secret") or master_secret
     
     # Check against master admin secret or user secret
     if verify_totp(master_secret, totp_code) or verify_totp(user_secret, totp_code):
-        token = create_session_token(user_info["username"], days_valid=30)
+        token = create_session_token(user_info["username"], client_ip=client_ip, user_agent=user_agent, days_valid=30)
         expiry = (datetime.datetime.now() + datetime.timedelta(days=30)).isoformat()
         return True, {
             "token": token,

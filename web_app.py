@@ -109,13 +109,59 @@ def load_csv_safely(f_content, nrows=None):
     return pd.DataFrame(padded)
 
 
-# Strictly enforce authentication: no tokens exposed in URL, no bypass via copied link
+def get_client_context():
+    ip = ""
+    ua = ""
+    try:
+        if hasattr(st, "context"):
+            if hasattr(st.context, "ip_address") and st.context.ip_address:
+                ip = str(st.context.ip_address).strip()
+            if hasattr(st.context, "headers") and st.context.headers:
+                if not ip:
+                    ip = st.context.headers.get("x-forwarded-for", "").split(",")[0].strip() or st.context.headers.get("x-real-ip", "").strip()
+                ua = st.context.headers.get("user-agent", "").strip()
+    except Exception:
+        pass
+    return ip, ua
+
+# Strictly enforce authentication: device-bound token + tab-scoped sessionStorage/cookie
 def authenticate_current_session():
-    # Only in-memory active session is valid
-    if st.session_state.get("user"):
-        return st.session_state.get("user")
-    
-    # Clean any query parameters completely so URL is always 100% clean
+    # 1. Existing verified session in current memory execution
+    user = st.session_state.get("user")
+    if user:
+        return user
+
+    client_ip, user_agent = get_client_context()
+    token = None
+
+    # 2. HTTP Cookie - Automatically sent on browser F5 reload
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "cookies") and st.context.cookies:
+            token = st.context.cookies.get("kaif_auth_token")
+    except Exception:
+        pass
+
+    # 3. Tab-scoped sessionStorage recovery bridge (_auth_sync)
+    if not token:
+        try:
+            token = st.query_params.get("_auth_sync")
+        except Exception:
+            pass
+
+    # Validate token if found
+    if token:
+        valid_user = am.get_session_user(token, client_ip=client_ip, user_agent=user_agent)
+        if valid_user:
+            st.session_state.user = valid_user
+            st.session_state.active_token = token
+            try:
+                if st.query_params:
+                    st.query_params.clear()
+            except Exception:
+                pass
+            return valid_user
+
+    # Clean URL: strip any old/stray query parameters so browser address bar remains 100% clean
     try:
         if st.query_params:
             st.query_params.clear()
@@ -126,10 +172,12 @@ def authenticate_current_session():
 
 def set_login_session(session_data):
     st.session_state.user = session_data
-    st.session_state.active_token = session_data.get("token")
-    # Clean URL: never leak session token to query_params or browser address bar
+    token = session_data.get("token")
+    st.session_state.active_token = token
+    st.session_state.auth_logged_out = False
     try:
-        st.query_params.clear()
+        if st.query_params:
+            st.query_params.clear()
     except Exception:
         pass
 
@@ -151,9 +199,11 @@ def clear_current_session():
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
+    st.session_state.auth_logged_out = True
     gc.collect()
     try:
-        st.query_params.clear()
+        if st.query_params:
+            st.query_params.clear()
     except Exception:
         pass
 
@@ -290,6 +340,59 @@ if "email_otp_sent_for" not in st.session_state:
     st.session_state.email_otp_sent_for = None
 
 if st.session_state.user is None:
+    # Client-side session bridge
+    if st.session_state.get("auth_logged_out"):
+        components.html("""
+        <script>
+        (function() {
+            try {
+                window.parent.sessionStorage.removeItem("kaif_auth_token");
+                window.parent.sessionStorage.removeItem("_auth_sync_attempted");
+                window.parent.document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+                if (window.parent.location.search) {
+                    window.parent.history.replaceState({}, '', window.parent.location.pathname);
+                }
+            } catch(e) {
+                try {
+                    sessionStorage.removeItem("kaif_auth_token");
+                    sessionStorage.removeItem("_auth_sync_attempted");
+                    document.cookie = "kaif_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+                } catch(e2) {}
+            }
+        })();
+        </script>
+        """, height=0)
+        st.session_state.auth_logged_out = False
+    else:
+        # Invisible recovery bridge for active tabs on browser refresh
+        components.html("""
+        <script>
+        (function() {
+            let tok = null;
+            try {
+                tok = window.parent.sessionStorage.getItem("kaif_auth_token");
+            } catch(e) {}
+            if (!tok) {
+                try { tok = sessionStorage.getItem("kaif_auth_token"); } catch(e) {}
+            }
+            if (tok && tok.length > 20) {
+                let attempted = false;
+                try {
+                    attempted = window.parent.sessionStorage.getItem("_auth_sync_attempted") === "1";
+                } catch(e) {}
+                if (!attempted) {
+                    try {
+                        window.parent.sessionStorage.setItem("_auth_sync_attempted", "1");
+                        const url = new URL(window.parent.location.href);
+                        url.searchParams.set("_auth_sync", tok);
+                        window.parent.location.replace(url.toString());
+                    } catch(e) {}
+                }
+            }
+        })();
+        </script>
+        """, height=0)
+
     # Render Login Page (Centered Box)
     login_c1, login_c2, login_c3 = st.columns([1, 1.8, 1])
     with login_c2:
@@ -315,7 +418,8 @@ if st.session_state.user is None:
             c_btn1, c_btn2 = st.columns([1.5, 1])
             if c_btn1.button("🚀 Verify & Log In", type="primary", use_container_width=True):
                 if totp_input and len(totp_input.strip()) == 6:
-                    ok_t, session_data = am.complete_totp_login(pending, totp_input)
+                    client_ip, user_agent = get_client_context()
+                    ok_t, session_data = am.complete_totp_login(pending, totp_input, client_ip=client_ip, user_agent=user_agent)
                     if ok_t:
                         set_login_session(session_data)
                         st.session_state.pending_totp_user = None
@@ -413,6 +517,30 @@ current_user = st.session_state.user or {}
 u_name = current_user.get("username", "kaif")
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
+
+# Synchronize session to browser cookie and tab-scoped sessionStorage, and guarantee clean URL
+tok_to_persist = st.session_state.get("active_token", "")
+if tok_to_persist:
+    components.html(f"""
+    <script>
+    (function() {{
+        try {{
+            window.parent.sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
+            window.parent.sessionStorage.removeItem("_auth_sync_attempted");
+            window.parent.document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; SameSite=Lax";
+            if (window.parent.location.search) {{
+                window.parent.history.replaceState({{}}, '', window.parent.location.pathname);
+            }}
+        }} catch(e) {{
+            try {{
+                sessionStorage.setItem("kaif_auth_token", "{tok_to_persist}");
+                sessionStorage.removeItem("_auth_sync_attempted");
+                document.cookie = "kaif_auth_token={tok_to_persist}; path=/; max-age=2592000; SameSite=Lax";
+            }} catch(e2) {{}}
+        }}
+    }})();
+    </script>
+    """, height=0)
 
 # ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
 with st.sidebar:
