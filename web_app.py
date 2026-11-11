@@ -572,12 +572,14 @@ if is_admin:
                 total_sheets = len(history)
                 arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
                 kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                aliba_total = sum(1 for h in history if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
 
-                m1, m2, m3, m4 = st.columns([1.5, 1.5, 1.5, 1])
-                m1.metric("📁 Total Rate Sheets", f"{total_sheets:,}")
-                m2.metric("👩 Standardized by Arhama", f"{arhama_total}")
-                m3.metric("👨 Standardized by Kaif", f"{kaif_total}")
-                with m4:
+                m1, m2, m3, m4, m5 = st.columns([1.5, 1.2, 1.2, 1.2, 1])
+                m1.metric("📁 Rolling 7-Day Sheets", f"{total_sheets:,}")
+                m2.metric("👩 Arhama", f"{arhama_total}")
+                m3.metric("👨 Kaif", f"{kaif_total}")
+                m4.metric("👩 Aliba", f"{aliba_total}")
+                with m5:
                     st.write("")
                     if st.button("🗑️ Clear Log", key="main_clear_hist_btn", use_container_width=True):
                         am.clear_processing_history()
@@ -585,6 +587,7 @@ if is_admin:
                         time.sleep(0.8)
                         st.rerun()
 
+                st.info("🕒 **Strict 7-Day Auto-Retention Active:** All rate sheets and audit records are saved for exactly 7 days (168 hours) from upload, after which they are automatically deleted.")
                 st.divider()
 
                 # Date Filter Mode Selector
@@ -1039,6 +1042,86 @@ if st.session_state.processed_results:
                 use_container_width=True
             )
     st.markdown("---")
+
+# ----------------- ADMIN LIVE TEAM ACTIVITY (LAST 7 DAYS) -----------------
+if is_admin:
+    recent_team = am.get_processing_history(days=7)
+    if recent_team:
+        arhama_cnt = sum(1 for h in recent_team if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
+        aliba_cnt = sum(1 for h in recent_team if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
+        kaif_cnt = sum(1 for h in recent_team if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
+        
+        with st.expander(f"👥 **Team Rate Sheets (Last 7 Days: {len(recent_team)} Active — Arhama: {arhama_cnt}, Kaif: {kaif_cnt}, Aliba: {aliba_cnt})**", expanded=False):
+            st.caption("🕒 **Strict 7-Day Auto-Retention:** All sheets processed by any team member are preserved here for 7 days with instant download, then automatically deleted.")
+            
+            q_col1, q_col2 = st.columns([1.5, 2.5])
+            with q_col1:
+                q_user_filter = st.selectbox("Filter Team Member:", ["All Team Members", "Arhama", "Kaif", "Aliba"], key="main_team_filter_user")
+            with q_col2:
+                q_search = st.text_input("Quick Search Sheet / Vendor:", key="main_team_search_kw", placeholder="Search by vendor name or file...")
+                
+            q_filtered = []
+            for h_entry in recent_team:
+                if q_user_filter != "All Team Members":
+                    u_m = (str(h_entry.get("user_name", "")) + " " + str(h_entry.get("username", ""))).lower()
+                    if q_user_filter.lower() not in u_m:
+                        continue
+                if q_search:
+                    kw_low = q_search.strip().lower()
+                    if kw_low not in str(h_entry.get("vendor_name", "")).lower() and kw_low not in str(h_entry.get("output_filename", "")).lower():
+                        continue
+                q_filtered.append(h_entry)
+                
+            if not q_filtered:
+                st.info("No sheets found matching the filter.")
+            else:
+                q_sheet_names = [h["output_filename"] for h in q_filtered if h.get("output_filename")]
+                if q_sheet_names:
+                    sel_team_f = st.selectbox("Select Sheet to Download Immediately:", q_sheet_names, key="main_team_quick_dl_sel")
+                    if sel_team_f:
+                        team_xl_b = get_historical_file_bytes(sel_team_f)
+                        team_csv_b, team_csv_fn = get_historical_csv_bytes(sel_team_f, team_xl_b)
+                        cd1, cd2 = st.columns(2)
+                        with cd1:
+                            if team_xl_b:
+                                st.download_button(
+                                    label=f"📊 Download Excel ({sel_team_f})",
+                                    data=team_xl_b,
+                                    file_name=sel_team_f,
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"main_team_dl_xl_{sel_team_f}",
+                                    type="primary",
+                                    use_container_width=True
+                                )
+                            else:
+                                st.button("Excel File Not in Cache", disabled=True, use_container_width=True, key=f"no_xl_{sel_team_f}")
+                        with cd2:
+                            if team_csv_b:
+                                st.download_button(
+                                    label=f"📄 Download CSV ({team_csv_fn})",
+                                    data=team_csv_b,
+                                    file_name=team_csv_fn,
+                                    mime="text/csv",
+                                    key=f"main_team_dl_csv_{sel_team_f}",
+                                    type="primary",
+                                    use_container_width=True
+                                )
+                            else:
+                                st.button("CSV Not in Cache", disabled=True, use_container_width=True, key=f"no_csv_{sel_team_f}")
+
+                t_display_rows = []
+                for entry in q_filtered[:25]:
+                    u_disp = entry.get("user_name") or entry.get("username")
+                    t_display_rows.append({
+                        "Date": str(entry.get("timestamp"))[:10],
+                        "Time (IST)": str(entry.get("timestamp"))[11:19],
+                        "User": u_disp,
+                        "Vendor": entry.get("vendor_name"),
+                        "Standardized File": entry.get("output_filename"),
+                        "Clean Rows": f"{entry.get('clean_rows', 0):,}"
+                    })
+                st.dataframe(pd.DataFrame(t_display_rows), use_container_width=True, hide_index=True)
+        st.write("")
 
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0

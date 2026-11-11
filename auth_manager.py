@@ -258,18 +258,31 @@ def verify_credentials(username, password):
     db = load_db()
     u = username.strip().lower()
     users = db.get("users", {})
-    if u not in users:
+    
+    # Flexible username matching (supports "arhama", "v_arhama", "aliba", "v_aliba", "kaif")
+    matched_key = None
+    if u in users:
+        matched_key = u
+    elif f"v_{u}" in users:
+        matched_key = f"v_{u}"
+    else:
+        for k, v in users.items():
+            if k.lower() == u or k.lower().replace("v_", "") == u or v.get("name", "").strip().lower() == u:
+                matched_key = k
+                break
+
+    if not matched_key:
         return False, "Username not found. Please verify spelling."
     
-    user_info = users[u]
+    user_info = users[matched_key]
     if user_info.get("status") != "active":
         return False, "This account is inactive. Please contact Administrator."
     
     saved_pw = user_info.get("password", "")
     if password == saved_pw:
         return True, {
-            "username": user_info["username"],
-            "name": user_info.get("name", user_info["username"].capitalize()),
+            "username": user_info.get("username", matched_key),
+            "name": user_info.get("name", matched_key.capitalize()),
             "role": user_info.get("role", "user"),
             "email": user_info.get("email", ""),
             "totp_secret": user_info.get("totp_secret", get_master_totp_secret())
@@ -494,9 +507,80 @@ def get_last_active_otp():
             pass
     return None
 
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
+
+# --- Strict 7-Day Auto-Retention Policy ---
+def prune_history_older_than_days(days=7):
+    """
+    Strict 7-Day Retention Policy:
+    Automatically deletes rate sheet records and their physical files from disk
+    once they are older than 7 days (168 hours).
+    Example: Sheet uploaded on the 11th stays until the 18th, and is deleted on the 18th/19th.
+    """
+    try:
+        if not os.path.exists(HISTORY_FILE):
+            return []
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        if not history:
+            return []
+
+        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        cutoff_dt = now_ist - datetime.timedelta(days=days)
+
+        kept_history = []
+        expired_files = []
+
+        for entry in history:
+            ts_str = entry.get("timestamp", "")
+            entry_dt = None
+            if ts_str:
+                try:
+                    entry_dt = datetime.datetime.strptime(str(ts_str).strip()[:19], "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    try:
+                        entry_dt = datetime.datetime.strptime(str(ts_str).strip()[:10], "%Y-%m-%d")
+                    except Exception:
+                        pass
+            
+            if entry_dt is not None:
+                if entry_dt >= cutoff_dt:
+                    kept_history.append(entry)
+                else:
+                    # Older than 7 days: expired!
+                    out_f = entry.get("output_filename")
+                    if out_f:
+                        expired_files.append(out_f)
+            else:
+                kept_history.append(entry)
+
+        # Delete expired physical files from OUTPUT_DIR
+        for fn in expired_files:
+            try:
+                p_xl = os.path.join(OUTPUT_DIR, fn)
+                if os.path.exists(p_xl):
+                    os.remove(p_xl)
+            except Exception:
+                pass
+            try:
+                csv_fn = fn.rsplit(".", 1)[0] + ".csv"
+                p_csv = os.path.join(OUTPUT_DIR, csv_fn)
+                if os.path.exists(p_csv):
+                    os.remove(p_csv)
+            except Exception:
+                pass
+
+        if len(kept_history) != len(history):
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(kept_history, f, indent=2)
+
+        return kept_history
+    except Exception:
+        return []
+
 # --- User Activity & Processing Audit Trail ---
 def log_processing_activity(username, user_name, output_filename, vendor_name, clean_rows, qc_excluded, elapsed_sec):
-    """Logs each rate sheet standardization event for Admin audit."""
+    """Logs each rate sheet standardization event for Admin audit and auto-prunes records > 7 days."""
     try:
         history = []
         if os.path.exists(HISTORY_FILE):
@@ -506,8 +590,9 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
             except Exception:
                 history = []
         
+        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
         entry = {
-            "timestamp": (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": now_ist.strftime("%Y-%m-%d %H:%M:%S"),
             "username": username,
             "user_name": user_name,
             "vendor_name": vendor_name,
@@ -517,21 +602,17 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
             "elapsed_sec": elapsed_sec
         }
         history.insert(0, entry)
-        history = history[:100000]
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
+
+        # Strictly enforce 7-day retention
+        prune_history_older_than_days(days=7)
     except Exception:
         pass
 
-def get_processing_history():
-    """Returns all logged processing events, newest first."""
-    try:
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return []
+def get_processing_history(days=7):
+    """Returns all logged processing events within the rolling 7-day retention window, newest first."""
+    return prune_history_older_than_days(days=days)
 
 def clear_processing_history():
     """Allows Admin to reset or clear the audit log."""
