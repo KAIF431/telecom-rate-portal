@@ -205,51 +205,51 @@ def clear_current_session():
     except Exception:
         pass
 
-def set_session_cookie_and_reload(token):
+def set_session_cookie_and_reload(token: str):
     """Sets tp_sid session cookie via parent.document.cookie, verifies write, then reloads parent."""
-    components.html(f"""
+    js_code = f"""
     <script>
     (function() {{
-        var sec = "; Secure";
+        const cookieName = "tp_sid";
+        const cookieValue = "{token}";
+        var isHttp = false;
         try {{
             if (parent.location.protocol === "http:" || location.protocol === "http:") {{
-                sec = "";
+                isHttp = true;
             }}
-        }} catch(e) {{}}
-        var cookieStr = "tp_sid={token}; path=/" + sec + "; SameSite=Lax";
-        try {{
-            parent.document.cookie = cookieStr;
-        }} catch(e) {{
-            document.cookie = cookieStr;
-        }}
-        try {{
-            parent.sessionStorage.setItem("tp_sid", "{token}");
         }} catch(e) {{}}
 
-        var retries = 0;
-        function checkAndReload() {{
+        // SameSite=None + Secure Streamlit Cloud iframe context ke liye zaroori hai
+        if (isHttp) {{
+            parent.document.cookie = cookieName + "=" + cookieValue + "; path=/; SameSite=Lax";
+        }} else {{
+            parent.document.cookie = cookieName + "=" + cookieValue + "; path=/; Secure; SameSite=None";
+        }}
+        try {{
+            parent.sessionStorage.setItem("tp_sid", cookieValue);
+        }} catch(e) {{}}
+
+        let retries = 0;
+        const checkAndReload = setInterval(() => {{
             var c = "";
             try {{ c = parent.document.cookie || ""; }} catch(e) {{ c = document.cookie || ""; }}
-            if (c.indexOf("tp_sid=") !== -1 || retries >= 10) {{
-                setTimeout(function() {{
-                    try {{
-                        parent.window.location.reload();
-                    }} catch(e) {{
-                        try {{ parent.location.reload(); }} catch(e2) {{ window.location.reload(); }}
-                    }}
-                }}, 250);
-            }} else {{
-                retries++;
-                setTimeout(checkAndReload, 50);
+            if (c.indexOf(cookieName + "=" + cookieValue) !== -1 || retries > 10) {{
+                clearInterval(checkAndReload);
+                try {{
+                    parent.window.location.reload();
+                }} catch(e) {{
+                    try {{ parent.location.reload(); }} catch(e2) {{ window.location.reload(); }}
+                }}
             }}
-        }}
-        checkAndReload();
+            retries++;
+        }}, 50);
     }})();
     </script>
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #166534; background: #DCFCE7; padding: 14px 18px; border-radius: 8px; font-weight: 600; text-align: center; border: 1px solid #86EFAC; margin-top: 15px;">
         ✅ 2FA Verified! Initializing secure session...
     </div>
-    """, height=75)
+    """
+    components.html(js_code, height=75)
     st.stop()
 
 def save_user_processed_cache(username, results, elapsed_time):
@@ -572,16 +572,17 @@ if tok_to_persist:
     components.html(f"""
     <script>
     (function() {{
-        var sec = "; Secure";
+        var isHttp = false;
         try {{
             if (parent.location.protocol === "http:" || location.protocol === "http:") {{
-                sec = "";
+                isHttp = true;
             }}
         }} catch(e) {{}}
+        var cookieStr = isHttp ? "tp_sid={tok_to_persist}; path=/; SameSite=Lax" : "tp_sid={tok_to_persist}; path=/; Secure; SameSite=None";
         try {{
-            parent.document.cookie = "tp_sid={tok_to_persist}; path=/" + sec + "; SameSite=Lax";
+            parent.document.cookie = cookieStr;
         }} catch(e) {{
-            document.cookie = "tp_sid={tok_to_persist}; path=/" + sec + "; SameSite=Lax";
+            document.cookie = cookieStr;
         }}
         try {{
             parent.sessionStorage.setItem("tp_sid", "{tok_to_persist}");
@@ -611,17 +612,19 @@ with st.sidebar:
         components.html("""
         <script>
         (function() {
-            var sec = "; Secure";
+            var isHttp = false;
             try {
                 if (parent.location.protocol === "http:" || location.protocol === "http:") {
-                    sec = "";
+                    isHttp = true;
                 }
             } catch(e) {}
+            var cStr1 = isHttp ? "tp_sid=; path=/; Max-Age=0; SameSite=Lax" : "tp_sid=; path=/; Max-Age=0; Secure; SameSite=None";
+            var cStr2 = isHttp ? "kaif_auth_token=; path=/; Max-Age=0; SameSite=Lax" : "kaif_auth_token=; path=/; Max-Age=0; Secure; SameSite=None";
             try {
-                parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
-                parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                parent.document.cookie = cStr1;
+                parent.document.cookie = cStr2;
             } catch(e) {
-                document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                document.cookie = cStr1;
             }
             try {
                 parent.sessionStorage.removeItem("tp_sid");
@@ -661,17 +664,19 @@ with top_head_col2:
         components.html("""
         <script>
         (function() {
-            var sec = "; Secure";
+            var isHttp = false;
             try {
                 if (parent.location.protocol === "http:" || location.protocol === "http:") {
-                    sec = "";
+                    isHttp = true;
                 }
             } catch(e) {}
+            var cStr1 = isHttp ? "tp_sid=; path=/; Max-Age=0; SameSite=Lax" : "tp_sid=; path=/; Max-Age=0; Secure; SameSite=None";
+            var cStr2 = isHttp ? "kaif_auth_token=; path=/; Max-Age=0; SameSite=Lax" : "kaif_auth_token=; path=/; Max-Age=0; Secure; SameSite=None";
             try {
-                parent.document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
-                parent.document.cookie = "kaif_auth_token=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                parent.document.cookie = cStr1;
+                parent.document.cookie = cStr2;
             } catch(e) {
-                document.cookie = "tp_sid=; path=/" + sec + "; Max-Age=0; SameSite=Lax";
+                document.cookie = cStr1;
             }
             try {
                 parent.sessionStorage.removeItem("tp_sid");
