@@ -2,6 +2,7 @@ import os
 import re
 import io
 import csv
+import gc
 import datetime
 import numpy as np
 import pandas as pd
@@ -795,7 +796,14 @@ def generate_target_excel_bytes(df_clean):
 
     wb.save(output)
     output.seek(0)
-    return output.getvalue()
+    data = output.getvalue()
+    try:
+        wb.close()
+    except Exception:
+        pass
+    del wb, ws, dt_list, codes, sums, rates, mins, incs
+    gc.collect()
+    return data
 
 def build_output_filename(base_name, comments_tag, member_name):
     base = str(base_name or '').strip()
@@ -885,7 +893,10 @@ def generate_target_csv_bytes(df_clean):
 
         writer.writerow([dest, c, rate_str, m_str, inc_str, d_str])
 
-    return output.getvalue().encode('utf-8')
+    csv_data = output.getvalue().encode('utf-8')
+    del summaries, codes, rates, dt_col, mins, incs
+    gc.collect()
+    return csv_data
 
 def build_csv_output_filename(base_name):
     """

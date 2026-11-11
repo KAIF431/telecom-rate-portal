@@ -3,6 +3,7 @@ import datetime
 import io
 import csv
 import re
+import gc
 import time
 import json
 import base64
@@ -31,6 +32,16 @@ from core_engine import (
 # Output directory for reliable caching of generated Excel files
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "generated_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def read_disk_bytes(p):
+    """Reads file bytes from disk on demand, preventing memory bloat in st.session_state."""
+    if p and os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return b""
 
 def load_excel_safely(f_content, fname):
     """Safely loads Excel files (.xlsx, .xls, .xlsm, .xlsb) using calamine with xlrd/openpyxl fallback."""
@@ -132,12 +143,21 @@ def clear_current_session():
     tok = st.session_state.get("active_token") or st.query_params.get("session_token")
     if tok:
         am.destroy_session(tok)
+    for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
+        z_p = st.session_state.get(z_key)
+        if z_p and os.path.exists(z_p):
+            try:
+                os.remove(z_p)
+            except Exception:
+                pass
+        st.session_state[z_key] = None
     st.session_state.user = None
     st.session_state.active_token = None
     st.session_state.cookie_id = None
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
+    gc.collect()
     try:
         st.query_params.clear()
     except Exception:
@@ -175,32 +195,10 @@ def load_user_processed_cache(username):
             items = []
             for item in data.get("items", []):
                 p = item.get("cached_path")
-                out_bytes = b""
-                if p and os.path.exists(p):
-                    try:
-                        with open(p, "rb") as f_b:
-                            out_bytes = f_b.read()
-                    except Exception:
-                        pass
-                if not out_bytes:
-                    alt_p = os.path.join(OUTPUT_DIR, item.get("filename", ""))
-                    if os.path.exists(alt_p):
-                        try:
-                            with open(alt_p, "rb") as f_b:
-                                out_bytes = f_b.read()
-                        except Exception:
-                            pass
-                item["bytes"] = out_bytes
-                p_csv = item.get("cached_csv_path")
-                csv_bytes = b""
-                if p_csv and os.path.exists(p_csv):
-                    try:
-                        with open(p_csv, "rb") as f_c:
-                            csv_bytes = f_c.read()
-                    except Exception:
-                        pass
-                item["csv_bytes"] = csv_bytes
-                if out_bytes:
+                # Do NOT load file bytes into memory. Use read_disk_bytes on demand!
+                if (p and os.path.exists(p)) or os.path.exists(os.path.join(OUTPUT_DIR, item.get("filename", ""))):
+                    item["bytes"] = None
+                    item["csv_bytes"] = None
                     items.append(item)
             if items:
                 return items, data.get("elapsed_time", 0.0)
@@ -213,6 +211,13 @@ def clear_user_processed_cache(username):
         cache_file = os.path.join(OUTPUT_DIR, f"last_results_{username}.json")
         if os.path.exists(cache_file):
             os.remove(cache_file)
+        # Also clean any stale batch zip files for this user
+        for fname in os.listdir(OUTPUT_DIR):
+            if fname.startswith(f"batch_") and username in fname and fname.endswith(".zip"):
+                try:
+                    os.remove(os.path.join(OUTPUT_DIR, fname))
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -871,7 +876,7 @@ if "processed_results" not in st.session_state:
 if st.session_state.get("just_processed") and st.session_state.processed_results:
     st.session_state.pop("just_processed", None)
     first_item = st.session_state.processed_results[0]
-    f_b = first_item.get("bytes")
+    f_b = first_item.get("bytes") or read_disk_bytes(first_item.get("cached_path"))
     # Only trigger JS download for small payloads (<250KB) to avoid WebSocket buffer overflow and browser freeze
     if f_b and len(f_b) < 250_000:
         try:
@@ -903,9 +908,18 @@ if st.session_state.processed_results:
     if col_clr.button("🗑️ Clear All / Reset", type="secondary", use_container_width=True, key="top_clear_results_btn"):
         curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
         clear_user_processed_cache(curr_u)
+        for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
+            z_p = st.session_state.get(z_key)
+            if z_p and os.path.exists(z_p):
+                try:
+                    os.remove(z_p)
+                except Exception:
+                    pass
+            st.session_state[z_key] = None
         st.session_state.processed_results = None
         st.session_state.elapsed_time = None
         st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+        gc.collect()
         st.rerun()
 
     if elapsed_sec is not None:
@@ -922,25 +936,9 @@ if st.session_state.processed_results:
 
     for idx, item in enumerate(results):
         out_name = item["filename"]
-        out_bytes = item.get("bytes")
+        cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
+        out_bytes = read_disk_bytes(cached_p)
         stats = item.get("stats", {})
-        
-        if not out_bytes:
-            for possible_p in [
-                item.get("cached_path"),
-                os.path.join(OUTPUT_DIR, out_name),
-                os.path.join(os.path.expanduser('~'), 'Downloads', out_name)
-            ]:
-                if possible_p and os.path.exists(possible_p):
-                    try:
-                        with open(possible_p, "rb") as f_cached:
-                            out_bytes = f_cached.read()
-                        if out_bytes:
-                            break
-                    except Exception:
-                        pass
-        if not out_bytes:
-            out_bytes = b""
 
         clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
         qc_ex = stats.get('qc_excluded', 0)
@@ -977,8 +975,9 @@ if st.session_state.processed_results:
                 use_container_width=True
             )
         with col_dl_csv:
-            csv_data = item.get("csv_bytes") or b""
             csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
+            cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
+            csv_data = read_disk_bytes(cached_csv_p)
             st.download_button(
                 label="📄 Download CSV (.csv)",
                 data=csv_data,
@@ -992,18 +991,37 @@ if st.session_state.processed_results:
     if len(results) > 1:
         st.write("")
         col_zip1, col_zip2 = st.columns(2)
+        zip_xl_path = st.session_state.get("batch_zip_xl_path")
+        if not zip_xl_path or not os.path.exists(zip_xl_path):
+            zip_xl_path = os.path.join(OUTPUT_DIR, f"batch_excel_{u_name}_{int(time.time())}.zip")
+            try:
+                with zipfile.ZipFile(zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
+                    for item in results:
+                        p = item.get("cached_path") or os.path.join(OUTPUT_DIR, item.get("filename", ""))
+                        if p and os.path.exists(p):
+                            zf_xl.write(p, arcname=item["filename"])
+                st.session_state.batch_zip_xl_path = zip_xl_path
+            except Exception:
+                zip_xl_path = None
+
+        zip_csv_path = st.session_state.get("batch_zip_csv_path")
+        if not zip_csv_path or not os.path.exists(zip_csv_path):
+            zip_csv_path = os.path.join(OUTPUT_DIR, f"batch_csv_{u_name}_{int(time.time())}.zip")
+            try:
+                with zipfile.ZipFile(zip_csv_path, "w", zipfile.ZIP_DEFLATED) as zf_csv:
+                    for item in results:
+                        c_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", item["filename"]))
+                        p_csv = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, c_name)
+                        if p_csv and os.path.exists(p_csv):
+                            zf_csv.write(p_csv, arcname=c_name)
+                st.session_state.batch_zip_csv_path = zip_csv_path
+            except Exception:
+                zip_csv_path = None
+
         with col_zip1:
-            zip_buffer_xl = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer_xl, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for item in results:
-                    f_name = item["filename"]
-                    f_bytes = item.get("bytes")
-                    if f_bytes:
-                        zip_file.writestr(f_name, f_bytes)
-            zip_buffer_xl.seek(0)
             st.download_button(
                 label=f"📦 Download All {len(results)} Excel Files (ZIP)",
-                data=zip_buffer_xl.getvalue(),
+                data=read_disk_bytes(zip_xl_path),
                 file_name=f"Standardized_Excel_Sheets_{u_name}.zip",
                 mime="application/zip",
                 key="top_zip_excel_dl",
@@ -1011,17 +1029,9 @@ if st.session_state.processed_results:
                 use_container_width=True
             )
         with col_zip2:
-            zip_buffer_csv = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer_csv, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for item in results:
-                    c_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", item["filename"]))
-                    c_bytes = item.get("csv_bytes")
-                    if c_bytes:
-                        zip_file.writestr(c_name, c_bytes)
-            zip_buffer_csv.seek(0)
             st.download_button(
                 label=f"📦 Download All {len(results)} CSV Files (ZIP)",
-                data=zip_buffer_csv.getvalue(),
+                data=read_disk_bytes(zip_csv_path),
                 file_name=f"Standardized_CSV_Decks_{u_name}.zip",
                 mime="application/zip",
                 key="top_zip_csv_dl",
@@ -1088,15 +1098,16 @@ if uploaded_files:
             preview_tag = st.session_state[cache_tag_key]
         else:
             preview_tag = ""
+            xl_prev = None
             try:
                 f_content.seek(0)
                 if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
-                    xl = load_excel_safely(f_content, fname)
+                    xl_prev = load_excel_safely(f_content, fname)
                     best_score = -1
                     best_sheet = None
-                    for s_name in xl.sheet_names:
+                    for s_name in xl_prev.sheet_names:
                         try:
-                            temp_sample = xl.parse(s_name, header=None, nrows=40)
+                            temp_sample = xl_prev.parse(s_name, header=None, nrows=40)
                             if len(temp_sample) < 2:
                                 continue
                             _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
@@ -1109,15 +1120,30 @@ if uploaded_files:
                         except Exception:
                             pass
                     target_sheet = best_sheet if best_sheet is not None else 0
-                    df_raw = xl.parse(target_sheet, header=None)
+                    df_sample = xl_prev.parse(target_sheet, header=None, nrows=100)
+                    h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
+                    if c_map.get('status') is not None:
+                        _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                        preview_tag = p_tag
                 elif fname.lower().endswith('.csv'):
                     df_sample = load_csv_safely(f_content, nrows=100)
                     h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
-                    _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
-                    preview_tag = p_tag
+                    if c_map.get('status') is not None:
+                        _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
+                        preview_tag = p_tag
                 f_content.seek(0)
             except Exception:
                 preview_tag = "UPdated"
+            finally:
+                if xl_prev is not None:
+                    try:
+                        xl_prev.close()
+                    except Exception:
+                        pass
+                    del xl_prev
+                if 'df_sample' in locals():
+                    del df_sample
+                gc.collect()
 
             if not preview_tag:
                 preview_tag = "UPdated"
@@ -1151,42 +1177,58 @@ if uploaded_files:
         for f_idx, (fname, f_content) in enumerate(raw_files):
             f_content.seek(0)
             df_raw = None
+            xl = None
             try:
                 if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
                     xl = load_excel_safely(f_content, fname)
-                    best_df = None
+                    best_sheet = None
                     best_score = -1
                     for s_name in xl.sheet_names:
-                        temp_df = xl.parse(s_name, header=None)
-                        if len(temp_df) < 2:
-                            continue
-                        _, col_map = core_engine.detect_header_row_and_columns(temp_df)
-                        score = len(col_map)
-                        if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
-                            score += 15
-                        if score > best_score and len(temp_df) >= 3:
-                            best_score = score
-                            best_df = temp_df
-                    df_raw = best_df if best_df is not None else xl.parse(0, header=None)
+                        try:
+                            temp_sample = xl.parse(s_name, header=None, nrows=40)
+                            if len(temp_sample) < 2:
+                                continue
+                            _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
+                            score = len(col_map)
+                            if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
+                                score += 15
+                            if score > best_score:
+                                best_score = score
+                                best_sheet = s_name
+                        except Exception:
+                            pass
+                    target_sheet = best_sheet if best_sheet is not None else 0
+                    df_raw = xl.parse(target_sheet, header=None)
                 elif fname.lower().endswith('.csv'):
                     df_raw = load_csv_safely(f_content)
             except Exception as e:
                 st.error(f"Could not parse file '{fname}': {e}")
                 continue
+            finally:
+                if xl is not None:
+                    try:
+                        xl.close()
+                    except Exception:
+                        pass
+                    del xl
 
             if df_raw is None or len(df_raw) == 0:
                 st.warning(f"File '{fname}' is empty.")
                 continue
 
             df_clean, df_excluded, stats = core_engine.fast_process_dataframe(df_raw, qc_codes, fname)
+            del df_raw, df_excluded
+            gc.collect()
 
             user_base = vendor_names.get(f_idx, f"Name - {fname}")
             final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
-
             final_csv_filename = core_engine.build_csv_output_filename(user_base)
 
             excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
             csv_bytes = core_engine.generate_target_csv_bytes(df_clean)
+            clean_rows_count = len(df_clean)
+            del df_clean
+            gc.collect()
 
             # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
             saved_paths = []
@@ -1236,16 +1278,20 @@ if uploaded_files:
             except Exception:
                 pass
 
+            # Free byte arrays from memory immediately after saving to disk!
+            del excel_bytes, csv_bytes
+            gc.collect()
+
             processed_list.append({
                 "filename": final_filename,
                 "csv_filename": final_csv_filename,
                 "vendor_name": user_base,
-                "bytes": excel_bytes,
-                "csv_bytes": csv_bytes,
+                "bytes": None,
+                "csv_bytes": None,
                 "cached_path": cached_path,
                 "cached_csv_path": cached_csv_path,
                 "stats": stats,
-                "rows_count": len(df_clean),
+                "rows_count": clean_rows_count,
                 "saved_paths": saved_paths
             })
 
@@ -1253,6 +1299,35 @@ if uploaded_files:
 
         t_end = time.time()
         elapsed_sec = round(t_end - t_start, 2)
+
+        # Pre-build on-disk ZIP files if multiple files in batch
+        if len(processed_list) > 1:
+            u_slug = current_user.get("username", "kaif")
+            ts = int(time.time())
+            zip_xl_path = os.path.join(OUTPUT_DIR, f"batch_excel_{u_slug}_{ts}.zip")
+            zip_csv_path = os.path.join(OUTPUT_DIR, f"batch_csv_{u_slug}_{ts}.zip")
+            try:
+                with zipfile.ZipFile(zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
+                    for p_item in processed_list:
+                        cp = p_item.get("cached_path")
+                        if cp and os.path.exists(cp):
+                            zf_xl.write(cp, arcname=p_item["filename"])
+                st.session_state.batch_zip_xl_path = zip_xl_path
+            except Exception:
+                st.session_state.batch_zip_xl_path = None
+
+            try:
+                with zipfile.ZipFile(zip_csv_path, "w", zipfile.ZIP_DEFLATED) as zf_csv:
+                    for p_item in processed_list:
+                        cp_csv = p_item.get("cached_csv_path")
+                        if cp_csv and os.path.exists(cp_csv):
+                            zf_csv.write(cp_csv, arcname=p_item["csv_filename"])
+                st.session_state.batch_zip_csv_path = zip_csv_path
+            except Exception:
+                st.session_state.batch_zip_csv_path = None
+        else:
+            st.session_state.batch_zip_xl_path = None
+            st.session_state.batch_zip_csv_path = None
 
         # Log audit trail for Admin view
         for p_item in processed_list:
@@ -1274,4 +1349,5 @@ if uploaded_files:
         
         # Reset file uploader so next batch starts with a fresh, clean uploader!
         st.session_state.uploader_key += 1
+        gc.collect()
         st.rerun()
