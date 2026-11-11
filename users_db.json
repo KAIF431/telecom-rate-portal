@@ -21,27 +21,7 @@
       "created_at": "2026-10-16 15:00:19",
       "status": "active"
     },
-    "v_arhama": {
-      "username": "arhama",
-      "name": "Arhama",
-      "password": "Arhama_@431",
-      "role": "user",
-      "totp_secret": "XCASLSAZCIRXLXFV",
-      "email": "",
-      "created_at": "2026-10-16 15:00:19",
-      "status": "active"
-    },
     "aliba": {
-      "username": "aliba",
-      "name": "Aliba",
-      "password": "aliba@006221",
-      "role": "user",
-      "totp_secret": "XCASLSAZCIRXLXFV",
-      "email": "",
-      "created_at": "2026-10-16 15:22:29",
-      "status": "active"
-    },
-    "v_aliba": {
       "username": "aliba",
       "name": "Aliba",
       "password": "aliba@006221",

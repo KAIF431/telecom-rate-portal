@@ -402,11 +402,15 @@ def verify_credentials(username, password):
     matched_key = None
     if u in users:
         matched_key = u
+    elif u.startswith("v_") and u[2:] in users:
+        matched_key = u[2:]
     elif f"v_{u}" in users:
         matched_key = f"v_{u}"
     else:
+        clean_u = u.replace("v_", "")
         for k, v in users.items():
-            if k.lower() == u or k.lower().replace("v_", "") == u or v.get("name", "").strip().lower() == u:
+            clean_k = k.lower().replace("v_", "")
+            if clean_k == clean_u or v.get("name", "").strip().lower() == clean_u or v.get("name", "").strip().lower() == u:
                 matched_key = k
                 break
 
