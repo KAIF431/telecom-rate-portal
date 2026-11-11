@@ -109,38 +109,32 @@ def load_csv_safely(f_content, nrows=None):
     return pd.DataFrame(padded)
 
 
-# Session Handlers (Maintains login on F5 refresh in active tab; strictly prompts login in fresh tab/incognito)
+# Strictly enforce authentication: no tokens exposed in URL, no bypass via copied link
 def authenticate_current_session():
-    # 1. In-memory session check
+    # Only in-memory active session is valid
     if st.session_state.get("user"):
         return st.session_state.get("user")
     
-    # 2. Query param session token (maintains active session on F5 refresh)
+    # Clean any query parameters completely so URL is always 100% clean
     try:
-        token = st.query_params.get("session_token")
-        if token:
-            user_info = am.get_session_user(token)
-            if user_info:
-                st.session_state.user = user_info
-                st.session_state.active_token = token
-                return user_info
+        if st.query_params:
+            st.query_params.clear()
     except Exception:
         pass
 
     return None
 
 def set_login_session(session_data):
-    token = session_data.get("token") or am.create_session_token(session_data.get("username", "kaif"), days_valid=30)
-    am.register_session(token, session_data)
     st.session_state.user = session_data
-    st.session_state.active_token = token
+    st.session_state.active_token = session_data.get("token")
+    # Clean URL: never leak session token to query_params or browser address bar
     try:
-        st.query_params["session_token"] = token
+        st.query_params.clear()
     except Exception:
         pass
 
 def clear_current_session():
-    tok = st.session_state.get("active_token") or st.query_params.get("session_token")
+    tok = st.session_state.get("active_token")
     if tok:
         am.destroy_session(tok)
     for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
@@ -270,6 +264,10 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
     [data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
+    [data-testid="stManageApp"] {display: none !important; visibility: hidden !important;}
+    button:has([data-testid="stIconManageApp"]) {display: none !important; visibility: hidden !important;}
+    div[class*="manageApp"] {display: none !important; visibility: hidden !important;}
+    div[class*="ManageApp"] {display: none !important; visibility: hidden !important;}
     .viewerBadge_container__1QSob {display: none !important; visibility: hidden !important;}
     div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
@@ -1042,86 +1040,6 @@ if st.session_state.processed_results:
                 use_container_width=True
             )
     st.markdown("---")
-
-# ----------------- ADMIN LIVE TEAM ACTIVITY (LAST 7 DAYS) -----------------
-if is_admin:
-    recent_team = am.get_processing_history(days=7)
-    if recent_team:
-        arhama_cnt = sum(1 for h in recent_team if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
-        aliba_cnt = sum(1 for h in recent_team if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
-        kaif_cnt = sum(1 for h in recent_team if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", ""))).lower())
-        
-        with st.expander(f"👥 **Team Rate Sheets (Last 7 Days: {len(recent_team)} Active — Arhama: {arhama_cnt}, Kaif: {kaif_cnt}, Aliba: {aliba_cnt})**", expanded=False):
-            st.caption("🕒 **Strict 7-Day Auto-Retention:** All sheets processed by any team member are preserved here for 7 days with instant download, then automatically deleted.")
-            
-            q_col1, q_col2 = st.columns([1.5, 2.5])
-            with q_col1:
-                q_user_filter = st.selectbox("Filter Team Member:", ["All Team Members", "Arhama", "Kaif", "Aliba"], key="main_team_filter_user")
-            with q_col2:
-                q_search = st.text_input("Quick Search Sheet / Vendor:", key="main_team_search_kw", placeholder="Search by vendor name or file...")
-                
-            q_filtered = []
-            for h_entry in recent_team:
-                if q_user_filter != "All Team Members":
-                    u_m = (str(h_entry.get("user_name", "")) + " " + str(h_entry.get("username", ""))).lower()
-                    if q_user_filter.lower() not in u_m:
-                        continue
-                if q_search:
-                    kw_low = q_search.strip().lower()
-                    if kw_low not in str(h_entry.get("vendor_name", "")).lower() and kw_low not in str(h_entry.get("output_filename", "")).lower():
-                        continue
-                q_filtered.append(h_entry)
-                
-            if not q_filtered:
-                st.info("No sheets found matching the filter.")
-            else:
-                q_sheet_names = [h["output_filename"] for h in q_filtered if h.get("output_filename")]
-                if q_sheet_names:
-                    sel_team_f = st.selectbox("Select Sheet to Download Immediately:", q_sheet_names, key="main_team_quick_dl_sel")
-                    if sel_team_f:
-                        team_xl_b = get_historical_file_bytes(sel_team_f)
-                        team_csv_b, team_csv_fn = get_historical_csv_bytes(sel_team_f, team_xl_b)
-                        cd1, cd2 = st.columns(2)
-                        with cd1:
-                            if team_xl_b:
-                                st.download_button(
-                                    label=f"📊 Download Excel ({sel_team_f})",
-                                    data=team_xl_b,
-                                    file_name=sel_team_f,
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key=f"main_team_dl_xl_{sel_team_f}",
-                                    type="primary",
-                                    use_container_width=True
-                                )
-                            else:
-                                st.button("Excel File Not in Cache", disabled=True, use_container_width=True, key=f"no_xl_{sel_team_f}")
-                        with cd2:
-                            if team_csv_b:
-                                st.download_button(
-                                    label=f"📄 Download CSV ({team_csv_fn})",
-                                    data=team_csv_b,
-                                    file_name=team_csv_fn,
-                                    mime="text/csv",
-                                    key=f"main_team_dl_csv_{sel_team_f}",
-                                    type="primary",
-                                    use_container_width=True
-                                )
-                            else:
-                                st.button("CSV Not in Cache", disabled=True, use_container_width=True, key=f"no_csv_{sel_team_f}")
-
-                t_display_rows = []
-                for entry in q_filtered[:25]:
-                    u_disp = entry.get("user_name") or entry.get("username")
-                    t_display_rows.append({
-                        "Date": str(entry.get("timestamp"))[:10],
-                        "Time (IST)": str(entry.get("timestamp"))[11:19],
-                        "User": u_disp,
-                        "Vendor": entry.get("vendor_name"),
-                        "Standardized File": entry.get("output_filename"),
-                        "Clean Rows": f"{entry.get('clean_rows', 0):,}"
-                    })
-                st.dataframe(pd.DataFrame(t_display_rows), use_container_width=True, hide_index=True)
-        st.write("")
 
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
