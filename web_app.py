@@ -287,7 +287,7 @@ st.set_page_config(
     page_title="Vendor Rate Sheet Standardizer",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
@@ -339,10 +339,39 @@ st.markdown("""
     .viewerBadge_container__1QSob {display: none !important; visibility: hidden !important;}
     div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
-    [data-testid="stSidebarCollapsedControl"] {
-        display: block !important;
-        visibility: visible !important;
-        z-index: 999999 !important;
+    
+    /* Permanently hide Streamlit Sidebar across all devices */
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+
+    /* Subtle professional micro-animations (pure animations, preserving exact site colors) */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .auto-dl-banner, .badge-success, [data-testid="stDataFrame"], .stTabs {
+        animation: fadeInUp 0.3s ease-out;
+    }
+    button[kind="primary"], button[kind="secondary"] {
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    button[kind="primary"]:hover, button[kind="secondary"]:hover {
+        transform: translateY(-1.5px) !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] {
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -527,33 +556,6 @@ if active_tok and controller.get("tp_sid") != active_tok:
     }})();
     </script>
     """, height=0)
-
-# ----------------- SIDEBAR: USER INFO & NAVIGATION -----------------
-with st.sidebar:
-    st.markdown(f"""
-    <div style="padding: 10px 14px; background: #EEF2FF; border-left: 4px solid #4F46E5; border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 0.72rem; color: #6B7280; text-transform: uppercase; font-weight: 600;">Logged In User</div>
-        <div style="font-size: 1.15rem; color: #1E1B4B; font-weight: 700;">{current_user.get('name')}</div>
-        <div style="font-size: 0.8rem; color: #4F46E5; font-weight: 600;">Role: {current_user.get('role', 'user').upper()}</div>
-        <div style="font-size: 0.72rem; color: #9CA3AF; margin-top: 4px;">📅 Session active till Monday 00:00</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("🚪 Logout", key="sidebar_logout_btn", use_container_width=True):
-        clear_current_session()
-        components.html("""
-        <script>
-        setTimeout(function() {
-            try {
-                parent.window.location.reload();
-            } catch(e) {
-                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-            }
-        }, 150);
-        </script>
-        <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
-        """, height=50)
-        st.stop()
 
 # ----------------- MAIN PORTAL -----------------
 top_head_col1, top_head_col2 = st.columns([3, 1.2])
@@ -1080,8 +1082,10 @@ if st.session_state.processed_results:
         stats = item.get("stats", {})
 
         clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
+        initial_rows = stats.get('initial_rows', clean_rows_display)
         qc_ex = stats.get('qc_excluded', 0)
         nanp_ex = stats.get('nanp_excluded', 0)
+        dedup_ex = stats.get('dedup_excluded', 0)
         minus1_ex = stats.get('rates_minus1_count', 0)
         future_eff = stats.get('future_eff_date')
 
@@ -1089,11 +1093,15 @@ if st.session_state.processed_results:
         if future_eff:
             future_badge = f' &nbsp;|&nbsp; <span style="background-color: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.88rem;">📅 Eff. Date: {future_eff}</span>'
 
+        dedup_badge = ""
+        if dedup_ex > 0:
+            dedup_badge = f' &nbsp;|&nbsp; 🔄 Duplicates Removed: <b style="color: #DC2626;">{dedup_ex:,}</b>'
+
         st.markdown(f"""
         <div class="auto-dl-banner" style="margin-bottom: 8px;">
             📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1.05rem; font-weight: 700;">{out_name}</code><br>
             <span style="font-size: 0.92rem; color: #4B5563;">
-                Clean Rows: <b>{clean_rows_display:,}</b> &nbsp;|&nbsp; 
+                Vendor Rows: <b>{initial_rows:,}</b> ➔ Cleaned Rows: <b style="color: #16A34A;">{clean_rows_display:,}</b>{dedup_badge} &nbsp;|&nbsp; 
                 QC Excluded: <b>{qc_ex:,}</b> &nbsp;|&nbsp; 
                 USA/Canada/PR Excluded: <b>{nanp_ex:,}</b> &nbsp;|&nbsp;
                 Rates to -1: <b>{minus1_ex:,}</b>{future_badge}

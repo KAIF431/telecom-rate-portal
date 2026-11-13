@@ -123,11 +123,11 @@ def detect_header_row_and_columns(df_raw):
             # (Check BEFORE dial code so 'dst code name', 'dest name', 'code name' are mapped to destination,
             # BUT do not capture code columns like 'destination code', 'dest code', 'country code'!)
             elif (
-                (any(k in v for k in ['destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary'])
+                (any(k in v for k in ['destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name'])
                  or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country']))
                  or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description'])
                      and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
-            ) and not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code']):
+            ) and (any(n in v for n in ['name', 'desc', 'description']) or not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code'])):
                 if 'destination' not in mapping:
                     mapping['destination'] = col_idx
                     kw_score += 7
@@ -163,7 +163,7 @@ def detect_header_row_and_columns(df_raw):
                     kw_score += 4
 
             # 4. Rate keywords (exclude table/sheet banners, decks, cards, zones, and previous rates)
-            elif (any(k in v for k in ['new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min']) or '$' in val) \
+            elif (any(k in v for k in ['new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min', 'allday', 'all day', 'alldays', 'all days', 'flat rate', 'flat']) or '$' in val) \
                 and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective']) \
                 and not re.search(r'\b(?:current|old|prev|previous|existing|base|diff)\b', v):
                 if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v:
@@ -176,7 +176,8 @@ def detect_header_row_and_columns(df_raw):
                 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from',
                 'valid from', 'valid date', 'start date', 'active from', 'active date', 'activation date',
                 'active', 'activation'
-            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to', 'valid to', 'eff to'])                and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
+            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to', 'valid to', 'eff to']) \
+                and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
                 is_valid_date_col = True
                 if v in ['active', 'activation']:
                     sample_check = df_raw.iloc[row_idx + 1 : min(row_idx + 15, len(df_raw)), col_idx].dropna().tolist()
@@ -199,8 +200,9 @@ def detect_header_row_and_columns(df_raw):
                 'increments', 'increment', 'incremental', 'pulse', 'billing', 'initial billing', 'incremental billing',
                 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc',
                 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
-                'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc'
-            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc']:
+                'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc',
+                'rounding', 'round', 'round off', 'rounding rule'
+            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     kw_score += 4
@@ -688,6 +690,31 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         'Increment': incs
     })
 
+    # DEDUPLICATION BY DIAL CODE:
+    # Dial codes must be strictly unique. If duplicate dial codes exist, keep the row
+    # with the latest / most future Effective Date. If dates are equal, keep the later row in file.
+    dedup_dropped_count = 0
+    if len(df_clean) > 0 and 'Dial Code' in df_clean.columns:
+        pre_dedup_len = len(df_clean)
+        
+        def to_sortable_date(d):
+            if d is None or pd.isna(d):
+                return datetime.datetime(1970, 1, 1)
+            if isinstance(d, datetime.datetime):
+                return d
+            if isinstance(d, datetime.date):
+                return datetime.datetime.combine(d, datetime.time.min)
+            return datetime.datetime(1970, 1, 1)
+
+        df_clean['_code_str'] = df_clean['Dial Code'].astype(str).str.strip()
+        df_clean['_sort_date'] = df_clean['_dt_obj'].apply(to_sortable_date)
+        df_clean['_orig_idx'] = np.arange(len(df_clean))
+
+        df_clean = df_clean.sort_values(by=['_sort_date', '_orig_idx'], ascending=[True, True])
+        df_clean = df_clean.drop_duplicates(subset=['_code_str'], keep='last')
+        df_clean = df_clean.sort_values(by='_orig_idx').drop(columns=['_code_str', '_sort_date', '_orig_idx']).reset_index(drop=True)
+        dedup_dropped_count = pre_dedup_len - len(df_clean)
+
     # Excluded rows for audit log
     df_excluded = pd.DataFrame({
         'Dial Code': code_series[is_excluded_mask],
@@ -700,12 +727,12 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     qc_count = int(is_qc_mask.sum())
     nanp_count = int(is_nanp_mask.sum())
     rates_minus1_count = int(is_minus_1.sum())
-    total_excluded = int(is_excluded_mask.sum())
+    total_excluded = int(is_excluded_mask.sum()) + dedup_dropped_count
     verification_passed = (initial_row_count - total_excluded == final_row_count)
 
-    # Calculate Last Effective Date (only if future date exists)
+    # Calculate Last Effective Date from deduplicated clean rows (only if future date exists)
     today = datetime.date.today()
-    valid_dates = [d for d in date_objs if d is not None and isinstance(d, (datetime.date, datetime.datetime))]
+    valid_dates = [d for d in df_clean['_dt_obj'] if d is not None and isinstance(d, (datetime.date, datetime.datetime))]
     future_dates = [d.date() if isinstance(d, datetime.datetime) else d for d in valid_dates if (d.date() if isinstance(d, datetime.datetime) else d) > today]
     last_future_date = max(future_dates) if future_dates else None
     future_eff_date_str = last_future_date.strftime('%m-%d-%y') if last_future_date else None
@@ -715,6 +742,7 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         'initial_rows': initial_row_count,
         'qc_excluded': qc_count,
         'nanp_excluded': nanp_count,
+        'dedup_excluded': dedup_dropped_count,
         'rates_minus1_count': rates_minus1_count,
         'final_clean_rows': final_row_count,
         'verification_passed': verification_passed,
