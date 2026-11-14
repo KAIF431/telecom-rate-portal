@@ -522,10 +522,22 @@ st.markdown("""
     .auto-dl-banner, .badge-success, [data-testid="stDataFrame"], .stTabs {
         animation: fadeInUp 0.3s ease-out;
     }
-    button[kind="primary"], button[kind="secondary"] {
+    button[kind="primary"] {
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
+        border: none !important;
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     }
-    button[kind="primary"]:hover, button[kind="secondary"]:hover {
+    button[kind="primary"]:hover {
+        background-color: #1D4ED8 !important;
+        color: #FFFFFF !important;
+        transform: translateY(-1.5px) !important;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
+    }
+    button[kind="secondary"] {
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    button[kind="secondary"]:hover {
         transform: translateY(-1.5px) !important;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
     }
@@ -1250,50 +1262,26 @@ if st.session_state.processed_results:
         minus1_ex = stats.get('rates_minus1_count', 0)
         future_eff = stats.get('future_eff_date')
 
-        future_eff_badge = ""
-        if future_eff:
-            future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>'
+        future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>' if future_eff else ""
+        dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
 
-        dedup_chip = ""
-        if dedup_ex > 0:
-            dedup_chip = f"""
-            <div class="kpi-chip kpi-danger">
-                <span class="kpi-label">DUPLICATES REMOVED</span>
-                <span class="kpi-val">{dedup_ex:,}</span>
-            </div>
-            """
-
-        st.markdown(f"""
-        <div class="deck-result-card">
-            <div class="deck-title-bar">
-                <span class="deck-name">📁 <b>Standardized File:</b> <code>{out_name}</code></span>
-                {future_eff_badge}
-            </div>
-            <div class="kpi-strip">
-                <div class="kpi-chip kpi-neutral">
-                    <span class="kpi-label">VENDOR INPUT</span>
-                    <span class="kpi-val">{initial_rows:,}</span>
-                </div>
-                <div class="kpi-chip kpi-success">
-                    <span class="kpi-label">CLEAN OUTPUT</span>
-                    <span class="kpi-val">{clean_rows_display:,}</span>
-                </div>
-                {dedup_chip}
-                <div class="kpi-chip kpi-warning">
-                    <span class="kpi-label">QC EXCLUDED</span>
-                    <span class="kpi-val">{qc_ex:,}</span>
-                </div>
-                <div class="kpi-chip kpi-subtle">
-                    <span class="kpi-label">NANP (+1) FILTERED</span>
-                    <span class="kpi-val">{nanp_ex:,}</span>
-                </div>
-                <div class="kpi-chip kpi-subtle">
-                    <span class="kpi-label">RATES TO -1</span>
-                    <span class="kpi-val">{minus1_ex:,}</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        card_html = (
+            f'<div class="deck-result-card">'
+            f'<div class="deck-title-bar">'
+            f'<span class="deck-name">📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1.05rem; font-weight: 700;">{out_name}</code></span>'
+            f'{future_eff_badge}'
+            f'</div>'
+            f'<div class="kpi-strip">'
+            f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
+            f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
+            f'{dedup_chip}'
+            f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
+            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1) FILTERED</span><span class="kpi-val">{nanp_ex:,}</span></div>'
+            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
+            f'</div>'
+            f'</div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
         v_name_clean = item.get("vendor_name", "").strip() or out_name.split(" A to Z ")[0].strip()
         col_dl_excel, col_dl_csv = st.columns(2)
