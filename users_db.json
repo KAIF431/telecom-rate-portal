@@ -9,7 +9,8 @@
       "created_at": "2026-10-16 13:21:43",
       "status": "active",
       "totp_secret": "XCASLSAZCIRXLXFV",
-      "password": "ratesadmin@431"
+      "password": "ratesadmin@431",
+      "avatar": "avatar_man_glasses.png"
     },
     "arhama": {
       "username": "arhama",
@@ -19,7 +20,8 @@
       "totp_secret": "XCASLSAZCIRXLXFV",
       "email": "",
       "created_at": "2026-10-16 15:00:19",
-      "status": "active"
+      "status": "active",
+      "avatar": "avatar_niqab_classic.png"
     },
     "aliba": {
       "username": "aliba",
@@ -29,7 +31,8 @@
       "totp_secret": "XCASLSAZCIRXLXFV",
       "email": "",
       "created_at": "2026-10-16 15:22:29",
-      "status": "active"
+      "status": "active",
+      "avatar": "avatar_hijab_niqab_dark.png"
     }
   },
   "reset_requests": []

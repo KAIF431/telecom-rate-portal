@@ -508,6 +508,18 @@ st.markdown("""
         color: #991B1B !important;
     }
 
+    button[key="btn_toggle_avatar_picker"] {
+        border: 1px solid #BAE6FD !important;
+        color: #0E7490 !important;
+        background: #F0F9FF !important;
+        font-weight: 600 !important;
+    }
+    button[key="btn_toggle_avatar_picker"]:hover {
+        background: #E0F2FE !important;
+        border-color: #0E7490 !important;
+        color: #0C4A6E !important;
+    }
+
     /* Subtle professional micro-animations (pure animations, preserving exact site colors) */
     @keyframes fadeInUp {
         from {
@@ -754,40 +766,137 @@ if active_tok and not st.session_state.get("cookie_synced"):
     """, height=0)
     st.session_state["cookie_synced"] = True
 
+def get_avatar_base64(filename):
+    if not filename:
+        filename = "avatar_man_glasses.png"
+    p = os.path.join(os.path.dirname(__file__), "assets", "avatars", filename)
+    if not os.path.exists(p):
+        p = os.path.join(os.path.dirname(__file__), "assets", "avatars", "avatar_man_glasses.png")
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception:
+            return ""
+    return ""
+
 # ----------------- MAIN PORTAL -----------------
-top_head_col1, top_head_col2 = st.columns([2.8, 1.4])
+top_head_col1, top_head_col2 = st.columns([2.5, 1.5])
 
 with top_head_col1:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 with top_head_col2:
-    head_sub1, head_sub2 = st.columns([1.2, 1])
+    curr_u = (current_user.get("username") or "").strip().lower()
+    active_avatar_file = current_user.get("avatar") or am.get_user_avatar(curr_u)
+    active_avatar_b64 = get_avatar_base64(active_avatar_file)
+    
+    head_sub1, head_sub2 = st.columns([1.35, 1.0])
     with head_sub1:
         st.markdown(f"""
-        <div style="text-align: right; margin-top: 4px;">
-            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #BAE6FD; display: inline-block;">
-                👤 <b>{current_user.get('name')}</b> ({current_user.get('role', 'user').upper()})
-            </span>
-            <div style="font-size: 0.70rem; color: #64748B; font-family: monospace; text-align: right; margin-top: 2px;">build: 2026.10.17.v3</div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 3px;">
+            <img src="data:image/png;base64,{active_avatar_b64}" 
+                 style="width: 44px; height: 44px; min-width: 44px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.15);" 
+                 alt="User Avatar" />
+            <div style="text-align: left; line-height: 1.25;">
+                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+                    {current_user.get('name')}
+                </div>
+                <div style="font-size: 0.70rem; color: #0284C7; font-weight: 600;">{current_user.get('role', 'user').upper()}</div>
+                <div style="font-size: 0.65rem; color: #64748B; font-family: monospace;">build: 2026.10.17.v3</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     with head_sub2:
-        if st.button("🚪 Log Out", key="top_logout_btn", use_container_width=True, type="secondary"):
-            clear_current_session()
-            components.html("""
-            <script>
-            setTimeout(function() {
-                try {
-                    parent.window.location.reload();
-                } catch(e) {
-                    try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-                }
-            }, 150);
-            </script>
-            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
-            """, height=50)
-            st.stop()
+        btn_lo_col, btn_av_col = st.columns([1, 1])
+        with btn_lo_col:
+            if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, type="secondary"):
+                clear_current_session()
+                components.html("""
+                <script>
+                setTimeout(function() {
+                    try {
+                        parent.window.location.reload();
+                    } catch(e) {
+                        try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+                    }
+                }, 150);
+                </script>
+                <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
+                """, height=50)
+                st.stop()
+        with btn_av_col:
+            if st.button("🖼️ Avatar", key="btn_toggle_avatar_picker", use_container_width=True, help="Click to select your profile avatar"):
+                st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+                st.rerun()
+
+# Expandable Profile Avatar Selector
+if st.session_state.get("show_avatar_picker", False):
+    with st.container():
+        st.markdown("""
+        <div style="background: #FFFFFF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 14px 18px; margin: 10px 0 15px 0; box-shadow: 0 2px 8px rgba(14, 116, 144, 0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E0F2FE; padding-bottom: 8px; margin-bottom: 12px;">
+                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.95rem;">
+                    🎨 Choose Your Profile Avatar (21 Curated Options)
+                </div>
+                <span style="font-size: 0.78rem; color: #0284C7; font-weight: 600;">
+                    Click 'Select' to instantly set your avatar
+                </span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        av_tab1, av_tab2, av_tab3 = st.tabs([
+            "🧔 Male & Executive (6)",
+            "🧕 Hijab & Niqab (11)",
+            "🎨 Modern Cartoon (4)"
+        ])
+        
+        cat_map = {
+            av_tab1: "Male & Executive",
+            av_tab2: "Hijab & Niqab",
+            av_tab3: "Modern Cartoon"
+        }
+        
+        for tab_obj, cat_name in cat_map.items():
+            with tab_obj:
+                cat_avatars = [a for a in am.AVAILABLE_AVATARS if a["category"] == cat_name]
+                chunk_size = 6
+                for i in range(0, len(cat_avatars), chunk_size):
+                    chunk = cat_avatars[i:i + chunk_size]
+                    cols = st.columns(len(chunk))
+                    for idx, av in enumerate(chunk):
+                        with cols[idx]:
+                            is_active = (av["id"] == active_avatar_file)
+                            border_col = "#0E7490" if is_active else "#BAE6FD"
+                            bg_col = "#E0F2FE" if is_active else "#FFFFFF"
+                            b64 = get_avatar_base64(av["id"])
+                            badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
+                            st.markdown(f"""
+                            <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
+                                <img src="data:image/png;base64,{b64}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" />
+                                <div style="font-size: 0.74rem; font-weight: 600; color: #0C4A6E; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{av['title']}">
+                                    {av['title']}
+                                </div>
+                                {badge_html}
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if st.button("Select", key=f"sel_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
+                                ok, msg = am.update_user_avatar(curr_u, av["id"])
+                                if ok:
+                                    current_user["avatar"] = av["id"]
+                                    if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                                        st.session_state.user["avatar"] = av["id"]
+                                    st.toast(f"✅ Avatar updated to {av['title']}!")
+                                    st.session_state["show_avatar_picker"] = False
+                                    st.rerun()
+
+        col_cls1, col_cls2 = st.columns([4, 1])
+        with col_cls2:
+            if st.button("✖ Close Selector", key="btn_close_av_picker", use_container_width=True):
+                st.session_state["show_avatar_picker"] = False
+                st.rerun()
 
 def get_historical_file_bytes(filename):
     if not filename:
@@ -1080,27 +1189,49 @@ if is_admin:
                     )
 
         with a_tab_edit:
-            st.subheader("✏️ Edit User Display / Full Name")
-            st.caption("Change the full name of Admin (yourself) or any user. The updated name reflects immediately across the portal and generated filenames.")
+            st.subheader("✏️ Edit User Display Name & Avatar")
+            st.caption("Change the full name and assign profile avatar for Admin (yourself) or any user. Changes reflect immediately across the portal.")
             all_users_dict = am.get_all_users()
             selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="main_edit_u_select")
             u_info = all_users_dict[selected_edit_u]
             
-            st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
+            cur_u_av = u_info.get("avatar") or am.get_user_avatar(selected_edit_u)
+            cur_av_b64 = get_avatar_base64(cur_u_av)
+            
+            e_col1, e_col2 = st.columns([1, 4])
+            with e_col1:
+                st.markdown(f"""
+                <div style="text-align: center; padding: 10px; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 10px;">
+                    <img src="data:image/png;base64,{cur_av_b64}" style="width: 55px; height: 55px; border-radius: 8px; object-fit: cover; border: 1px solid #0E7490;" />
+                    <div style="font-size: 0.70rem; color: #0C4A6E; font-weight: 600; margin-top: 4px;">Current Avatar</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with e_col2:
+                st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
             
             new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"main_input_edit_name_{selected_edit_u}")
-            if st.button("💾 Save Updated Name", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
+            
+            av_opts = [a["id"] for a in am.AVAILABLE_AVATARS]
+            av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in am.AVAILABLE_AVATARS}
+            cur_idx = av_opts.index(cur_u_av) if cur_u_av in av_opts else 0
+            new_av_val = st.selectbox("Assign Profile Avatar:", av_opts, index=cur_idx, format_func=lambda x: av_dict.get(x, x), key=f"main_sel_edit_av_{selected_edit_u}")
+            
+            if st.button("💾 Save Updated User Details", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
                 if new_name_val and new_name_val.strip():
                     ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
-                    if ok_n:
+                    ok_a, msg_a = am.update_user_avatar(selected_edit_u, new_av_val)
+                    if ok_n and ok_a:
                         if selected_edit_u == current_user.get("username"):
                             current_user["name"] = new_name_val.strip()
-                            st.session_state.user["name"] = new_name_val.strip()
-                        st.success(msg_n)
+                            current_user["avatar"] = new_av_val
+                            if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                                st.session_state.user["name"] = new_name_val.strip()
+                                st.session_state.user["avatar"] = new_av_val
+                        st.success(f"Name and Avatar updated successfully for '{selected_edit_u}'!")
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(msg_n)
+                        st.error(msg_n or msg_a)
                 else:
                     st.warning("Name cannot be empty.")
 

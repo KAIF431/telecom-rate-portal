@@ -203,6 +203,7 @@ def verify_session_token(token_str, user_agent="", client_ip=""):
                     "name": u_info.get("name", u_info["username"].capitalize()),
                     "role": u_info.get("role", "user"),
                     "email": u_info.get("email", ""),
+                    "avatar": u_info.get("avatar") or get_user_avatar(u_info["username"]),
                     "session_expiry": datetime.datetime.fromtimestamp(exp_timestamp).isoformat()
                 }
     except Exception:
@@ -237,6 +238,8 @@ def get_session_user(token, user_agent="", client_ip=""):
                 store = json.load(f)
             user_info = store.get(token)
             if user_info and not is_session_expired(user_info.get("session_expiry")):
+                if not user_info.get("avatar"):
+                    user_info["avatar"] = get_user_avatar(user_info.get("username"))
                 return user_info
             elif user_info:
                 del store[token]
@@ -428,6 +431,7 @@ def verify_credentials(username, password):
             "name": user_info.get("name", matched_key.capitalize()),
             "role": user_info.get("role", "user"),
             "email": user_info.get("email", ""),
+            "avatar": user_info.get("avatar") or get_user_avatar(matched_key),
             "totp_secret": user_info.get("totp_secret", get_master_totp_secret())
         }
     else:
@@ -542,6 +546,77 @@ def delete_user(username):
 def get_all_users():
     db = load_db()
     return db.get("users", {})
+
+# --- Profile Avatar Management ---
+AVAILABLE_AVATARS = [
+    # Male & Executive (Kaif & Team)
+    {"id": "avatar_man_glasses.png", "title": "Bearded Glasses (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
+    {"id": "avatar_cartoon_beard_suit.png", "title": "Suit & Beard", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_bearded_specs.png", "title": "Executive Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_young_man.png", "title": "Young Casual", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_blonde_glasses.png", "title": "Blonde Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "Brown Hair Casual", "category": "Male & Executive", "badge": ""},
+
+    # Hijab & Niqab (Arhama, Aliba & Team)
+    {"id": "avatar_niqab_classic.png", "title": "Classic Black Niqab", "category": "Hijab & Niqab", "badge": "Arhama Default"},
+    {"id": "avatar_hijab_niqab_dark.png", "title": "Dark Niqab Veil", "category": "Hijab & Niqab", "badge": "Aliba Default"},
+    {"id": "avatar_hijab_bw_art.png", "title": "Floral Art Silhouette", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_black.png", "title": "Black Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_charcoal.png", "title": "Charcoal Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_gold.png", "title": "Gold Mustard Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_ruby_red.png", "title": "Ruby Red Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_shades_green.png", "title": "Green with Shades", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_coral_pink.png", "title": "Coral Pink Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_green_trim.png", "title": "Green Trim Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_silver_gray.png", "title": "Silver Gray Hijab", "category": "Hijab & Niqab", "badge": ""},
+
+    # Modern Cartoon (General / Team)
+    {"id": "avatar_cartoon_curly_hair.png", "title": "Curly Hair", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_asian_woman.png", "title": "Yellow Top Specs", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "Short Hair Specs", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_modern_woman.png", "title": "Modern Chic", "category": "Modern Cartoon", "badge": ""}
+]
+
+def get_user_avatar(username):
+    """Returns the avatar filename for username with intelligent fallback defaults."""
+    try:
+        db = load_db()
+        u = (str(username) if username else "").strip().lower()
+        user = db.get("users", {}).get(u, {})
+        av = user.get("avatar")
+        if av:
+            return av
+        if "kaif" in u:
+            return "avatar_man_glasses.png"
+        elif "arhama" in u:
+            return "avatar_niqab_classic.png"
+        elif "aliba" in u:
+            return "avatar_hijab_niqab_dark.png"
+        return "avatar_man_glasses.png"
+    except Exception:
+        return "avatar_man_glasses.png"
+
+def update_user_avatar(username, avatar_filename):
+    """Updates user avatar in database and updates any active session store entries."""
+    db = load_db()
+    u = (str(username) if username else "").strip().lower()
+    if u not in db.get("users", {}):
+        return False, "User not found."
+    db["users"][u]["avatar"] = avatar_filename
+    save_db(db)
+    
+    try:
+        if os.path.exists(TOKEN_STORE_FILE):
+            with open(TOKEN_STORE_FILE, "r", encoding="utf-8") as f:
+                store = json.load(f)
+            for tok, uinfo in store.items():
+                if uinfo.get("username") == u:
+                    uinfo["avatar"] = avatar_filename
+            with open(TOKEN_STORE_FILE, "w", encoding="utf-8") as f:
+                json.dump(store, f, indent=2)
+    except Exception:
+        pass
+    return True, f"Avatar updated successfully for '{u}'."
 
 # --- Password Reset Option 1: Request to Admin ---
 def request_password_reset(username, note=""):
