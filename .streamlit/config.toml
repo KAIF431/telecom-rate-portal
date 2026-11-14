@@ -12,3 +12,6 @@ gatherUsageStats = false
 [client]
 toolbarMode = "minimal"
 showErrorDetails = "full"
+
+[runner]
+fastReruns = true

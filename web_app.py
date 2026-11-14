@@ -163,6 +163,7 @@ def authenticate_current_session():
         if valid_user:
             st.session_state.user = valid_user
             st.session_state.active_token = token_str
+            st.session_state.cookie_synced = True
             return valid_user
 
     # Never expose tokens in st.query_params - scrub any stray query params
@@ -179,6 +180,7 @@ def set_login_session(session_data):
     st.session_state.user = session_data
     token = session_data.get("token")
     st.session_state.active_token = token
+    st.session_state.cookie_synced = False
     st.session_state.auth_logged_out = False
     cache = get_session_cache()
     if token:
@@ -213,6 +215,7 @@ def clear_current_session():
     st.session_state.user = None
     st.session_state.active_token = None
     st.session_state.cookie_id = None
+    st.session_state.cookie_synced = False
     st.session_state.pending_totp_user = None
     st.session_state.processed_results = None
     st.session_state.elapsed_time = None
@@ -539,9 +542,9 @@ u_name = current_user.get("username", "kaif")
 is_admin = (current_user.get("role") == "admin")
 active_member = current_user.get("name", "Kaif")
 
-# Ensure persistent session cookie is saved in browser for F5 reload persistence (background sync)
+# Ensure persistent session cookie is saved in browser for F5 reload persistence (run ONCE per login)
 active_tok = st.session_state.get("active_token")
-if active_tok and controller.get("tp_sid") != active_tok:
+if active_tok and not st.session_state.get("cookie_synced"):
     try:
         controller.set("tp_sid", active_tok, max_age=28800, path="/")
     except Exception:
@@ -556,6 +559,7 @@ if active_tok and controller.get("tp_sid") != active_tok:
     }})();
     </script>
     """, height=0)
+    st.session_state["cookie_synced"] = True
 
 # ----------------- MAIN PORTAL -----------------
 top_head_col1, top_head_col2 = st.columns([3, 1.2])
@@ -1239,7 +1243,14 @@ if uploaded_files:
         clean_v_name = v_name.strip() if v_name else f"File {idx+1}"
         
         # Fast-detect real comments tag with instant session-state caching (prevents typing lag/freezes)
-        f_len = getattr(f_content, 'size', len(f_content.getvalue()) if hasattr(f_content, 'getvalue') else 0)
+        f_len = getattr(f_content, 'size', None)
+        if f_len is None:
+            if hasattr(f_content, 'getbuffer'):
+                f_len = f_content.getbuffer().nbytes
+            else:
+                f_content.seek(0, os.SEEK_END)
+                f_len = f_content.tell()
+                f_content.seek(0)
         cache_tag_key = f"tag_cache_{fname}_{f_len}"
         if cache_tag_key in st.session_state:
             preview_tag = st.session_state[cache_tag_key]
