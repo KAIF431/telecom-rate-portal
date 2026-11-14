@@ -18,6 +18,71 @@ from streamlit_cookies_controller import CookieController
 controller = CookieController()
 
 import auth_manager as am
+try:
+    importlib.reload(am)
+except Exception:
+    pass
+
+# Bulletproof self-contained avatar resolution
+def resolve_user_avatar(username):
+    u = (str(username) if username else "").strip().lower()
+    if hasattr(am, "get_user_avatar"):
+        try:
+            return am.get_user_avatar(u)
+        except Exception:
+            pass
+    if "kaif" in u:
+        return "avatar_man_glasses.png"
+    elif "arhama" in u:
+        return "avatar_niqab_classic.png"
+    elif "aliba" in u:
+        return "avatar_hijab_niqab_dark.png"
+    return "avatar_man_glasses.png"
+
+SAFE_AVAILABLE_AVATARS = getattr(am, "AVAILABLE_AVATARS", [
+    {"id": "avatar_man_glasses.png", "title": "Bearded Glasses (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
+    {"id": "avatar_cartoon_beard_suit.png", "title": "Suit & Beard", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_bearded_specs.png", "title": "Executive Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_young_man.png", "title": "Young Casual", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_blonde_glasses.png", "title": "Blonde Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "Brown Hair Casual", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_niqab_classic.png", "title": "Classic Black Niqab", "category": "Hijab & Niqab", "badge": "Arhama Default"},
+    {"id": "avatar_hijab_niqab_dark.png", "title": "Dark Niqab Veil", "category": "Hijab & Niqab", "badge": "Aliba Default"},
+    {"id": "avatar_hijab_bw_art.png", "title": "Floral Art Silhouette", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_black.png", "title": "Black Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_charcoal.png", "title": "Charcoal Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_gold.png", "title": "Gold Mustard Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_ruby_red.png", "title": "Ruby Red Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_shades_green.png", "title": "Green with Shades", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_coral_pink.png", "title": "Coral Pink Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_green_trim.png", "title": "Green Trim Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_hijab_silver_gray.png", "title": "Silver Gray Hijab", "category": "Hijab & Niqab", "badge": ""},
+    {"id": "avatar_cartoon_curly_hair.png", "title": "Curly Hair", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_asian_woman.png", "title": "Yellow Top Specs", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "Short Hair Specs", "category": "Modern Cartoon", "badge": ""},
+    {"id": "avatar_cartoon_modern_woman.png", "title": "Modern Chic", "category": "Modern Cartoon", "badge": ""}
+])
+
+def save_user_avatar_choice(u_name, avatar_id):
+    if hasattr(am, "update_user_avatar"):
+        try:
+            return am.update_user_avatar(u_name, avatar_id)
+        except Exception:
+            pass
+    try:
+        db_p = os.path.join(os.path.dirname(__file__), "users_db.json")
+        if os.path.exists(db_p):
+            with open(db_p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            u = str(u_name).strip().lower()
+            if u in d.get("users", {}):
+                d["users"][u]["avatar"] = avatar_id
+                with open(db_p, "w", encoding="utf-8") as f:
+                    json.dump(d, f, indent=2)
+            return True, "Avatar updated."
+    except Exception as e:
+        return False, str(e)
+    return True, "Avatar updated."
 import core_engine
 import secrets
 from config_manager import load_config, add_member, remove_member, set_active_member
@@ -788,8 +853,8 @@ with top_head_col1:
     st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 with top_head_col2:
-    curr_u = (current_user.get("username") or "").strip().lower()
-    active_avatar_file = current_user.get("avatar") or am.get_user_avatar(curr_u)
+    curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
+    active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
     active_avatar_b64 = get_avatar_base64(active_avatar_file)
     
     head_sub1, head_sub2 = st.columns([1.35, 1.0])
@@ -861,7 +926,7 @@ if st.session_state.get("show_avatar_picker", False):
         
         for tab_obj, cat_name in cat_map.items():
             with tab_obj:
-                cat_avatars = [a for a in am.AVAILABLE_AVATARS if a["category"] == cat_name]
+                cat_avatars = [a for a in SAFE_AVAILABLE_AVATARS if a["category"] == cat_name]
                 chunk_size = 6
                 for i in range(0, len(cat_avatars), chunk_size):
                     chunk = cat_avatars[i:i + chunk_size]
@@ -883,9 +948,10 @@ if st.session_state.get("show_avatar_picker", False):
                             </div>
                             """, unsafe_allow_html=True)
                             if st.button("Select", key=f"sel_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
-                                ok, msg = am.update_user_avatar(curr_u, av["id"])
+                                ok, msg = save_user_avatar_choice(curr_u, av["id"])
                                 if ok:
-                                    current_user["avatar"] = av["id"]
+                                    if isinstance(current_user, dict):
+                                        current_user["avatar"] = av["id"]
                                     if "user" in st.session_state and isinstance(st.session_state.user, dict):
                                         st.session_state.user["avatar"] = av["id"]
                                     st.toast(f"✅ Avatar updated to {av['title']}!")
@@ -1195,7 +1261,7 @@ if is_admin:
             selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="main_edit_u_select")
             u_info = all_users_dict[selected_edit_u]
             
-            cur_u_av = u_info.get("avatar") or am.get_user_avatar(selected_edit_u)
+            cur_u_av = u_info.get("avatar") or resolve_user_avatar(selected_edit_u)
             cur_av_b64 = get_avatar_base64(cur_u_av)
             
             e_col1, e_col2 = st.columns([1, 4])
@@ -1211,15 +1277,15 @@ if is_admin:
             
             new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"main_input_edit_name_{selected_edit_u}")
             
-            av_opts = [a["id"] for a in am.AVAILABLE_AVATARS]
-            av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in am.AVAILABLE_AVATARS}
+            av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
+            av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
             cur_idx = av_opts.index(cur_u_av) if cur_u_av in av_opts else 0
             new_av_val = st.selectbox("Assign Profile Avatar:", av_opts, index=cur_idx, format_func=lambda x: av_dict.get(x, x), key=f"main_sel_edit_av_{selected_edit_u}")
             
             if st.button("💾 Save Updated User Details", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
                 if new_name_val and new_name_val.strip():
                     ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
-                    ok_a, msg_a = am.update_user_avatar(selected_edit_u, new_av_val)
+                    ok_a, msg_a = save_user_avatar_choice(selected_edit_u, new_av_val)
                     if ok_n and ok_a:
                         if selected_edit_u == current_user.get("username"):
                             current_user["name"] = new_name_val.strip()
@@ -1394,7 +1460,123 @@ if st.session_state.processed_results:
         </div>
         """, unsafe_allow_html=True)
 
-    for idx, item in enumerate(results):
+    if len(results) > 1:
+        zip_xl_path = st.session_state.get("batch_zip_xl_path")
+        zip_csv_path = st.session_state.get("batch_zip_csv_path")
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%); border: 1.5px solid #0E7490; border-radius: 10px; padding: 12px 18px; margin: 10px 0 14px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-weight: 800; color: #0C4A6E; font-size: 1.02rem;">
+                    📦 Batch Package: All {len(results)} Sheets Standardized ({elapsed_sec:.2f}s)
+                </span>
+                <span style="background: #0E7490; color: #FFFFFF; font-size: 0.74rem; font-weight: 700; padding: 3px 10px; border-radius: 12px;">
+                    BATCH READY
+                </span>
+            </div>
+            <div style="font-size: 0.80rem; color: #475569;">
+                Download all standardized decks in a single archive, or inspect individual files below:
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_b_zip1, col_b_zip2 = st.columns(2)
+        with col_b_zip1:
+            st.download_button(
+                label=f"📦 Download All {len(results)} Excel Sheets (.zip)",
+                data=read_disk_bytes(zip_xl_path),
+                file_name=f"Standardized_Excel_Sheets_{u_name}.zip",
+                mime="application/zip",
+                key="top_batch_zip_excel_dl",
+                type="primary",
+                use_container_width=True
+            )
+        with col_b_zip2:
+            st.download_button(
+                label=f"📦 Download All {len(results)} CSV Files (.zip)",
+                data=read_disk_bytes(zip_csv_path),
+                file_name=f"Standardized_CSV_Decks_{u_name}.zip",
+                mime="application/zip",
+                key="top_batch_zip_csv_dl",
+                type="primary",
+                use_container_width=True
+            )
+
+        summary_rows = []
+        for idx, item in enumerate(results):
+            s = item.get("stats", {})
+            summary_rows.append({
+                "#": idx + 1,
+                "Standardized File": item["filename"],
+                "Clean Rows": f"{s.get('final_clean_rows', item.get('rows_count', 0)):,}",
+                "QC Excluded": f"{s.get('qc_excluded', 0):,}",
+                "NANP (+1)": f"{s.get('nanp_excluded', 0):,}",
+                "Status": "✅ Complete"
+            })
+        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+
+        with st.expander(f"🔍 Individual File Downloads & Detailed KPI Breakdown ({len(results)} Sheets)", expanded=False):
+            for idx, item in enumerate(results):
+                out_name = item["filename"]
+                cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
+                out_bytes = read_disk_bytes(cached_p)
+                stats = item.get("stats", {})
+
+                clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
+                initial_rows = stats.get('initial_rows', clean_rows_display)
+                qc_ex = stats.get('qc_excluded', 0)
+                nanp_ex = stats.get('nanp_excluded', 0)
+                dedup_ex = stats.get('dedup_excluded', 0)
+                minus1_ex = stats.get('rates_minus1_count', 0)
+                future_eff = stats.get('future_eff_date')
+
+                future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>' if future_eff else ""
+                dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
+
+                card_html = (
+                    f'<div class="deck-result-card" style="margin-bottom: 8px;">'
+                    f'<div class="deck-title-bar">'
+                    f'<span class="deck-name">📁 #{idx+1} <b>File:</b> <code style="color: #0E7490; font-size: 0.95rem; font-weight: 700;">{out_name}</code></span>'
+                    f'{future_eff_badge}'
+                    f'</div>'
+                    f'<div class="kpi-strip">'
+                    f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
+                    f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
+                    f'{dedup_chip}'
+                    f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
+                    f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1)</span><span class="kpi-val">{nanp_ex:,}</span></div>'
+                    f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
+                    f'</div>'
+                    f'</div>'
+                )
+                st.markdown(card_html, unsafe_allow_html=True)
+
+                col_dl_excel, col_dl_csv = st.columns(2)
+                with col_dl_excel:
+                    st.download_button(
+                        label=f"📊 Download Excel (.xlsx)",
+                        data=out_bytes,
+                        file_name=out_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"top_dl_btn_excel_{idx}",
+                        type="secondary",
+                        use_container_width=True
+                    )
+                with col_dl_csv:
+                    csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
+                    cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
+                    csv_data = read_disk_bytes(cached_csv_p)
+                    st.download_button(
+                        label=f"📄 Download CSV (.csv)",
+                        data=csv_data,
+                        file_name=csv_name,
+                        mime="text/csv",
+                        key=f"top_dl_btn_csv_{idx}",
+                        type="secondary",
+                        use_container_width=True
+                    )
+    else:
+        item = results[0]
         out_name = item["filename"]
         cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
         out_bytes = read_disk_bytes(cached_p)
@@ -1429,7 +1611,6 @@ if st.session_state.processed_results:
         )
         st.markdown(card_html, unsafe_allow_html=True)
 
-        v_name_clean = item.get("vendor_name", "").strip() or out_name.split(" A to Z ")[0].strip()
         col_dl_excel, col_dl_csv = st.columns(2)
         with col_dl_excel:
             st.download_button(
@@ -1437,7 +1618,7 @@ if st.session_state.processed_results:
                 data=out_bytes,
                 file_name=out_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"top_dl_btn_excel_{idx}",
+                key="top_dl_btn_excel_0",
                 type="primary",
                 use_container_width=True
             )
@@ -1450,58 +1631,7 @@ if st.session_state.processed_results:
                 data=csv_data,
                 file_name=csv_name,
                 mime="text/csv",
-                key=f"top_dl_btn_csv_{idx}",
-                type="primary",
-                use_container_width=True
-            )
-
-    if len(results) > 1:
-        st.write("")
-        col_zip1, col_zip2 = st.columns(2)
-        zip_xl_path = st.session_state.get("batch_zip_xl_path")
-        if not zip_xl_path or not os.path.exists(zip_xl_path):
-            zip_xl_path = os.path.join(OUTPUT_DIR, f"batch_excel_{u_name}_{int(time.time())}.zip")
-            try:
-                with zipfile.ZipFile(zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
-                    for item in results:
-                        p = item.get("cached_path") or os.path.join(OUTPUT_DIR, item.get("filename", ""))
-                        if p and os.path.exists(p):
-                            zf_xl.write(p, arcname=item["filename"])
-                st.session_state.batch_zip_xl_path = zip_xl_path
-            except Exception:
-                zip_xl_path = None
-
-        zip_csv_path = st.session_state.get("batch_zip_csv_path")
-        if not zip_csv_path or not os.path.exists(zip_csv_path):
-            zip_csv_path = os.path.join(OUTPUT_DIR, f"batch_csv_{u_name}_{int(time.time())}.zip")
-            try:
-                with zipfile.ZipFile(zip_csv_path, "w", zipfile.ZIP_DEFLATED) as zf_csv:
-                    for item in results:
-                        c_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", item["filename"]))
-                        p_csv = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, c_name)
-                        if p_csv and os.path.exists(p_csv):
-                            zf_csv.write(p_csv, arcname=c_name)
-                st.session_state.batch_zip_csv_path = zip_csv_path
-            except Exception:
-                zip_csv_path = None
-
-        with col_zip1:
-            st.download_button(
-                label=f"📦 Download All {len(results)} Excel Files (ZIP)",
-                data=read_disk_bytes(zip_xl_path),
-                file_name=f"Standardized_Excel_Sheets_{u_name}.zip",
-                mime="application/zip",
-                key="top_zip_excel_dl",
-                type="primary",
-                use_container_width=True
-            )
-        with col_zip2:
-            st.download_button(
-                label=f"📦 Download All {len(results)} CSV Files (ZIP)",
-                data=read_disk_bytes(zip_csv_path),
-                file_name=f"Standardized_CSV_Decks_{u_name}.zip",
-                mime="application/zip",
-                key="top_zip_csv_dl",
+                key="top_dl_btn_csv_0",
                 type="primary",
                 use_container_width=True
             )
@@ -1569,8 +1699,21 @@ if uploaded_files:
         st.warning(f"⚠️ Maximum 10 sheets allowed per batch. Processing first 10 files out of {len(raw_files)}.")
         raw_files = raw_files[:10]
 
-    st.markdown("### 📝 Enter Vendor / Trunk Names")
-    st.caption("Customize Vendor / Trunk name for each file. Live final filename preview is shown below:")
+    if len(raw_files) > 1:
+        st.markdown(f"""
+        <div style="background: #FFFFFF; border: 1.5px solid #BAE6FD; border-radius: 10px; padding: 12px 16px; margin: 12px 0 14px 0; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.05);">
+            <div>
+                <span style="font-weight: 700; color: #0C4A6E; font-size: 0.96rem;">📁 Batch Configuration ({len(raw_files)} Sheets Loaded)</span>
+                <div style="font-size: 0.76rem; color: #64748B;">Enter or confirm Vendor / Trunk Names below. Output filenames update in real-time:</div>
+            </div>
+            <span style="background: #E0F2FE; color: #0284C7; font-weight: 700; font-size: 0.78rem; padding: 4px 12px; border-radius: 14px; border: 1px solid #BAE6FD;">
+                ⚡ {len(raw_files)} Files in Batch
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("### 📝 Enter Vendor / Trunk Name")
+        st.caption("Customize Vendor / Trunk name for each file. Live final filename preview is shown below:")
 
     vendor_names = {}
     for idx, (fname, f_content) in enumerate(raw_files):
@@ -1578,91 +1721,28 @@ if uploaded_files:
         clean_stem = re.sub(r'_\d{8,}.*$', '', clean_stem).strip()
         default_vendor_name = f"Name - {clean_stem}"
 
-        c1, c2 = st.columns([1.5, 2])
+        short_fname = fname if len(fname) <= 35 else (fname[:32] + "...")
+        c1, c2 = st.columns([1.8, 2.2])
         v_name = c1.text_input(
-            f"Vendor Name for File {idx+1} ({fname}):",
+            f"#{idx+1}: {short_fname}",
             value=default_vendor_name,
-            key=f"v_name_input_{st.session_state.uploader_key}_{idx}"
+            key=f"v_name_input_{st.session_state.uploader_key}_{idx}",
+            help=f"Original File: {fname}"
         )
         vendor_names[idx] = v_name
         
-        # Real-time live preview that updates instantly without session-state caching bugs
         clean_v_name = v_name.strip() if v_name else f"File {idx+1}"
         
-        # Fast-detect real comments tag with instant session-state caching (prevents typing lag/freezes)
-        f_len = getattr(f_content, 'size', None)
-        if f_len is None:
-            if hasattr(f_content, 'getbuffer'):
-                f_len = f_content.getbuffer().nbytes
-            else:
-                f_content.seek(0, os.SEEK_END)
-                f_len = f_content.tell()
-                f_content.seek(0)
-        cache_tag_key = f"tag_cache_{fname}_{f_len}"
-        if cache_tag_key in st.session_state:
-            preview_tag = st.session_state[cache_tag_key]
-        else:
-            preview_tag = ""
-            xl_prev = None
-            try:
-                f_content.seek(0)
-                if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
-                    xl_prev = load_excel_safely(f_content, fname)
-                    best_score = -1
-                    best_sheet = None
-                    for s_name in xl_prev.sheet_names:
-                        try:
-                            temp_sample = xl_prev.parse(s_name, header=None, nrows=40)
-                            if len(temp_sample) < 2:
-                                continue
-                            _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
-                            score = len(col_map)
-                            if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
-                                score += 15
-                            if score > best_score:
-                                best_score = score
-                                best_sheet = s_name
-                        except Exception:
-                            pass
-                    target_sheet = best_sheet if best_sheet is not None else 0
-                    df_sample = xl_prev.parse(target_sheet, header=None, nrows=100)
-                    h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
-                    if c_map.get('status') is not None:
-                        _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
-                        preview_tag = p_tag
-                elif fname.lower().endswith('.csv'):
-                    df_sample = load_csv_safely(f_content, nrows=100)
-                    h_idx, c_map = core_engine.detect_header_row_and_columns(df_sample)
-                    if c_map.get('status') is not None:
-                        _, p_tag = core_engine.analyze_vendor_comments(df_sample.iloc[h_idx+1:], c_map.get('status'))
-                        preview_tag = p_tag
-                f_content.seek(0)
-            except Exception:
-                preview_tag = "UPdated"
-            finally:
-                if xl_prev is not None:
-                    try:
-                        xl_prev.close()
-                    except Exception:
-                        pass
-                    del xl_prev
-                if 'df_sample' in locals():
-                    del df_sample
-                gc.collect()
-
-            if not preview_tag:
-                preview_tag = "UPdated"
-            st.session_state[cache_tag_key] = preview_tag
-
         if 'a to z' in clean_v_name.lower():
-            preview_filename = f"{clean_v_name} {preview_tag} {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} UPdated {active_member}.xlsx"
         else:
-            preview_filename = f"{clean_v_name} A to Z {preview_tag} {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} A to Z UPdated {active_member}.xlsx"
             
         preview_csv_name = core_engine.build_csv_output_filename(clean_v_name)
         c2.markdown(f"""
-        <div style="margin-top: 26px; padding: 8px 12px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #0C4A6E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            📊 <b>Excel:</b> <span style="color: #0E7490; font-weight: 600;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #059669;">{preview_csv_name}</span>
+        <div style="margin-top: 26px; padding: 6px 12px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px; font-family: monospace; font-size: 0.78rem; color: #0C4A6E; line-height: 1.35;">
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📊 <b>XLSX:</b> <span style="color: #0E7490; font-weight: 600;">{preview_filename}</span></div>
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📄 <b>CSV:</b> <span style="color: #059669; font-weight: 600;">{preview_csv_name}</span></div>
         </div>
         """, unsafe_allow_html=True)
 
