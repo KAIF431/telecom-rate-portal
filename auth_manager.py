@@ -549,32 +549,30 @@ def get_all_users():
 
 # --- Profile Avatar Management ---
 AVAILABLE_AVATARS = [
-    # Male & Executive (Kaif & Team)
-    {"id": "avatar_man_glasses.png", "title": "Bearded Glasses (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
-    {"id": "avatar_cartoon_beard_suit.png", "title": "Suit & Beard", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_bearded_specs.png", "title": "Executive Specs", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_young_man.png", "title": "Young Casual", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_blonde_glasses.png", "title": "Blonde Specs", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "Brown Hair Casual", "category": "Male & Executive", "badge": ""},
+    # 🧕 15 Female, Hijab & Niqab Avatars (Arhama, Aliba & Girls)
+    {"id": "avatar_niqab_classic.png", "title": "1. Classic Black Niqab", "category": "Female & Hijab", "badge": "Arhama Default"},
+    {"id": "avatar_hijab_niqab_dark.png", "title": "2. Dark Niqab Veil", "category": "Female & Hijab", "badge": "Aliba Default"},
+    {"id": "avatar_hijab_bw_art.png", "title": "3. Floral Art Silhouette", "category": "Female & Hijab", "badge": "Art Style"},
+    {"id": "avatar_hijab_black.png", "title": "4. Black Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_charcoal.png", "title": "5. Charcoal Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_gold.png", "title": "6. Gold Mustard Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_ruby_red.png", "title": "7. Ruby Red Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_shades_green.png", "title": "8. Green with Shades", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_coral_pink.png", "title": "9. Coral Pink Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_green_trim.png", "title": "10. Green Trim Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_silver_gray.png", "title": "11. Silver Gray Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_curly_hair.png", "title": "12. Curly Hair Girl", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_asian_woman.png", "title": "13. Yellow Top Specs", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "14. Short Hair Specs", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_modern_woman.png", "title": "15. Modern Chic Girl", "category": "Female & Hijab", "badge": ""},
 
-    # Hijab & Niqab (Arhama, Aliba & Team)
-    {"id": "avatar_niqab_classic.png", "title": "Classic Black Niqab", "category": "Hijab & Niqab", "badge": "Arhama Default"},
-    {"id": "avatar_hijab_niqab_dark.png", "title": "Dark Niqab Veil", "category": "Hijab & Niqab", "badge": "Aliba Default"},
-    {"id": "avatar_hijab_bw_art.png", "title": "Floral Art Silhouette", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_black.png", "title": "Black Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_charcoal.png", "title": "Charcoal Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_gold.png", "title": "Gold Mustard Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_ruby_red.png", "title": "Ruby Red Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_shades_green.png", "title": "Green with Shades", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_coral_pink.png", "title": "Coral Pink Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_green_trim.png", "title": "Green Trim Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_silver_gray.png", "title": "Silver Gray Hijab", "category": "Hijab & Niqab", "badge": ""},
-
-    # Modern Cartoon (General / Team)
-    {"id": "avatar_cartoon_curly_hair.png", "title": "Curly Hair", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_asian_woman.png", "title": "Yellow Top Specs", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "Short Hair Specs", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_modern_woman.png", "title": "Modern Chic", "category": "Modern Cartoon", "badge": ""}
+    # 🧔 6 Male & Executive Avatars (Kaif & Boys)
+    {"id": "avatar_man_glasses.png", "title": "16. Bearded Specs (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
+    {"id": "avatar_cartoon_beard_suit.png", "title": "17. Suit & Beard", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_bearded_specs.png", "title": "18. Executive Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_young_man.png", "title": "19. Young Casual", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_blonde_glasses.png", "title": "20. Blonde Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "21. Brown Hair Casual", "category": "Male & Executive", "badge": ""}
 ]
 
 def get_user_avatar(username):

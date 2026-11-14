@@ -39,29 +39,32 @@ def resolve_user_avatar(username):
         return "avatar_hijab_niqab_dark.png"
     return "avatar_man_glasses.png"
 
-SAFE_AVAILABLE_AVATARS = getattr(am, "AVAILABLE_AVATARS", [
-    {"id": "avatar_man_glasses.png", "title": "Bearded Glasses (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
-    {"id": "avatar_cartoon_beard_suit.png", "title": "Suit & Beard", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_bearded_specs.png", "title": "Executive Specs", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_young_man.png", "title": "Young Casual", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_blonde_glasses.png", "title": "Blonde Specs", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "Brown Hair Casual", "category": "Male & Executive", "badge": ""},
-    {"id": "avatar_niqab_classic.png", "title": "Classic Black Niqab", "category": "Hijab & Niqab", "badge": "Arhama Default"},
-    {"id": "avatar_hijab_niqab_dark.png", "title": "Dark Niqab Veil", "category": "Hijab & Niqab", "badge": "Aliba Default"},
-    {"id": "avatar_hijab_bw_art.png", "title": "Floral Art Silhouette", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_black.png", "title": "Black Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_charcoal.png", "title": "Charcoal Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_gold.png", "title": "Gold Mustard Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_ruby_red.png", "title": "Ruby Red Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_shades_green.png", "title": "Green with Shades", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_coral_pink.png", "title": "Coral Pink Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_green_trim.png", "title": "Green Trim Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_hijab_silver_gray.png", "title": "Silver Gray Hijab", "category": "Hijab & Niqab", "badge": ""},
-    {"id": "avatar_cartoon_curly_hair.png", "title": "Curly Hair", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_asian_woman.png", "title": "Yellow Top Specs", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "Short Hair Specs", "category": "Modern Cartoon", "badge": ""},
-    {"id": "avatar_cartoon_modern_woman.png", "title": "Modern Chic", "category": "Modern Cartoon", "badge": ""}
-])
+SAFE_AVAILABLE_AVATARS = [
+    # 🧕 15 Female, Hijab & Niqab Avatars (Arhama, Aliba & Girls)
+    {"id": "avatar_niqab_classic.png", "title": "1. Classic Black Niqab", "category": "Female & Hijab", "badge": "Arhama Default"},
+    {"id": "avatar_hijab_niqab_dark.png", "title": "2. Dark Niqab Veil", "category": "Female & Hijab", "badge": "Aliba Default"},
+    {"id": "avatar_hijab_bw_art.png", "title": "3. Floral Art Silhouette", "category": "Female & Hijab", "badge": "Art Style"},
+    {"id": "avatar_hijab_black.png", "title": "4. Black Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_charcoal.png", "title": "5. Charcoal Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_gold.png", "title": "6. Gold Mustard Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_ruby_red.png", "title": "7. Ruby Red Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_shades_green.png", "title": "8. Green with Shades", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_coral_pink.png", "title": "9. Coral Pink Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_green_trim.png", "title": "10. Green Trim Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_silver_gray.png", "title": "11. Silver Gray Hijab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_curly_hair.png", "title": "12. Curly Hair Girl", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_asian_woman.png", "title": "13. Yellow Top Specs", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_short_hair_glasses.png", "title": "14. Short Hair Specs", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_cartoon_modern_woman.png", "title": "15. Modern Chic Girl", "category": "Female & Hijab", "badge": ""},
+
+    # 🧔 6 Male & Executive Avatars (Kaif & Boys)
+    {"id": "avatar_man_glasses.png", "title": "16. Bearded Specs (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
+    {"id": "avatar_cartoon_beard_suit.png", "title": "17. Suit & Beard", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_bearded_specs.png", "title": "18. Executive Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_young_man.png", "title": "19. Young Casual", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_blonde_glasses.png", "title": "20. Blonde Specs", "category": "Male & Executive", "badge": ""},
+    {"id": "avatar_cartoon_teen_brown_hair.png", "title": "21. Brown Hair Casual", "category": "Male & Executive", "badge": ""}
+]
 
 def save_user_avatar_choice(u_name, avatar_id):
     if hasattr(am, "update_user_avatar"):
@@ -901,62 +904,122 @@ if st.session_state.get("show_avatar_picker", False):
     with st.container():
         st.markdown("""
         <div style="background: #FFFFFF; border: 1.5px solid #BAE6FD; border-radius: 12px; padding: 14px 18px; margin: 10px 0 15px 0; box-shadow: 0 2px 8px rgba(14, 116, 144, 0.08);">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E0F2FE; padding-bottom: 8px; margin-bottom: 12px;">
-                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.95rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E0F2FE; padding-bottom: 8px; margin-bottom: 8px;">
+                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.98rem;">
                     🎨 Choose Your Profile Avatar (21 Curated Options)
                 </div>
-                <span style="font-size: 0.78rem; color: #0284C7; font-weight: 600;">
-                    Click 'Select' to instantly set your avatar
+                <span style="font-size: 0.78rem; color: #0369A1; font-weight: 700; background: #E0F2FE; border: 1px solid #BAE6FD; padding: 4px 12px; border-radius: 14px;">
+                    🧕 15 Female / Hijab &nbsp;|&nbsp; 🧔 6 Male
                 </span>
+            </div>
+            <div style="font-size: 0.82rem; color: #475569;">
+                Arhama, Aliba, Kaif aur team ke liye sabhi avatars niche available hain. Apne pasandida avatar ke niche <b>'Select'</b> click karein:
             </div>
         </div>
         """, unsafe_allow_html=True)
         
         av_tab1, av_tab2, av_tab3 = st.tabs([
-            "🧔 Male & Executive (6)",
-            "🧕 Hijab & Niqab (11)",
-            "🎨 Modern Cartoon (4)"
+            "🧕 Female / Hijab & Girls (15 Avatars)",
+            "🧔 Male & Executive / Boys (6 Avatars)",
+            "🌟 All 21 Avatars (Single View)"
         ])
         
-        cat_map = {
-            av_tab1: "Male & Executive",
-            av_tab2: "Hijab & Niqab",
-            av_tab3: "Modern Cartoon"
-        }
-        
-        for tab_obj, cat_name in cat_map.items():
-            with tab_obj:
-                cat_avatars = [a for a in SAFE_AVAILABLE_AVATARS if a["category"] == cat_name]
-                chunk_size = 6
-                for i in range(0, len(cat_avatars), chunk_size):
-                    chunk = cat_avatars[i:i + chunk_size]
-                    cols = st.columns(len(chunk))
-                    for idx, av in enumerate(chunk):
-                        with cols[idx]:
-                            is_active = (av["id"] == active_avatar_file)
-                            border_col = "#0E7490" if is_active else "#BAE6FD"
-                            bg_col = "#E0F2FE" if is_active else "#FFFFFF"
-                            b64 = get_avatar_base64(av["id"])
-                            badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
-                            st.markdown(f"""
-                            <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
-                                <img src="data:image/png;base64,{b64}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" />
-                                <div style="font-size: 0.74rem; font-weight: 600; color: #0C4A6E; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{av['title']}">
-                                    {av['title']}
-                                </div>
-                                {badge_html}
+        with av_tab1:
+            female_avatars = [a for a in SAFE_AVAILABLE_AVATARS if a["category"] == "Female & Hijab"]
+            chunk_size = 5
+            for i in range(0, len(female_avatars), chunk_size):
+                chunk = female_avatars[i:i + chunk_size]
+                cols = st.columns(len(chunk))
+                for idx, av in enumerate(chunk):
+                    with cols[idx]:
+                        is_active = (av["id"] == active_avatar_file)
+                        border_col = "#0E7490" if is_active else "#BAE6FD"
+                        bg_col = "#E0F2FE" if is_active else "#FFFFFF"
+                        b64 = get_avatar_base64(av["id"])
+                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
+                        st.markdown(f"""
+                        <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
+                            <img src="data:image/png;base64,{b64}" style="width: 52px; height: 52px; border-radius: 8px; object-fit: cover;" />
+                            <div style="font-size: 0.74rem; font-weight: 600; color: #0C4A6E; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{av['title']}">
+                                {av['title']}
                             </div>
-                            """, unsafe_allow_html=True)
-                            if st.button("Select", key=f"sel_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
-                                ok, msg = save_user_avatar_choice(curr_u, av["id"])
-                                if ok:
-                                    if isinstance(current_user, dict):
-                                        current_user["avatar"] = av["id"]
-                                    if "user" in st.session_state and isinstance(st.session_state.user, dict):
-                                        st.session_state.user["avatar"] = av["id"]
-                                    st.toast(f"✅ Avatar updated to {av['title']}!")
-                                    st.session_state["show_avatar_picker"] = False
-                                    st.rerun()
+                            {badge_html}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("Select", key=f"sel_f_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
+                            ok, msg = save_user_avatar_choice(curr_u, av["id"])
+                            if ok:
+                                if isinstance(current_user, dict):
+                                    current_user["avatar"] = av["id"]
+                                if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                                    st.session_state.user["avatar"] = av["id"]
+                                st.toast(f"✅ Avatar updated to {av['title']}!")
+                                st.session_state["show_avatar_picker"] = False
+                                st.rerun()
+
+        with av_tab2:
+            male_avatars = [a for a in SAFE_AVAILABLE_AVATARS if a["category"] == "Male & Executive"]
+            chunk_size = 6
+            for i in range(0, len(male_avatars), chunk_size):
+                chunk = male_avatars[i:i + chunk_size]
+                cols = st.columns(len(chunk))
+                for idx, av in enumerate(chunk):
+                    with cols[idx]:
+                        is_active = (av["id"] == active_avatar_file)
+                        border_col = "#0E7490" if is_active else "#BAE6FD"
+                        bg_col = "#E0F2FE" if is_active else "#FFFFFF"
+                        b64 = get_avatar_base64(av["id"])
+                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
+                        st.markdown(f"""
+                        <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
+                            <img src="data:image/png;base64,{b64}" style="width: 52px; height: 52px; border-radius: 8px; object-fit: cover;" />
+                            <div style="font-size: 0.74rem; font-weight: 600; color: #0C4A6E; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{av['title']}">
+                                {av['title']}
+                            </div>
+                            {badge_html}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("Select", key=f"sel_m_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
+                            ok, msg = save_user_avatar_choice(curr_u, av["id"])
+                            if ok:
+                                if isinstance(current_user, dict):
+                                    current_user["avatar"] = av["id"]
+                                if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                                    st.session_state.user["avatar"] = av["id"]
+                                st.toast(f"✅ Avatar updated to {av['title']}!")
+                                st.session_state["show_avatar_picker"] = False
+                                st.rerun()
+
+        with av_tab3:
+            st.caption("Showing all 21 avatars together:")
+            chunk_size = 7
+            for i in range(0, len(SAFE_AVAILABLE_AVATARS), chunk_size):
+                chunk = SAFE_AVAILABLE_AVATARS[i:i + chunk_size]
+                cols = st.columns(len(chunk))
+                for idx, av in enumerate(chunk):
+                    with cols[idx]:
+                        is_active = (av["id"] == active_avatar_file)
+                        border_col = "#0E7490" if is_active else "#BAE6FD"
+                        bg_col = "#E0F2FE" if is_active else "#FFFFFF"
+                        b64 = get_avatar_base64(av["id"])
+                        st.markdown(f"""
+                        <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 6px 2px; margin-bottom: 6px;">
+                            <img src="data:image/png;base64,{b64}" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover;" />
+                            <div style="font-size: 0.70rem; font-weight: 600; color: #0C4A6E; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{av['title']}">
+                                {av['title']}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("Select", key=f"sel_all_av_{av['id']}", use_container_width=True, type="primary" if is_active else "secondary"):
+                            ok, msg = save_user_avatar_choice(curr_u, av["id"])
+                            if ok:
+                                if isinstance(current_user, dict):
+                                    current_user["avatar"] = av["id"]
+                                if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                                    st.session_state.user["avatar"] = av["id"]
+                                st.toast(f"✅ Avatar updated to {av['title']}!")
+                                st.session_state["show_avatar_picker"] = False
+                                st.rerun()
 
         col_cls1, col_cls2 = st.columns([4, 1])
         with col_cls2:
