@@ -297,22 +297,22 @@ st.set_page_config(
 st.markdown("""
 <style>
     .stApp {
-        background-color: #F8FAFC;
+        background-color: #FBF9F5 !important;
     }
     .main-title {
         font-size: 1.85rem;
         font-weight: 700;
-        color: #1E3A8A;
+        color: #3E2723 !important;
         margin-bottom: 0.15rem;
     }
     .sub-title {
         font-size: 0.92rem;
-        color: #4B5563;
+        color: #6B5E55 !important;
         margin-bottom: 0.8rem;
     }
     .badge-success {
-        background-color: #DEF7EC;
-        color: #03543F;
+        background-color: #E8F5E9;
+        color: #1B5E20;
         padding: 8px 16px;
         border-radius: 6px;
         font-weight: 600;
@@ -321,10 +321,10 @@ st.markdown("""
         font-size: 1rem;
     }
     .auto-dl-banner {
-        background-color: #EFF6FF;
-        border-left: 4px solid #2563EB;
+        background-color: #F5EFEB;
+        border-left: 4px solid #5D4037;
         padding: 12px 18px;
-        color: #1E40AF;
+        color: #3E2723;
         font-weight: 600;
         border-radius: 4px;
         margin: 12px 0;
@@ -353,8 +353,8 @@ st.markdown("""
 
     /* Segmented Pill Navigation Control */
     div[role="radiogroup"] {
-        background: #F1F5F9 !important;
-        border: 1px solid #E2E8F0 !important;
+        background: #EFEBE7 !important;
+        border: 1px solid #DDD6CE !important;
         border-radius: 8px !important;
         padding: 3px !important;
         display: inline-flex !important;
@@ -373,29 +373,29 @@ st.markdown("""
         border-radius: 6px !important;
         font-weight: 500 !important;
         font-size: 0.88rem !important;
-        color: #64748B !important;
+        color: #796B60 !important;
         cursor: pointer !important;
         transition: all 0.15s ease !important;
         margin: 0 !important;
         background: transparent !important;
     }
     div[role="radiogroup"] > label:has(input:focus-visible) {
-        outline: 2px solid #2563EB !important;
+        outline: 2px solid #5D4037 !important;
         outline-offset: 2px !important;
     }
     div[role="radiogroup"] > label:has(input:checked) {
         background: #FFFFFF !important;
-        color: #1E3A8A !important;
+        color: #3E2723 !important;
         font-weight: 600 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.1) !important;
     }
 
     /* Clean SaaS Card Container Styling */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
+        border: 1px solid #EAE6DF !important;
         border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.04) !important;
         padding: 16px 20px !important;
         margin-bottom: 12px !important;
     }
@@ -403,9 +403,9 @@ st.markdown("""
     /* Executive Deck Result Card & Structured KPI Strip */
     .deck-result-card {
         background: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
+        border: 1px solid #EAE6DF !important;
         border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.04) !important;
         padding: 16px 20px !important;
         margin-bottom: 12px !important;
     }
@@ -422,7 +422,7 @@ st.markdown("""
     .deck-name {
         font-size: 1.02rem !important;
         font-weight: 700 !important;
-        color: #1E3A8A !important;
+        color: #3E2723 !important;
         word-break: break-all !important;
     }
     .deck-badge-eff {
@@ -461,11 +461,11 @@ st.markdown("""
         line-height: 1.2 !important;
     }
     .kpi-neutral {
-        background: #F8FAFC !important;
-        border: 1px solid #E2E8F0 !important;
+        background: #FAF8F5 !important;
+        border: 1px solid #EAE6DF !important;
     }
-    .kpi-neutral .kpi-label { color: #64748B !important; }
-    .kpi-neutral .kpi-val { color: #1E293B !important; }
+    .kpi-neutral .kpi-label { color: #796B60 !important; }
+    .kpi-neutral .kpi-val { color: #2B2118 !important; }
 
     .kpi-success {
         background: #F0FDF4 !important;
@@ -489,11 +489,11 @@ st.markdown("""
     .kpi-warning .kpi-val { color: #B45309 !important; }
 
     .kpi-subtle {
-        background: #F8FAFC !important;
-        border: 1px solid #CBD5E1 !important;
+        background: #FAF8F5 !important;
+        border: 1px solid #EAE6DF !important;
     }
-    .kpi-subtle .kpi-label { color: #475569 !important; }
-    .kpi-subtle .kpi-val { color: #334155 !important; }
+    .kpi-subtle .kpi-label { color: #796B60 !important; }
+    .kpi-subtle .kpi-val { color: #2B2118 !important; }
 
     /* Accessible Logout Button Styling */
     button[key="top_logout_btn"] {
@@ -523,34 +523,40 @@ st.markdown("""
         animation: fadeInUp 0.3s ease-out;
     }
     button[kind="primary"] {
-        background-color: #2563EB !important;
+        background-color: #3E2723 !important;
         color: #FFFFFF !important;
         border: none !important;
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     }
     button[kind="primary"]:hover {
-        background-color: #1D4ED8 !important;
+        background-color: #271815 !important;
         color: #FFFFFF !important;
         transform: translateY(-1.5px) !important;
-        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
+        box-shadow: 0 4px 12px rgba(62, 39, 35, 0.25) !important;
     }
     button[kind="secondary"] {
+        border: 1px solid #D7CCC8 !important;
+        color: #3E2723 !important;
+        background: #FFFFFF !important;
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     }
     button[kind="secondary"]:hover {
+        background-color: #F7F3EF !important;
+        border-color: #8D6E63 !important;
+        color: #271815 !important;
         transform: translateY(-1.5px) !important;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 4px 10px rgba(62, 39, 35, 0.08) !important;
     }
     [data-testid="stFileUploaderDropzone"] {
         transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
-        background: #F8FAFC !important;
-        border: 2px dashed #CBD5E1 !important;
+        background: #FAF8F5 !important;
+        border: 2px dashed #D7CCC8 !important;
         border-radius: 8px !important;
     }
     [data-testid="stFileUploaderDropzone"]:hover {
         transform: translateY(-2px) !important;
-        border-color: #2563EB !important;
-        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+        border-color: #5D4037 !important;
+        box-shadow: 0 6px 14px rgba(62, 39, 35, 0.08) !important;
     }
 
     /* Responsive Adjustments for Mobile */
@@ -760,7 +766,7 @@ with top_head_col2:
     with head_sub1:
         st.markdown(f"""
         <div style="text-align: right; margin-top: 4px;">
-            <span style="background: #EEF2FF; color: #3730A3; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #C7D2FE; display: inline-block;">
+            <span style="background: #F5EFEB; color: #3E2723; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #D7CCC8; display: inline-block;">
                 👤 <b>{current_user.get('name')}</b> ({current_user.get('role', 'user').upper()})
             </span>
             <div style="font-size: 0.70rem; color: #94A3B8; font-family: monospace; text-align: right; margin-top: 2px;">build: 2026.10.17.v3</div>
@@ -1515,8 +1521,8 @@ if uploaded_files:
             
         preview_csv_name = core_engine.build_csv_output_filename(clean_v_name)
         c2.markdown(f"""
-        <div style="margin-top: 26px; padding: 8px 12px; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #1E293B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            📊 <b>Excel:</b> <span style="color: #2563EB;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #059669;">{preview_csv_name}</span>
+        <div style="margin-top: 26px; padding: 8px 12px; background: #FAF8F5; border: 1px solid #EAE6DF; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #2B2118; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            📊 <b>Excel:</b> <span style="color: #4A3525; font-weight: 600;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #2E7D32;">{preview_csv_name}</span>
         </div>
         """, unsafe_allow_html=True)
 
