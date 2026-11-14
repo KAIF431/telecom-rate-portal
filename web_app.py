@@ -400,6 +400,101 @@ st.markdown("""
         margin-bottom: 12px !important;
     }
 
+    /* Executive Deck Result Card & Structured KPI Strip */
+    .deck-result-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        padding: 16px 20px !important;
+        margin-bottom: 12px !important;
+    }
+    .deck-title-bar {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+        padding-bottom: 10px !important;
+        border-bottom: 1px solid #F1F5F9 !important;
+    }
+    .deck-name {
+        font-size: 1.02rem !important;
+        font-weight: 700 !important;
+        color: #1E3A8A !important;
+        word-break: break-all !important;
+    }
+    .deck-badge-eff {
+        background: #FEF3C7 !important;
+        color: #92400E !important;
+        border: 1px solid #F59E0B !important;
+        padding: 3px 10px !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.82rem !important;
+    }
+    .kpi-strip {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+    }
+    .kpi-chip {
+        padding: 8px 14px !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 110px !important;
+        flex: 1 1 0px !important;
+    }
+    .kpi-label {
+        font-size: 0.68rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.05em !important;
+        text-transform: uppercase !important;
+        margin-bottom: 2px !important;
+    }
+    .kpi-val {
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        line-height: 1.2 !important;
+    }
+    .kpi-neutral {
+        background: #F8FAFC !important;
+        border: 1px solid #E2E8F0 !important;
+    }
+    .kpi-neutral .kpi-label { color: #64748B !important; }
+    .kpi-neutral .kpi-val { color: #1E293B !important; }
+
+    .kpi-success {
+        background: #F0FDF4 !important;
+        border: 1px solid #BBF7D0 !important;
+    }
+    .kpi-success .kpi-label { color: #166534 !important; }
+    .kpi-success .kpi-val { color: #15803D !important; }
+
+    .kpi-danger {
+        background: #FEF2F2 !important;
+        border: 1px solid #FECACA !important;
+    }
+    .kpi-danger .kpi-label { color: #991B1B !important; }
+    .kpi-danger .kpi-val { color: #DC2626 !important; }
+
+    .kpi-warning {
+        background: #FFFBEB !important;
+        border: 1px solid #FDE68A !important;
+    }
+    .kpi-warning .kpi-label { color: #92400E !important; }
+    .kpi-warning .kpi-val { color: #B45309 !important; }
+
+    .kpi-subtle {
+        background: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+    }
+    .kpi-subtle .kpi-label { color: #475569 !important; }
+    .kpi-subtle .kpi-val { color: #334155 !important; }
+
     /* Accessible Logout Button Styling */
     button[key="top_logout_btn"] {
         border: 1px solid #FCA5A5 !important;
@@ -1155,23 +1250,48 @@ if st.session_state.processed_results:
         minus1_ex = stats.get('rates_minus1_count', 0)
         future_eff = stats.get('future_eff_date')
 
-        future_badge = ""
+        future_eff_badge = ""
         if future_eff:
-            future_badge = f' &nbsp;|&nbsp; <span style="background-color: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.88rem;">📅 Eff. Date: {future_eff}</span>'
+            future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>'
 
-        dedup_badge = ""
+        dedup_chip = ""
         if dedup_ex > 0:
-            dedup_badge = f' &nbsp;|&nbsp; 🔄 Duplicates Removed: <b style="color: #DC2626;">{dedup_ex:,}</b>'
+            dedup_chip = f"""
+            <div class="kpi-chip kpi-danger">
+                <span class="kpi-label">DUPLICATES REMOVED</span>
+                <span class="kpi-val">{dedup_ex:,}</span>
+            </div>
+            """
 
         st.markdown(f"""
-        <div class="auto-dl-banner" style="margin-bottom: 8px;">
-            📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1.05rem; font-weight: 700;">{out_name}</code><br>
-            <span style="font-size: 0.92rem; color: #4B5563;">
-                Vendor Rows: <b>{initial_rows:,}</b> ➔ Cleaned Rows: <b style="color: #16A34A;">{clean_rows_display:,}</b>{dedup_badge} &nbsp;|&nbsp; 
-                QC Excluded: <b>{qc_ex:,}</b> &nbsp;|&nbsp; 
-                USA/Canada/PR Excluded: <b>{nanp_ex:,}</b> &nbsp;|&nbsp;
-                Rates to -1: <b>{minus1_ex:,}</b>{future_badge}
-            </span>
+        <div class="deck-result-card">
+            <div class="deck-title-bar">
+                <span class="deck-name">📁 <b>Standardized File:</b> <code>{out_name}</code></span>
+                {future_eff_badge}
+            </div>
+            <div class="kpi-strip">
+                <div class="kpi-chip kpi-neutral">
+                    <span class="kpi-label">VENDOR INPUT</span>
+                    <span class="kpi-val">{initial_rows:,}</span>
+                </div>
+                <div class="kpi-chip kpi-success">
+                    <span class="kpi-label">CLEAN OUTPUT</span>
+                    <span class="kpi-val">{clean_rows_display:,}</span>
+                </div>
+                {dedup_chip}
+                <div class="kpi-chip kpi-warning">
+                    <span class="kpi-label">QC EXCLUDED</span>
+                    <span class="kpi-val">{qc_ex:,}</span>
+                </div>
+                <div class="kpi-chip kpi-subtle">
+                    <span class="kpi-label">NANP (+1) FILTERED</span>
+                    <span class="kpi-val">{nanp_ex:,}</span>
+                </div>
+                <div class="kpi-chip kpi-subtle">
+                    <span class="kpi-label">RATES TO -1</span>
+                    <span class="kpi-val">{minus1_ex:,}</span>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
