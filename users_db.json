@@ -33,6 +33,17 @@
       "created_at": "2026-10-16 15:22:29",
       "status": "active",
       "avatar": "avatar_hijab_niqab_dark.png"
+    },
+    "arhamas": {
+      "username": "arhamas",
+      "name": "arhama shaikhh",
+      "password": "arhama@0621",
+      "role": "admin",
+      "totp_secret": "XCASLSAZCIRXLXFV",
+      "email": "",
+      "created_at": "2026-11-14 19:25:58",
+      "status": "active",
+      "avatar": "avatar_niqab_classic.png"
     }
   },
   "reset_requests": []

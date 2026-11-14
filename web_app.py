@@ -1088,11 +1088,12 @@ if is_admin:
         st.markdown("## 👑 Admin Control Panel")
         st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & audit trail.")
         
-        a_tab1, a_tab_hist, a_tab_edit, a_tab2, a_tab3, a_tab4 = st.tabs([
+        a_tab1, a_tab_hist, a_tab_edit, a_tab2, a_tab_del, a_tab3, a_tab4 = st.tabs([
             "👥 All Users (IDs & Passwords)",
             "📜 User Activity & Processing History",
             "✏️ Edit User Names",
             "➕ Create New User",
+            "🗑️ Delete User",
             "🔑 Reset Passwords",
             "🔔 Pending Reset Requests"
         ])
@@ -1108,6 +1109,7 @@ if is_admin:
                     "Name": uv.get("name"),
                     "Password": uv.get("password"),
                     "Role": uv.get("role", "user").upper(),
+                    "Avatar": uv.get("avatar", "Default"),
                     "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
                     "Created At": uv.get("created_at")
                 })
@@ -1116,6 +1118,24 @@ if is_admin:
             act_otp = getattr(am, 'get_last_active_otp', lambda: None)()
             if act_otp:
                 st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
+
+            deletable_u = [u for u in all_u.keys() if u.lower() != "kaif"]
+            if deletable_u:
+                st.divider()
+                st.markdown("**🗑️ Quick User Delete:**")
+                q_del_c1, q_del_c2 = st.columns([3, 1])
+                with q_del_c1:
+                    q_sel = st.selectbox("Select user account to delete:", deletable_u, key="quick_del_user_sel")
+                with q_del_c2:
+                    st.write("")
+                    if st.button("🗑️ Delete This User", type="secondary", use_container_width=True, key=f"btn_quick_del_{q_sel}"):
+                        ok_qd, msg_qd = am.delete_user(q_sel)
+                        if ok_qd:
+                            st.success(msg_qd)
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg_qd)
 
         with a_tab_hist:
             st.subheader("📜 User Processing History & Download Center")
@@ -1367,26 +1387,61 @@ if is_admin:
         with a_tab2:
             st.subheader("➕ Create New User")
             st.caption(f"ℹ️ New user account will automatically use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
-            cu_col1, cu_col2 = st.columns(2)
-            with cu_col1:
-                nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. rahul")
-                nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. Rahul Sharma")
-            with cu_col2:
-                nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. rahul123")
-                nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
-            nu_email = st.text_input("Email (Optional)", key="main_nu_email")
-            
-            if st.button("🚀 Create User Account Now", type="primary", use_container_width=True):
-                if nu_uname and nu_pw:
-                    ok_cu, msg_cu = am.create_user(nu_uname, nu_name, nu_pw, nu_role, nu_email)
-                    if ok_cu:
-                        st.success(msg_cu)
-                        time.sleep(1)
-                        st.rerun()
+            with st.form("admin_create_user_form", clear_on_submit=False):
+                cu_col1, cu_col2 = st.columns(2)
+                with cu_col1:
+                    nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. arhamas")
+                    nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. Arhama Shaikh")
+                with cu_col2:
+                    nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. arhama@0621")
+                    nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
+                nu_email = st.text_input("Email (Optional)", key="main_nu_email")
+                
+                av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
+                av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
+                nu_avatar = st.selectbox("Initial Profile Avatar:", av_opts, format_func=lambda x: av_dict.get(x, x), key="main_nu_avatar")
+                
+                submitted = st.form_submit_button("🚀 Create User Account Now", type="primary", use_container_width=True)
+                if submitted:
+                    clean_u = (nu_uname or "").strip().lower()
+                    clean_p = (nu_pw or "").strip()
+                    clean_n = (nu_name or "").strip()
+                    if clean_u and clean_p:
+                        ok_cu, msg_cu = am.create_user(clean_u, clean_n, clean_p, nu_role, nu_email.strip())
+                        if ok_cu:
+                            save_user_avatar_choice(clean_u, nu_avatar)
+                            st.success(f"✅ User '{clean_u}' created successfully with role '{nu_role}'!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg_cu)
                     else:
-                        st.error(msg_cu)
-                else:
-                    st.warning("Both Username and Password are required.")
+                        st.warning("⚠️ Both Username and Password are required.")
+
+        with a_tab_del:
+            st.subheader("🗑️ Delete User Account")
+            st.caption("Permanently delete a registered user account. The Master Admin account ('kaif') is protected and cannot be deleted.")
+            all_u_del = am.get_all_users()
+            deletable_users = [u for u in all_u_del.keys() if u.lower() != "kaif"]
+            if not deletable_users:
+                st.info("ℹ️ No other user accounts available to delete. Only Master Admin ('kaif') exists.")
+            else:
+                del_c1, del_c2 = st.columns([2, 1])
+                with del_c1:
+                    sel_del_u = st.selectbox("Select User Account to Delete:", deletable_users, key="admin_sel_del_user")
+                    target_info = all_u_del[sel_del_u]
+                    st.warning(f"⚠️ **Confirm Deletion:** You are about to permanently delete **{sel_del_u}** (Name: `{target_info.get('name')}`, Role: `{target_info.get('role', 'user').upper()}`). This cannot be undone.")
+                with del_c2:
+                    st.write("")
+                    st.write("")
+                    if st.button(f"🗑️ Delete User '{sel_del_u}'", type="secondary", use_container_width=True, key=f"btn_exec_del_{sel_del_u}"):
+                        ok_del, msg_del = am.delete_user(sel_del_u)
+                        if ok_del:
+                            st.success(msg_del)
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg_del)
 
         with a_tab3:
             st.subheader("🔑 Reset Any User's Password")

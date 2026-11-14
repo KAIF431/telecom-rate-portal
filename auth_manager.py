@@ -536,11 +536,22 @@ def delete_user(username):
     db = load_db()
     u = username.strip().lower()
     if u == "kaif":
-        return False, "Master Admin account ('kaif') cannot be deleted."
+        return False, "Master Admin account ('kaif') is protected and cannot be deleted."
     if u in db.get("users", {}):
         del db["users"][u]
         save_db(db)
-        return True, f"User '{u}' has been deleted."
+        
+        # Invalidate active session tokens for deleted user
+        try:
+            if os.path.exists(TOKEN_STORE_FILE):
+                with open(TOKEN_STORE_FILE, "r", encoding="utf-8") as f:
+                    store = json.load(f)
+                store = {k: v for k, v in store.items() if (v.get("username") or "").strip().lower() != u}
+                with open(TOKEN_STORE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(store, f, indent=2)
+        except Exception:
+            pass
+        return True, f"User account '{u}' has been permanently deleted."
     return False, "User not found."
 
 def get_all_users():
