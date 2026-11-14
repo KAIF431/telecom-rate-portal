@@ -1058,7 +1058,7 @@ if is_admin:
                         table_rows.append({
                             "Date": ts[:10] if len(ts) >= 10 else "",
                             "Time (Kitne Baje Se Kitne Baje Tak)": time_disp,
-                            "User": u_disp,
+                            "User Name": u_disp,
                             "Vendor / Trunk Name": entry.get("vendor_name"),
                             "Standardized File": entry.get("output_filename"),
                             "Clean Rows": f"{entry.get('clean_rows', 0):,}",
