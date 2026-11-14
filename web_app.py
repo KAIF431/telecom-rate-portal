@@ -296,16 +296,19 @@ st.set_page_config(
 # Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
 st.markdown("""
 <style>
+    .stApp {
+        background-color: #F8FAFC;
+    }
     .main-title {
-        font-size: 2.1rem;
+        font-size: 1.85rem;
         font-weight: 700;
         color: #1E3A8A;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.15rem;
     }
     .sub-title {
-        font-size: 1rem;
+        font-size: 0.92rem;
         color: #4B5563;
-        margin-bottom: 1.2rem;
+        margin-bottom: 0.8rem;
     }
     .badge-success {
         background-color: #DEF7EC;
@@ -348,6 +351,68 @@ st.markdown("""
     [data-testid="collapsedControl"] { display: none !important; }
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
+    /* Segmented Pill Navigation Control */
+    div[role="radiogroup"] {
+        background: #F1F5F9 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        padding: 3px !important;
+        display: inline-flex !important;
+        gap: 3px !important;
+        margin-bottom: 8px !important;
+    }
+    div[role="radiogroup"] input[type="radio"] {
+        position: absolute !important;
+        opacity: 0 !important;
+        width: 1px !important;
+        height: 1px !important;
+        pointer-events: none !important;
+    }
+    div[role="radiogroup"] > label {
+        padding: 6px 16px !important;
+        border-radius: 6px !important;
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+        color: #64748B !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+        margin: 0 !important;
+        background: transparent !important;
+    }
+    div[role="radiogroup"] > label:has(input:focus-visible) {
+        outline: 2px solid #2563EB !important;
+        outline-offset: 2px !important;
+    }
+    div[role="radiogroup"] > label:has(input:checked) {
+        background: #FFFFFF !important;
+        color: #1E3A8A !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* Clean SaaS Card Container Styling */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        padding: 16px 20px !important;
+        margin-bottom: 12px !important;
+    }
+
+    /* Accessible Logout Button Styling */
+    button[key="top_logout_btn"] {
+        border: 1px solid #FCA5A5 !important;
+        color: #B91C1C !important;
+        background: #FEF2F2 !important;
+        font-weight: 600 !important;
+    }
+    button[key="top_logout_btn"]:hover {
+        background: #FEE2E2 !important;
+        border-color: #EF4444 !important;
+        color: #991B1B !important;
+    }
+
     /* Subtle professional micro-animations (pure animations, preserving exact site colors) */
     @keyframes fadeInUp {
         from {
@@ -371,10 +436,25 @@ st.markdown("""
     }
     [data-testid="stFileUploaderDropzone"] {
         transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+        background: #F8FAFC !important;
+        border: 2px dashed #CBD5E1 !important;
+        border-radius: 8px !important;
     }
     [data-testid="stFileUploaderDropzone"]:hover {
         transform: translateY(-2px) !important;
+        border-color: #2563EB !important;
         box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+    }
+
+    /* Responsive Adjustments for Mobile */
+    @media (max-width: 768px) {
+        .main-title {
+            font-size: 1.45rem !important;
+        }
+        div[role="radiogroup"] {
+            width: 100% !important;
+            justify-content: center !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -562,39 +642,39 @@ if active_tok and not st.session_state.get("cookie_synced"):
     st.session_state["cookie_synced"] = True
 
 # ----------------- MAIN PORTAL -----------------
-top_head_col1, top_head_col2 = st.columns([3, 1.2])
+top_head_col1, top_head_col2 = st.columns([2.8, 1.4])
 
 with top_head_col1:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting. <span style="font-size:0.75rem; color:#9CA3AF;">(Build: 2026.10.17.v3)</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 with top_head_col2:
-    st.markdown(f"""
-    <div style="text-align: right; margin-top: 4px; margin-bottom: 6px;">
-        <span style="background: #EEF2FF; color: #3730A3; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; border: 1px solid #C7D2FE;">
-            👤 <b>{current_user.get('name')}</b> ({current_user.get('role', 'user').upper()})
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("🚪 Log Out", key="top_logout_btn", use_container_width=True, type="secondary"):
-        clear_current_session()
-        components.html("""
-        <script>
-        setTimeout(function() {
-            try {
-                parent.window.location.reload();
-            } catch(e) {
-                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-            }
-        }, 150);
-        </script>
-        <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
-        """, height=50)
-        st.stop()
-
-# Template Download Buttons Row
-t_col1, t_col2, t_col3 = st.columns([1.5, 1.5, 3])
+    head_sub1, head_sub2 = st.columns([1.2, 1])
+    with head_sub1:
+        st.markdown(f"""
+        <div style="text-align: right; margin-top: 4px;">
+            <span style="background: #EEF2FF; color: #3730A3; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #C7D2FE; display: inline-block;">
+                👤 <b>{current_user.get('name')}</b> ({current_user.get('role', 'user').upper()})
+            </span>
+            <div style="font-size: 0.70rem; color: #94A3B8; font-family: monospace; text-align: right; margin-top: 2px;">build: 2026.10.17.v3</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with head_sub2:
+        if st.button("🚪 Log Out", key="top_logout_btn", use_container_width=True, type="secondary"):
+            clear_current_session()
+            components.html("""
+            <script>
+            setTimeout(function() {
+                try {
+                    parent.window.location.reload();
+                } catch(e) {
+                    try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+                }
+            }, 150);
+            </script>
+            <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
+            """, height=50)
+            st.stop()
 
 def get_historical_file_bytes(filename):
     if not filename:
@@ -645,14 +725,13 @@ def get_historical_csv_bytes(filename, excel_bytes=None):
     return None, csv_fname
 
 if is_admin:
-    st.markdown("---")
     admin_nav_mode = st.radio(
         "Navigation Mode:",
         ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
         horizontal=True,
-        key="main_admin_nav_toggle"
+        key="main_admin_nav_toggle",
+        label_visibility="collapsed"
     )
-    st.markdown("---")
 
     if admin_nav_mode == "👑 Admin Management Panel":
         st.markdown("## 👑 Admin Control Panel")
@@ -989,24 +1068,7 @@ def get_cached_template_file(filename):
     return b""
 
 sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
-if sample_bytes:
-    t_col1.download_button(
-        label="📥 Download Sample Format Sheet",
-        data=sample_bytes,
-        file_name="Vendor Sample sheet.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
-
 qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
-if qc_bytes:
-    t_col2.download_button(
-        label="📥 Download QC Exception Codes",
-        data=qc_bytes,
-        file_name="QC exception Vlookup.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
 
 st.write("")
 
@@ -1194,14 +1256,45 @@ if st.session_state.processed_results:
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
-# File Uploader
-uploaded_files = st.file_uploader(
-    "Upload Vendor Rate Sheet(s) (Max 10 files or ZIP Archive)",
-    type=["xlsx", "xls", "csv", "zip"],
-    accept_multiple_files=True,
-    key=f"vendor_file_uploader_{st.session_state.uploader_key}",
-    help="Supports .xlsx, .xls, .csv, or .zip archives with multiple sheets."
-)
+# File Uploader in dedicated card with resources
+with st.container(border=True):
+    col_card_hdr, col_dl_samp, col_dl_qc = st.columns([3, 1.2, 1.2])
+    with col_card_hdr:
+        st.markdown("""
+        <div style="margin-bottom: 4px;">
+            <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Vendor Rate Sheet(s)</span>
+            <div style="font-size: 0.82rem; color: #64748B;">Supports up to 10 files (.xlsx, .xls, .csv) or ZIP archive (max 500MB)</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_dl_samp:
+        if sample_bytes:
+            st.download_button(
+                label="📄 Sample Format",
+                data=sample_bytes,
+                file_name="Vendor Sample sheet.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_dl_sample_fmt",
+                use_container_width=True
+            )
+    with col_dl_qc:
+        if qc_bytes:
+            st.download_button(
+                label="📑 QC Codes",
+                data=qc_bytes,
+                file_name="QC exception Vlookup.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_dl_qc_codes",
+                use_container_width=True
+            )
+
+    uploaded_files = st.file_uploader(
+        "Upload Vendor Rate Sheet(s) (Max 10 files or ZIP Archive)",
+        type=["xlsx", "xls", "csv", "zip"],
+        accept_multiple_files=True,
+        key=f"vendor_file_uploader_{st.session_state.uploader_key}",
+        label_visibility="collapsed",
+        help="Supports .xlsx, .xls, .csv, or .zip archives with multiple sheets."
+    )
 
 if uploaded_files:
     raw_files = []
