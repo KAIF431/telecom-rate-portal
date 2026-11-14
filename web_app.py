@@ -293,26 +293,26 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom Styling (Clean, professional, completely hidden Streamlit default header/toolbar/manage-app)
+# Custom Styling (Theme 4: Deep Ocean Teal & Frost - Cloud Terminal / Tech Precision)
 st.markdown("""
 <style>
     .stApp {
-        background-color: #FBF9F5 !important;
+        background-color: #F0F9FF !important;
     }
     .main-title {
         font-size: 1.85rem;
         font-weight: 700;
-        color: #3E2723 !important;
+        color: #0C4A6E !important;
         margin-bottom: 0.15rem;
     }
     .sub-title {
         font-size: 0.92rem;
-        color: #6B5E55 !important;
+        color: #475569 !important;
         margin-bottom: 0.8rem;
     }
     .badge-success {
-        background-color: #E8F5E9;
-        color: #1B5E20;
+        background-color: #E0F2FE;
+        color: #0369A1;
         padding: 8px 16px;
         border-radius: 6px;
         font-weight: 600;
@@ -321,10 +321,10 @@ st.markdown("""
         font-size: 1rem;
     }
     .auto-dl-banner {
-        background-color: #F5EFEB;
-        border-left: 4px solid #5D4037;
+        background-color: #E0F2FE;
+        border-left: 4px solid #0E7490;
         padding: 12px 18px;
-        color: #3E2723;
+        color: #0C4A6E;
         font-weight: 600;
         border-radius: 4px;
         margin: 12px 0;
@@ -353,8 +353,8 @@ st.markdown("""
 
     /* Segmented Pill Navigation Control */
     div[role="radiogroup"] {
-        background: #EFEBE7 !important;
-        border: 1px solid #DDD6CE !important;
+        background: #E0F2FE !important;
+        border: 1px solid #BAE6FD !important;
         border-radius: 8px !important;
         padding: 3px !important;
         display: inline-flex !important;
@@ -373,29 +373,29 @@ st.markdown("""
         border-radius: 6px !important;
         font-weight: 500 !important;
         font-size: 0.88rem !important;
-        color: #796B60 !important;
+        color: #475569 !important;
         cursor: pointer !important;
         transition: all 0.15s ease !important;
         margin: 0 !important;
         background: transparent !important;
     }
     div[role="radiogroup"] > label:has(input:focus-visible) {
-        outline: 2px solid #5D4037 !important;
+        outline: 2px solid #0E7490 !important;
         outline-offset: 2px !important;
     }
     div[role="radiogroup"] > label:has(input:checked) {
         background: #FFFFFF !important;
-        color: #3E2723 !important;
+        color: #0C4A6E !important;
         font-weight: 600 !important;
-        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.1) !important;
+        box-shadow: 0 1px 3px rgba(14, 116, 144, 0.15) !important;
     }
 
     /* Clean SaaS Card Container Styling */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: #FFFFFF !important;
-        border: 1px solid #EAE6DF !important;
+        border: 1px solid #BAE6FD !important;
         border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.04) !important;
+        box-shadow: 0 1px 4px rgba(12, 74, 110, 0.04) !important;
         padding: 16px 20px !important;
         margin-bottom: 12px !important;
     }
@@ -403,9 +403,9 @@ st.markdown("""
     /* Executive Deck Result Card & Structured KPI Strip */
     .deck-result-card {
         background: #FFFFFF !important;
-        border: 1px solid #EAE6DF !important;
+        border: 1px solid #BAE6FD !important;
         border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(62, 39, 35, 0.04) !important;
+        box-shadow: 0 1px 4px rgba(12, 74, 110, 0.04) !important;
         padding: 16px 20px !important;
         margin-bottom: 12px !important;
     }
@@ -417,12 +417,12 @@ st.markdown("""
         gap: 8px !important;
         margin-bottom: 12px !important;
         padding-bottom: 10px !important;
-        border-bottom: 1px solid #F1F5F9 !important;
+        border-bottom: 1px solid #E0F2FE !important;
     }
     .deck-name {
         font-size: 1.02rem !important;
         font-weight: 700 !important;
-        color: #3E2723 !important;
+        color: #0C4A6E !important;
         word-break: break-all !important;
     }
     .deck-badge-eff {
@@ -461,11 +461,11 @@ st.markdown("""
         line-height: 1.2 !important;
     }
     .kpi-neutral {
-        background: #FAF8F5 !important;
-        border: 1px solid #EAE6DF !important;
+        background: #F0F9FF !important;
+        border: 1px solid #BAE6FD !important;
     }
-    .kpi-neutral .kpi-label { color: #796B60 !important; }
-    .kpi-neutral .kpi-val { color: #2B2118 !important; }
+    .kpi-neutral .kpi-label { color: #475569 !important; }
+    .kpi-neutral .kpi-val { color: #0C4A6E !important; }
 
     .kpi-success {
         background: #F0FDF4 !important;
@@ -489,11 +489,11 @@ st.markdown("""
     .kpi-warning .kpi-val { color: #B45309 !important; }
 
     .kpi-subtle {
-        background: #FAF8F5 !important;
-        border: 1px solid #EAE6DF !important;
+        background: #F0F9FF !important;
+        border: 1px solid #BAE6FD !important;
     }
-    .kpi-subtle .kpi-label { color: #796B60 !important; }
-    .kpi-subtle .kpi-val { color: #2B2118 !important; }
+    .kpi-subtle .kpi-label { color: #475569 !important; }
+    .kpi-subtle .kpi-val { color: #0C4A6E !important; }
 
     /* Accessible Logout Button Styling */
     button[key="top_logout_btn"] {
@@ -523,40 +523,40 @@ st.markdown("""
         animation: fadeInUp 0.3s ease-out;
     }
     button[kind="primary"] {
-        background-color: #3E2723 !important;
+        background-color: #0E7490 !important;
         color: #FFFFFF !important;
-        border: none !important;
+        border: 1px solid #0E7490 !important;
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     }
     button[kind="primary"]:hover {
-        background-color: #271815 !important;
+        background-color: #155E75 !important;
         color: #FFFFFF !important;
         transform: translateY(-1.5px) !important;
-        box-shadow: 0 4px 12px rgba(62, 39, 35, 0.25) !important;
+        box-shadow: 0 4px 12px rgba(14, 116, 144, 0.25) !important;
     }
     button[kind="secondary"] {
-        border: 1px solid #D7CCC8 !important;
-        color: #3E2723 !important;
+        border: 1px solid #7DD3FC !important;
+        color: #0C4A6E !important;
         background: #FFFFFF !important;
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     }
     button[kind="secondary"]:hover {
-        background-color: #F7F3EF !important;
-        border-color: #8D6E63 !important;
-        color: #271815 !important;
+        background-color: #F0F9FF !important;
+        border-color: #0E7490 !important;
+        color: #083344 !important;
         transform: translateY(-1.5px) !important;
-        box-shadow: 0 4px 10px rgba(62, 39, 35, 0.08) !important;
+        box-shadow: 0 4px 10px rgba(14, 116, 144, 0.08) !important;
     }
     [data-testid="stFileUploaderDropzone"] {
         transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
-        background: #FAF8F5 !important;
-        border: 2px dashed #D7CCC8 !important;
+        background: #F0F9FF !important;
+        border: 2px dashed #BAE6FD !important;
         border-radius: 8px !important;
     }
     [data-testid="stFileUploaderDropzone"]:hover {
         transform: translateY(-2px) !important;
-        border-color: #5D4037 !important;
-        box-shadow: 0 6px 14px rgba(62, 39, 35, 0.08) !important;
+        border-color: #0E7490 !important;
+        box-shadow: 0 6px 14px rgba(14, 116, 144, 0.1) !important;
     }
 
     /* Responsive Adjustments for Mobile */
@@ -614,11 +614,11 @@ if st.session_state.user is None:
     login_c1, login_c2, login_c3 = st.columns([1, 1.8, 1])
     with login_c2:
         st.markdown("""
-        <div style="background: white; padding: 26px 30px; border-radius: 12px; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.06); margin-top: 30px; margin-bottom: 20px;">
+        <div style="background: white; padding: 26px 30px; border-radius: 12px; border: 1px solid #BAE6FD; box-shadow: 0 4px 6px -1px rgba(12, 74, 110, 0.06); margin-top: 30px; margin-bottom: 20px;">
             <div style="text-align: center; margin-bottom: 18px;">
                 <div style="font-size: 2.3rem;">🔐</div>
-                <div style="font-size: 1.55rem; font-weight: 700; color: #1E3A8A; margin-top: 4px;">Rate Standardizer Portal</div>
-                <div style="font-size: 0.88rem; color: #64748B;">Authorized access with Password + Authy 2FA.</div>
+                <div style="font-size: 1.55rem; font-weight: 700; color: #0C4A6E; margin-top: 4px;">Rate Standardizer Portal</div>
+                <div style="font-size: 0.88rem; color: #475569;">Authorized access with Password + Authy 2FA.</div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -766,10 +766,10 @@ with top_head_col2:
     with head_sub1:
         st.markdown(f"""
         <div style="text-align: right; margin-top: 4px;">
-            <span style="background: #F5EFEB; color: #3E2723; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #D7CCC8; display: inline-block;">
+            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.82rem; border: 1px solid #BAE6FD; display: inline-block;">
                 👤 <b>{current_user.get('name')}</b> ({current_user.get('role', 'user').upper()})
             </span>
-            <div style="font-size: 0.70rem; color: #94A3B8; font-family: monospace; text-align: right; margin-top: 2px;">build: 2026.10.17.v3</div>
+            <div style="font-size: 0.70rem; color: #64748B; font-family: monospace; text-align: right; margin-top: 2px;">build: 2026.10.17.v3</div>
         </div>
         """, unsafe_allow_html=True)
     with head_sub2:
@@ -785,7 +785,7 @@ with top_head_col2:
                 }
             }, 150);
             </script>
-            <div style="font-family: sans-serif; color: #1E3A8A; padding: 10px; text-align: center;">Logging out...</div>
+            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
             """, height=50)
             st.stop()
 
@@ -1274,7 +1274,7 @@ if st.session_state.processed_results:
         card_html = (
             f'<div class="deck-result-card">'
             f'<div class="deck-title-bar">'
-            f'<span class="deck-name">📁 <b>Standardized File:</b> <code style="color: #1E3A8A; font-size: 1.05rem; font-weight: 700;">{out_name}</code></span>'
+            f'<span class="deck-name">📁 <b>Standardized File:</b> <code style="color: #0E7490; font-size: 1.05rem; font-weight: 700;">{out_name}</code></span>'
             f'{future_eff_badge}'
             f'</div>'
             f'<div class="kpi-strip">'
@@ -1521,8 +1521,8 @@ if uploaded_files:
             
         preview_csv_name = core_engine.build_csv_output_filename(clean_v_name)
         c2.markdown(f"""
-        <div style="margin-top: 26px; padding: 8px 12px; background: #FAF8F5; border: 1px solid #EAE6DF; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #2B2118; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            📊 <b>Excel:</b> <span style="color: #4A3525; font-weight: 600;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #2E7D32;">{preview_csv_name}</span>
+        <div style="margin-top: 26px; padding: 8px 12px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: #0C4A6E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            📊 <b>Excel:</b> <span style="color: #0E7490; font-weight: 600;">{preview_filename}</span> &nbsp;|&nbsp; 📄 <b>CSV:</b> <span style="color: #059669;">{preview_csv_name}</span>
         </div>
         """, unsafe_allow_html=True)
 
