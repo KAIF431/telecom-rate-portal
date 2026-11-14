@@ -903,10 +903,12 @@ if is_admin:
                 min_available_date = min(valid_dates) if valid_dates else today
                 max_available_date = max(valid_dates) if valid_dates else today
 
-                total_sheets = len(history)
-                arhama_total = sum(1 for h in history if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-                kaif_total = sum(1 for h in history if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-                aliba_total = sum(1 for h in history if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                cutoff_7d = today - datetime.timedelta(days=7)
+                sheets_7d = [h for h in history if extract_entry_date(h.get("timestamp")) and extract_entry_date(h.get("timestamp")) >= cutoff_7d]
+                total_sheets = len(sheets_7d)
+                arhama_total = sum(1 for h in sheets_7d if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                kaif_total = sum(1 for h in sheets_7d if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+                aliba_total = sum(1 for h in sheets_7d if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
 
                 m1, m2, m3, m4, m5 = st.columns([1.5, 1.2, 1.2, 1.2, 1])
                 m1.metric("📁 Rolling 7-Day Sheets", f"{total_sheets:,}")
@@ -924,11 +926,11 @@ if is_admin:
                 st.info("🕒 **Strict 7-Day Auto-Retention Active:** All rate sheets and audit records are saved for exactly 7 days (168 hours) from upload, after which they are automatically deleted.")
                 st.divider()
 
-                # Date Filter Mode Selector
+                # Date Filter Mode Selector (Simplified: Last 7 Days (Default), All Time, Date Range)
                 st.markdown("**📅 Filter History by Date:**")
                 date_filter_mode = st.radio(
                     "Choose Date View:",
-                    ["🌐 All Time", "⚡ Today", "⚡ Yesterday", "⚡ Last 7 Days", "🗓️ Single Date", "📆 Date Range"],
+                    ["⚡ Last 7 Days (Default)", "🌐 All Time", "📆 Date Range"],
                     horizontal=True,
                     key="hist_date_filter_mode"
                 )
@@ -936,34 +938,22 @@ if is_admin:
                 sel_start_date = None
                 sel_end_date = None
 
-                if date_filter_mode == "🗓️ Single Date":
-                    col_sd1, col_sd2 = st.columns([1.5, 2.5])
-                    with col_sd1:
-                        target_day = st.date_input("Select Date:", value=max_available_date, key="hist_single_day_input")
-                    sel_start_date = target_day
-                    sel_end_date = target_day
+                if date_filter_mode == "⚡ Last 7 Days (Default)":
+                    sel_start_date = today - datetime.timedelta(days=7)
+                    sel_end_date = today
 
                 elif date_filter_mode == "📆 Date Range":
                     col_dr1, col_dr2 = st.columns(2)
                     with col_dr1:
-                        from_d = st.date_input("From Date:", value=min_available_date, key="hist_from_date_input")
+                        from_d = st.date_input("From Date:", value=(min_available_date if min_available_date else (today - datetime.timedelta(days=7))), key="hist_from_date_input")
                     with col_dr2:
                         to_d = st.date_input("To Date:", value=today, key="hist_to_date_input")
                     sel_start_date = min(from_d, to_d)
                     sel_end_date = max(from_d, to_d)
 
-                elif date_filter_mode == "⚡ Today":
-                    sel_start_date = today
-                    sel_end_date = today
-
-                elif date_filter_mode == "⚡ Yesterday":
-                    yesterday = today - datetime.timedelta(days=1)
-                    sel_start_date = yesterday
-                    sel_end_date = yesterday
-
-                elif date_filter_mode == "⚡ Last 7 Days":
-                    sel_start_date = today - datetime.timedelta(days=7)
-                    sel_end_date = today
+                elif date_filter_mode == "🌐 All Time":
+                    sel_start_date = None
+                    sel_end_date = None
 
                 # Secondary Filters: User and Keyword Search
                 fc1, fc2 = st.columns([1.5, 2.5])
@@ -1045,16 +1035,35 @@ if is_admin:
 
                     table_rows = []
                     for entry in filtered:
-                        u_disp = entry.get("user_name") or entry.get("username")
+                        u_disp = entry.get("user_name") or entry.get("username") or "Unknown"
+                        ts = str(entry.get("timestamp", ""))
+                        elapsed = entry.get("elapsed_sec", 0)
+
+                        # Time processing window (Kitne baje se kitne baje tak)
+                        time_disp = ""
+                        if entry.get("time_range"):
+                            time_disp = entry.get("time_range")
+                        elif entry.get("start_time") and entry.get("end_time"):
+                            time_disp = f"{entry.get('start_time')} - {entry.get('end_time')} ({elapsed}s)"
+                        elif len(ts) >= 19:
+                            try:
+                                end_dt = datetime.datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S")
+                                start_dt = end_dt - datetime.timedelta(seconds=float(elapsed))
+                                time_disp = f"{start_dt.strftime('%H:%M:%S')} - {end_dt.strftime('%H:%M:%S')} ({elapsed}s)"
+                            except Exception:
+                                time_disp = ts[11:19]
+                        else:
+                            time_disp = ts
+
                         table_rows.append({
-                            "Timestamp (IST)": entry.get("timestamp"),
-                            "Date": str(entry.get("timestamp"))[:10],
+                            "Date": ts[:10] if len(ts) >= 10 else "",
+                            "Time (Kitne Baje Se Kitne Baje Tak)": time_disp,
                             "User": u_disp,
                             "Vendor / Trunk Name": entry.get("vendor_name"),
                             "Standardized File": entry.get("output_filename"),
                             "Clean Rows": f"{entry.get('clean_rows', 0):,}",
                             "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
-                            "Speed": f"{entry.get('elapsed_sec', 0)}s"
+                            "Duration": f"{elapsed}s"
                         })
                     
                     df_audit = pd.DataFrame(table_rows)
@@ -1695,6 +1704,11 @@ if uploaded_files:
             st.session_state.batch_zip_csv_path = None
 
         # Log audit trail for Admin view
+        now_log_dt = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        end_time_log = now_log_dt.strftime("%H:%M:%S")
+        start_time_log = (now_log_dt - datetime.timedelta(seconds=float(elapsed_sec))).strftime("%H:%M:%S")
+        time_range_log = f"{start_time_log} - {end_time_log} ({round(float(elapsed_sec), 1)}s)"
+
         for p_item in processed_list:
             am.log_processing_activity(
                 username=current_user.get("username", "unknown"),
@@ -1703,7 +1717,10 @@ if uploaded_files:
                 vendor_name=p_item.get("vendor_name", ""),
                 clean_rows=p_item["stats"].get("final_clean_rows", p_item.get("rows_count", 0)),
                 qc_excluded=p_item["stats"].get("qc_excluded", 0),
-                elapsed_sec=elapsed_sec
+                elapsed_sec=elapsed_sec,
+                start_time=start_time_log,
+                end_time=end_time_log,
+                time_range=time_range_log
             )
 
         # Store in session state for this user's browser & disk cache

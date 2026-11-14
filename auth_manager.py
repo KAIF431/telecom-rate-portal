@@ -733,8 +733,8 @@ def prune_history_older_than_days(days=7):
         return []
 
 # --- User Activity & Processing Audit Trail ---
-def log_processing_activity(username, user_name, output_filename, vendor_name, clean_rows, qc_excluded, elapsed_sec):
-    """Logs each rate sheet standardization event for Admin audit and auto-prunes records > 7 days."""
+def log_processing_activity(username, user_name, output_filename, vendor_name, clean_rows, qc_excluded, elapsed_sec, start_time=None, end_time=None, time_range=None):
+    """Logs each rate sheet standardization event for Admin audit with start and end times."""
     try:
         history = []
         if os.path.exists(HISTORY_FILE):
@@ -745,28 +745,39 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
                 history = []
         
         now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        end_str = end_time or now_ist.strftime("%H:%M:%S")
+        start_str = start_time or (now_ist - datetime.timedelta(seconds=float(elapsed_sec))).strftime("%H:%M:%S")
+        range_str = time_range or f"{start_str} - {end_str} ({round(float(elapsed_sec), 1)}s)"
+
         entry = {
             "timestamp": now_ist.strftime("%Y-%m-%d %H:%M:%S"),
+            "start_time": start_str,
+            "end_time": end_str,
+            "time_range": range_str,
             "username": username,
             "user_name": user_name,
             "vendor_name": vendor_name,
             "output_filename": output_filename,
             "clean_rows": clean_rows,
             "qc_excluded": qc_excluded,
-            "elapsed_sec": elapsed_sec
+            "elapsed_sec": round(float(elapsed_sec), 2)
         }
         history.insert(0, entry)
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
-
-        # Strictly enforce 7-day retention
-        prune_history_older_than_days(days=7)
     except Exception:
         pass
 
-def get_processing_history(days=7):
-    """Returns all logged processing events within the rolling 7-day retention window, newest first."""
-    return prune_history_older_than_days(days=days)
+def get_processing_history(days=None):
+    """Returns all logged processing events, newest first. Safe non-destructive read."""
+    try:
+        if not os.path.exists(HISTORY_FILE):
+            return []
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        return history if isinstance(history, list) else []
+    except Exception:
+        return []
 
 def clear_processing_history():
     """Allows Admin to reset or clear the audit log."""
