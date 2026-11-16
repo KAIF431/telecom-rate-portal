@@ -848,76 +848,82 @@ def get_avatar_base64(filename):
             return ""
     return ""
 
-# ----------------- MAIN PORTAL HEADER (RouteTrust Left Architecture) -----------------
-top_profile_col, top_title_col = st.columns([1.15, 2.85])
-
-with top_profile_col:
-    curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
-    active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
-    active_avatar_b64 = get_avatar_base64(active_avatar_file)
-    now_utc = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    
-    # Sleek RouteTrust-style Left Profile Card
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1.5px solid #334155; border-radius: 10px; padding: 10px 14px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15); margin-bottom: 6px;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <img src="data:image/png;base64,{active_avatar_b64}" 
-                 style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 2px solid #38BDF8; object-fit: cover; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);" 
-                 alt="User Avatar" />
-            <div style="line-height: 1.25; overflow: hidden;">
-                <div style="font-weight: 700; color: #F8FAFC; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    {current_user.get('name')}
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                    <span style="font-size: 0.68rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25);">
-                        {current_user.get('role', 'user')}
-                    </span>
-                    <span style="font-size: 0.65rem; color: #94A3B8; font-family: monospace;">@{curr_u}</span>
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    btn_lo_col, btn_av_col = st.columns([1, 1])
-    with btn_lo_col:
-        if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, type="secondary"):
-            clear_current_session()
-            components.html("""
-            <script>
-            setTimeout(function() {
-                try {
-                    parent.window.location.reload();
-                } catch(e) {
-                    try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-                }
-            }, 150);
-            </script>
-            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
-            """, height=50)
-            st.stop()
-    with btn_av_col:
-        if st.button("🖼️ Avatar", key="btn_toggle_avatar_picker", use_container_width=True, help="Click to select your profile avatar"):
-            st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
-            st.rerun()
-            
-    # RouteTrust live UTC clock badge
-    st.markdown(f"""
-    <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 4px 8px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.72rem; color: #94A3B8; text-align: center; margin-top: 4px; font-weight: 600; letter-spacing: 0.5px;">
-        🕒 {now_utc}
-    </div>
-    """, unsafe_allow_html=True)
+# ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
+top_title_col, top_profile_col = st.columns([2.6, 1.4])
 
 with top_title_col:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-        <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.76rem; padding: 3px 10px; border-radius: 12px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
-        <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.76rem; padding: 3px 10px; border-radius: 12px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
-        <span style="font-size: 0.70rem; color: #64748B; font-family: monospace; padding-top: 4px;">build: 2026.10.17.v3</span>
+    <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+        <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
+        <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
     </div>
     """, unsafe_allow_html=True)
+
+with top_profile_col:
+    curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
+    active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
+    active_avatar_b64 = get_avatar_base64(active_avatar_file)
+    u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
+    u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
+    
+    # RouteTrust right-side pattern: Avatar next to Name, and Logout right underneath the Name
+    st.markdown("""
+    <style>
+    button[key="top_logout_btn"], button[key="btn_toggle_avatar_picker"] {
+        padding: 2px 6px !important;
+        min-height: 26px !important;
+        height: 26px !important;
+        font-size: 0.72rem !important;
+        line-height: 1 !important;
+        border-radius: 6px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    prof_card_col1, prof_card_col2 = st.columns([0.8, 2.2])
+    with prof_card_col1:
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: center; padding-top: 3px;">
+            <img src="data:image/png;base64,{active_avatar_b64}" 
+                 style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18);" 
+                 alt="Avatar" />
+        </div>
+        """, unsafe_allow_html=True)
+    with prof_card_col2:
+        st.markdown(f"""
+        <div style="line-height: 1.2; margin-bottom: 4px;">
+            <div style="font-weight: 700; color: #0C4A6E; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                {u_display_name}
+            </div>
+            <div style="font-size: 0.67rem; color: #0284C7; font-weight: 600; text-transform: uppercase;">
+                {u_role}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        btn_lo_sub, btn_av_sub = st.columns([1, 1])
+        with btn_lo_sub:
+            if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, type="secondary"):
+                clear_current_session()
+                components.html("""
+                <script>
+                setTimeout(function() {
+                    try {
+                        parent.window.location.reload();
+                    } catch(e) {
+                        try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+                    }
+                }, 150);
+                </script>
+                <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
+                """, height=50)
+                st.stop()
+        with btn_av_sub:
+            if st.button("🖼️ Avatar", key="btn_toggle_avatar_picker", use_container_width=True, help="Change your profile avatar"):
+                st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+                st.rerun()
 
 # Expandable Profile Avatar Selector
 if st.session_state.get("show_avatar_picker", False):
