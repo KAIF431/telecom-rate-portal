@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+scratch/
+server_sessions.json
+used_totp.json
