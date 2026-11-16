@@ -11,13 +11,17 @@ import zipfile
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import functools
+import importlib
 from streamlit_cookies_controller import CookieController
 
 # Initialize controller early in script execution
 controller = CookieController()
 
 import auth_manager as am
+try:
+    importlib.reload(am)
+except Exception:
+    pass
 
 # Bulletproof self-contained avatar resolution
 def resolve_user_avatar(username):
@@ -830,7 +834,6 @@ if active_tok and not st.session_state.get("cookie_synced"):
     """, height=0)
     st.session_state["cookie_synced"] = True
 
-@functools.lru_cache(maxsize=128)
 def get_avatar_base64(filename):
     if not filename:
         filename = "avatar_man_glasses.png"
@@ -1892,196 +1895,197 @@ if uploaded_files:
     # User's explicit requested button name: Proceed for Download
     btn_label = f"⚡ Proceed for Download ({len(raw_files)} Sheets)" if len(raw_files) > 1 else "⚡ Proceed for Download"
     if st.button(btn_label, type="primary", use_container_width=True, key=f"proceed_btn_{st.session_state.uploader_key}"):
-        t_start = time.time()
-        processed_list = []
-        progress_bar = st.progress(0)
+        with st.spinner(f"⚡ Processing {len(raw_files)} sheet(s)... Standardizing rows, please wait..."):
+            t_start = time.time()
+            processed_list = []
+            progress_bar = st.progress(0)
 
-        user_dl_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
-        kaif_dir = r"C:\Kaif\Standardized_Sheets"
-        os.makedirs(kaif_dir, exist_ok=True)
+            user_dl_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+            kaif_dir = r"C:\Kaif\Standardized_Sheets"
+            os.makedirs(kaif_dir, exist_ok=True)
 
-        for f_idx, (fname, f_content) in enumerate(raw_files):
-            f_content.seek(0)
-            df_raw = None
-            xl = None
-            try:
-                if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
-                    xl = load_excel_safely(f_content, fname)
-                    best_sheet = None
-                    best_score = -1
-                    for s_name in xl.sheet_names:
+            for f_idx, (fname, f_content) in enumerate(raw_files):
+                f_content.seek(0)
+                df_raw = None
+                xl = None
+                try:
+                    if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
+                        xl = load_excel_safely(f_content, fname)
+                        best_sheet = None
+                        best_score = -1
+                        for s_name in xl.sheet_names:
+                            try:
+                                temp_sample = xl.parse(s_name, header=None, nrows=40)
+                                if len(temp_sample) < 2:
+                                    continue
+                                _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
+                                score = len(col_map)
+                                if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
+                                    score += 15
+                                if score > best_score:
+                                    best_score = score
+                                    best_sheet = s_name
+                            except Exception:
+                                pass
+                        target_sheet = best_sheet if best_sheet is not None else 0
+                        df_raw = xl.parse(target_sheet, header=None)
+                    elif fname.lower().endswith('.csv'):
+                        df_raw = load_csv_safely(f_content)
+                except Exception as e:
+                    st.error(f"Could not parse file '{fname}': {e}")
+                    continue
+                finally:
+                    if xl is not None:
                         try:
-                            temp_sample = xl.parse(s_name, header=None, nrows=40)
-                            if len(temp_sample) < 2:
-                                continue
-                            _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
-                            score = len(col_map)
-                            if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
-                                score += 15
-                            if score > best_score:
-                                best_score = score
-                                best_sheet = s_name
+                            xl.close()
                         except Exception:
                             pass
-                    target_sheet = best_sheet if best_sheet is not None else 0
-                    df_raw = xl.parse(target_sheet, header=None)
-                elif fname.lower().endswith('.csv'):
-                    df_raw = load_csv_safely(f_content)
-            except Exception as e:
-                st.error(f"Could not parse file '{fname}': {e}")
-                continue
-            finally:
-                if xl is not None:
-                    try:
-                        xl.close()
-                    except Exception:
-                        pass
-                    del xl
+                        del xl
 
-            if df_raw is None or len(df_raw) == 0:
-                st.warning(f"File '{fname}' is empty.")
-                continue
+                if df_raw is None or len(df_raw) == 0:
+                    st.warning(f"File '{fname}' is empty.")
+                    continue
 
-            df_clean, df_excluded, stats = core_engine.fast_process_dataframe(df_raw, qc_codes, fname)
-            del df_raw, df_excluded
-            gc.collect()
+                df_clean, df_excluded, stats = core_engine.fast_process_dataframe(df_raw, qc_codes, fname)
+                del df_raw, df_excluded
+                gc.collect()
 
-            user_base = vendor_names.get(f_idx, f"Name - {fname}")
-            final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
-            final_csv_filename = core_engine.build_csv_output_filename(user_base)
+                user_base = vendor_names.get(f_idx, f"Name - {fname}")
+                final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
+                final_csv_filename = core_engine.build_csv_output_filename(user_base)
 
-            excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
-            csv_bytes = core_engine.generate_target_csv_bytes(df_clean)
-            clean_rows_count = len(df_clean)
-            del df_clean
-            gc.collect()
+                excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
+                csv_bytes = core_engine.generate_target_csv_bytes(df_clean)
+                clean_rows_count = len(df_clean)
+                del df_clean
+                gc.collect()
 
-            # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
-            saved_paths = []
-            try:
-                dl_path = os.path.join(user_dl_dir, final_filename)
-                with open(dl_path, "wb") as f_out:
-                    f_out.write(excel_bytes)
-                saved_paths.append(dl_path)
-            except Exception:
-                pass
+                # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
+                saved_paths = []
+                try:
+                    dl_path = os.path.join(user_dl_dir, final_filename)
+                    with open(dl_path, "wb") as f_out:
+                        f_out.write(excel_bytes)
+                    saved_paths.append(dl_path)
+                except Exception:
+                    pass
 
-            try:
-                dl_csv_path = os.path.join(user_dl_dir, final_csv_filename)
-                with open(dl_csv_path, "wb") as f_out:
-                    f_out.write(csv_bytes)
-                saved_paths.append(dl_csv_path)
-            except Exception:
-                pass
+                try:
+                    dl_csv_path = os.path.join(user_dl_dir, final_csv_filename)
+                    with open(dl_csv_path, "wb") as f_out:
+                        f_out.write(csv_bytes)
+                    saved_paths.append(dl_csv_path)
+                except Exception:
+                    pass
 
-            try:
-                kaif_path = os.path.join(kaif_dir, final_filename)
-                with open(kaif_path, "wb") as f_out:
-                    f_out.write(excel_bytes)
-                saved_paths.append(kaif_path)
-            except Exception:
-                pass
+                try:
+                    kaif_path = os.path.join(kaif_dir, final_filename)
+                    with open(kaif_path, "wb") as f_out:
+                        f_out.write(excel_bytes)
+                    saved_paths.append(kaif_path)
+                except Exception:
+                    pass
 
-            try:
-                kaif_csv_path = os.path.join(kaif_dir, final_csv_filename)
-                with open(kaif_csv_path, "wb") as f_out:
-                    f_out.write(csv_bytes)
-                saved_paths.append(kaif_csv_path)
-            except Exception:
-                pass
+                try:
+                    kaif_csv_path = os.path.join(kaif_dir, final_csv_filename)
+                    with open(kaif_csv_path, "wb") as f_out:
+                        f_out.write(csv_bytes)
+                    saved_paths.append(kaif_csv_path)
+                except Exception:
+                    pass
 
-            # Guaranteed Save to OUTPUT_DIR
-            cached_path = os.path.join(OUTPUT_DIR, final_filename)
-            cached_csv_path = os.path.join(OUTPUT_DIR, final_csv_filename)
-            try:
-                with open(cached_path, "wb") as f_out:
-                    f_out.write(excel_bytes)
-            except Exception:
-                pass
-            try:
-                with open(cached_csv_path, "wb") as f_out:
-                    f_out.write(csv_bytes)
-            except Exception:
-                pass
+                # Guaranteed Save to OUTPUT_DIR
+                cached_path = os.path.join(OUTPUT_DIR, final_filename)
+                cached_csv_path = os.path.join(OUTPUT_DIR, final_csv_filename)
+                try:
+                    with open(cached_path, "wb") as f_out:
+                        f_out.write(excel_bytes)
+                except Exception:
+                    pass
+                try:
+                    with open(cached_csv_path, "wb") as f_out:
+                        f_out.write(csv_bytes)
+                except Exception:
+                    pass
 
-            # Free byte arrays from memory immediately after saving to disk!
-            del excel_bytes, csv_bytes
-            gc.collect()
+                # Free byte arrays from memory immediately after saving to disk!
+                del excel_bytes, csv_bytes
+                gc.collect()
 
-            processed_list.append({
-                "filename": final_filename,
-                "csv_filename": final_csv_filename,
-                "vendor_name": user_base,
-                "bytes": None,
-                "csv_bytes": None,
-                "cached_path": cached_path,
-                "cached_csv_path": cached_csv_path,
-                "stats": stats,
-                "rows_count": clean_rows_count,
-                "saved_paths": saved_paths
-            })
+                processed_list.append({
+                    "filename": final_filename,
+                    "csv_filename": final_csv_filename,
+                    "vendor_name": user_base,
+                    "bytes": None,
+                    "csv_bytes": None,
+                    "cached_path": cached_path,
+                    "cached_csv_path": cached_csv_path,
+                    "stats": stats,
+                    "rows_count": clean_rows_count,
+                    "saved_paths": saved_paths
+                })
 
-            progress_bar.progress((f_idx + 1) / len(raw_files))
+                progress_bar.progress((f_idx + 1) / len(raw_files))
 
-        t_end = time.time()
-        elapsed_sec = round(t_end - t_start, 2)
+            t_end = time.time()
+            elapsed_sec = round(t_end - t_start, 2)
 
-        # Pre-build on-disk ZIP files if multiple files in batch
-        if len(processed_list) > 1:
-            u_slug = current_user.get("username", "kaif")
-            ts = int(time.time())
-            zip_xl_path = os.path.join(OUTPUT_DIR, f"batch_excel_{u_slug}_{ts}.zip")
-            zip_csv_path = os.path.join(OUTPUT_DIR, f"batch_csv_{u_slug}_{ts}.zip")
-            try:
-                with zipfile.ZipFile(zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
-                    for p_item in processed_list:
-                        cp = p_item.get("cached_path")
-                        if cp and os.path.exists(cp):
-                            zf_xl.write(cp, arcname=p_item["filename"])
-                st.session_state.batch_zip_xl_path = zip_xl_path
-            except Exception:
+            # Pre-build on-disk ZIP files if multiple files in batch
+            if len(processed_list) > 1:
+                u_slug = current_user.get("username", "kaif")
+                ts = int(time.time())
+                zip_xl_path = os.path.join(OUTPUT_DIR, f"batch_excel_{u_slug}_{ts}.zip")
+                zip_csv_path = os.path.join(OUTPUT_DIR, f"batch_csv_{u_slug}_{ts}.zip")
+                try:
+                    with zipfile.ZipFile(zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
+                        for p_item in processed_list:
+                            cp = p_item.get("cached_path")
+                            if cp and os.path.exists(cp):
+                                zf_xl.write(cp, arcname=p_item["filename"])
+                    st.session_state.batch_zip_xl_path = zip_xl_path
+                except Exception:
+                    st.session_state.batch_zip_xl_path = None
+
+                try:
+                    with zipfile.ZipFile(zip_csv_path, "w", zipfile.ZIP_DEFLATED) as zf_csv:
+                        for p_item in processed_list:
+                            cp_csv = p_item.get("cached_csv_path")
+                            if cp_csv and os.path.exists(cp_csv):
+                                zf_csv.write(cp_csv, arcname=p_item["csv_filename"])
+                    st.session_state.batch_zip_csv_path = zip_csv_path
+                except Exception:
+                    st.session_state.batch_zip_csv_path = None
+            else:
                 st.session_state.batch_zip_xl_path = None
-
-            try:
-                with zipfile.ZipFile(zip_csv_path, "w", zipfile.ZIP_DEFLATED) as zf_csv:
-                    for p_item in processed_list:
-                        cp_csv = p_item.get("cached_csv_path")
-                        if cp_csv and os.path.exists(cp_csv):
-                            zf_csv.write(cp_csv, arcname=p_item["csv_filename"])
-                st.session_state.batch_zip_csv_path = zip_csv_path
-            except Exception:
                 st.session_state.batch_zip_csv_path = None
-        else:
-            st.session_state.batch_zip_xl_path = None
-            st.session_state.batch_zip_csv_path = None
 
-        # Log audit trail for Admin view
-        now_log_dt = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-        end_time_log = now_log_dt.strftime("%H:%M:%S")
-        start_time_log = (now_log_dt - datetime.timedelta(seconds=float(elapsed_sec))).strftime("%H:%M:%S")
-        time_range_log = f"{start_time_log} - {end_time_log} ({round(float(elapsed_sec), 1)}s)"
+            # Log audit trail for Admin view
+            now_log_dt = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+            end_time_log = now_log_dt.strftime("%H:%M:%S")
+            start_time_log = (now_log_dt - datetime.timedelta(seconds=float(elapsed_sec))).strftime("%H:%M:%S")
+            time_range_log = f"{start_time_log} - {end_time_log} ({round(float(elapsed_sec), 1)}s)"
 
-        for p_item in processed_list:
-            am.log_processing_activity(
-                username=current_user.get("username", "unknown"),
-                user_name=current_user.get("name", "Unknown"),
-                output_filename=p_item["filename"],
-                vendor_name=p_item.get("vendor_name", ""),
-                clean_rows=p_item["stats"].get("final_clean_rows", p_item.get("rows_count", 0)),
-                qc_excluded=p_item["stats"].get("qc_excluded", 0),
-                elapsed_sec=elapsed_sec,
-                start_time=start_time_log,
-                end_time=end_time_log,
-                time_range=time_range_log
-            )
+            for p_item in processed_list:
+                am.log_processing_activity(
+                    username=current_user.get("username", "unknown"),
+                    user_name=current_user.get("name", "Unknown"),
+                    output_filename=p_item["filename"],
+                    vendor_name=p_item.get("vendor_name", ""),
+                    clean_rows=p_item["stats"].get("final_clean_rows", p_item.get("rows_count", 0)),
+                    qc_excluded=p_item["stats"].get("qc_excluded", 0),
+                    elapsed_sec=elapsed_sec,
+                    start_time=start_time_log,
+                    end_time=end_time_log,
+                    time_range=time_range_log
+                )
 
-        # Store in session state for this user's browser & disk cache
-        st.session_state.processed_results = processed_list
-        st.session_state.elapsed_time = elapsed_sec
-        st.session_state.just_processed = True
-        save_user_processed_cache(current_user.get("username", "kaif"), processed_list, elapsed_sec)
-        
-        # Reset file uploader so next batch starts with a fresh, clean uploader!
-        st.session_state.uploader_key += 1
-        gc.collect()
-        st.rerun()
+            # Store in session state for this user's browser & disk cache
+            st.session_state.processed_results = processed_list
+            st.session_state.elapsed_time = elapsed_sec
+            st.session_state.just_processed = True
+            save_user_processed_cache(current_user.get("username", "kaif"), processed_list, elapsed_sec)
+            
+            # Reset file uploader so next batch starts with a fresh, clean uploader!
+            st.session_state.uploader_key += 1
+            gc.collect()
+            st.rerun()
