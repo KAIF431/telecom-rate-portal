@@ -381,19 +381,35 @@ def init_db():
         except Exception:
             pass
 
+_DB_CACHE = None
+_DB_CACHE_MTIME = 0
+
 def load_db():
+    global _DB_CACHE, _DB_CACHE_MTIME
     init_db()
     try:
+        mtime = os.path.getmtime(DB_FILE) if os.path.exists(DB_FILE) else 0
+        if _DB_CACHE is not None and mtime == _DB_CACHE_MTIME:
+            return _DB_CACHE
         with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            _DB_CACHE = data
+            _DB_CACHE_MTIME = mtime
+            return data
     except Exception:
         init_db()
         with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
 
 def save_db(data):
+    global _DB_CACHE, _DB_CACHE_MTIME
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _DB_CACHE = data
+    try:
+        _DB_CACHE_MTIME = os.path.getmtime(DB_FILE) if os.path.exists(DB_FILE) else time.time()
+    except Exception:
+        pass
 
 # --- 2-Step Login Workflow ---
 def verify_credentials(username, password):

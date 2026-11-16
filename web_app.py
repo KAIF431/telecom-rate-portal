@@ -11,17 +11,13 @@ import zipfile
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import importlib
+import functools
 from streamlit_cookies_controller import CookieController
 
 # Initialize controller early in script execution
 controller = CookieController()
 
 import auth_manager as am
-try:
-    importlib.reload(am)
-except Exception:
-    pass
 
 # Bulletproof self-contained avatar resolution
 def resolve_user_avatar(username):
@@ -834,6 +830,7 @@ if active_tok and not st.session_state.get("cookie_synced"):
     """, height=0)
     st.session_state["cookie_synced"] = True
 
+@functools.lru_cache(maxsize=128)
 def get_avatar_base64(filename):
     if not filename:
         filename = "avatar_man_glasses.png"
