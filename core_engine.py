@@ -170,14 +170,16 @@ def detect_header_row_and_columns(df_raw):
                     mapping['rate'] = col_idx
                     kw_score += 7
 
-            # 5. Effective Date keywords (strictly ignore expiry/end/to dates, support 'Active' / 'Activation' when containing dates)
+            # 5. Effective Date keywords (strictly ignore expiry/end/to dates, and ignore pulse/increment start dates)
             elif any(k in v for k in [
                 'effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date',
                 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from',
                 'valid from', 'valid date', 'start date', 'active from', 'active date', 'activation date',
                 'active', 'activation'
-            ]) and not any(bad in v for bad in ['expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to', 'valid to', 'eff to']) \
-                and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
+            ]) and not any(bad in v for bad in [
+                'expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to',
+                'valid to', 'eff to', 'minimum', 'increment', 'increments', 'pulse', 'billing', 'min/inc'
+            ]) and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
                 is_valid_date_col = True
                 if v in ['active', 'activation']:
                     sample_check = df_raw.iloc[row_idx + 1 : min(row_idx + 15, len(df_raw)), col_idx].dropna().tolist()
@@ -190,9 +192,14 @@ def detect_header_row_and_columns(df_raw):
                         is_valid_date_col = False
 
                 if is_valid_date_col:
-                    is_explicit_from = any(k in v for k in ['from', 'start', 'begin', 'eff date', 'effective date', 'eff. date', 'eff_date'])
-                    if 'effective_date' not in mapping or is_explicit_from:
+                    is_high_priority = any(k in v for k in [
+                        'eff date', 'effective date', 'eff. date', 'eff_date', 'effective from',
+                        'application date', 'pricing valid from', 'valid from'
+                    ])
+                    curr_is_high = mapping.get('effective_date_is_high', False)
+                    if 'effective_date' not in mapping or (is_high_priority and not curr_is_high):
                         mapping['effective_date'] = col_idx
+                        mapping['effective_date_is_high'] = is_high_priority
                         kw_score += 5
 
             # 6. Pulse / Billing keywords
@@ -202,8 +209,8 @@ def detect_header_row_and_columns(df_raw):
                 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
                 'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc',
                 'rounding', 'round', 'round off', 'rounding rule', 'min (sec)', 'min(sec)', 'increment (sec)', 'increment(sec)',
-                'minimum', 'initial'
-            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding', 'min', 'inc']:
+                'minimum', 'initial', 'additional', 'subsequent', 'addl'
+            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding', 'min', 'inc', 'additional', 'subsequent']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     kw_score += 4
@@ -440,9 +447,9 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
             c_name = str(col_name).lower().strip()
             c_clean = re.sub(r'[^a-z0-9]+', ' ', c_name).strip()
             words = set(c_clean.split())
-            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or any(w in words for w in ['mc', 'min', 'initial', 'init', 'first'])) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
+            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or any(w in words for w in ['mc', 'min', 'initial', 'init', 'first'])) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci', 'additional', 'addl', 'subsequent']):
                 min_col_idx = idx
-            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration', 'inc sec', 'increment sec']) or any(w in words for w in ['ci', 'inc', 'recur', 'next', 'step'])) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
+            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration', 'inc sec', 'increment sec', 'additional', 'addl', 'additional period', 'additional interval', 'subsequent', 'subsequent period', 'subsequent interval']) or any(w in words for w in ['ci', 'inc', 'recur', 'next', 'step', 'additional', 'addl', 'subsequent'])) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
                 inc_col_idx = idx
 
         # If only one increment or minimum column exists without separate pair, treat as combined pulse column
