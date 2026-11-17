@@ -870,7 +870,7 @@ if "action" in st.query_params and st.query_params["action"] == "avatar":
         pass
 
 # ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
-top_title_col, top_profile_col = st.columns([3.35, 0.65])
+top_title_col, top_user_info, top_avatar_col = st.columns([3.3, 0.7, 0.28])
 
 with top_title_col:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
@@ -882,24 +882,32 @@ with top_title_col:
     </div>
     """, unsafe_allow_html=True)
 
-with top_profile_col:
-    curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
-    active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
-    active_avatar_b64 = get_avatar_base64(active_avatar_file)
-    u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
-    u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
-    
+curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
+active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
+active_avatar_b64 = get_avatar_base64(active_avatar_file)
+u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
+u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
+
+with top_user_info:
+    st.markdown(f"""
+    <div style="text-align: right; padding-top: 6px; line-height: 1.25;">
+        <div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; white-space: nowrap;">
+            {u_display_name}
+        </div>
+        <div style="font-size: 0.68rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
+            {u_role}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with top_avatar_col:
     st.markdown(f"""
     <style>
-    div.st-key-top_logout_btn {{
-        display: flex !important;
-        justify-content: flex-end !important;
-        margin-top: 4px !important;
-    }}
-    div.st-key-top_logout_btn > button {{
-        width: 50px !important;
-        min-width: 50px !important;
-        max-width: 50px !important;
+    div.st-key-top_logout_btn button {{
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        margin: 3px auto 0 auto !important;
         height: 22px !important;
         min-height: 22px !important;
         padding: 0 !important;
@@ -912,32 +920,22 @@ with top_profile_col:
         color: #475569 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
     }}
-    div.st-key-top_logout_btn > button:hover {{
+    div.st-key-top_logout_btn button:hover {{
         background-color: #FEF2F2 !important;
         border-color: #F87171 !important;
         color: #DC2626 !important;
     }}
     </style>
-    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-start; text-align: right;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="line-height: 1.2;">
-                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; white-space: nowrap;">
-                    {u_display_name}
-                </div>
-                <div style="font-size: 0.65rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
-                    {u_role}
-                </div>
-            </div>
-            <a href="?action=avatar" target="_self" title="Click to change your avatar" style="display: block; cursor: pointer; text-decoration: none;">
-                <img src="data:image/png;base64,{active_avatar_b64}" 
-                     style="width: 50px; height: 50px; min-width: 50px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
-                     alt="Avatar" />
-            </a>
-        </div>
+    <div style="display: flex; justify-content: center; align-items: center;">
+        <a href="?action=avatar" target="_self" title="Click to change your avatar" style="display: block; cursor: pointer; text-decoration: none;">
+            <img src="data:image/png;base64,{active_avatar_b64}" 
+                 style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
+                 alt="Avatar" />
+        </a>
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("🚪 Logout", key="top_logout_btn", help="Logout from portal"):
+    if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, help="Logout from portal"):
         clear_current_session()
         components.html("""
         <script>
