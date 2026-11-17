@@ -1675,7 +1675,9 @@ def render_executive_deck_card(idx, item, is_single=False):
     stats = item.get("stats", {})
 
     clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
+    initial_rows = stats.get('initial_rows', clean_rows_display)
     qc_ex = stats.get('qc_excluded', 0)
+    nanp_ex = stats.get('nanp_excluded', 0)
     minus1_ex = stats.get('rates_minus1_count', 0)
     dedup_ex = stats.get('dedup_excluded', 0)
 
@@ -1692,9 +1694,7 @@ def render_executive_deck_card(idx, item, is_single=False):
     mismatches = item.get("mismatches", [])
     has_mm = len(mismatches) > 0
 
-    qc_pill = f'<span style="background: #FEF3C7; color: #B45309; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">⚠️ {qc_ex:,} Excluded</span>' if qc_ex > 0 else ""
-    minus1_pill = f'<span style="background: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">🚫 {minus1_ex:,} Blocked (-1)</span>' if minus1_ex > 0 else ""
-    dedup_pill = f'<span style="background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">✂️ {dedup_ex:,} Dups</span>' if dedup_ex > 0 else ""
+    dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
 
     prefix_label = f"📁 #{idx+1} " if not is_single else "📁 "
 
@@ -1702,19 +1702,26 @@ def render_executive_deck_card(idx, item, is_single=False):
         col_hdr_left, col_hdr_right = st.columns([3.2, 1.4])
         with col_hdr_left:
             st.markdown(
-                f'<div style="font-size: 0.96rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">'
-                f'<span>{prefix_label}</span><span style="font-family: monospace; color: #0E7490;">{out_name}</span>'
-                f'</div>'
-                f'<div style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem;">'
-                f'<span style="background: #E0F2FE; color: #0369A1; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✅ {clean_rows_display:,} Ready</span>'
-                f'{qc_pill}'
-                f'{minus1_pill}'
-                f'{dedup_pill}'
+                f'<div style="font-size: 0.98rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">'
+                f'<span>{prefix_label}<b>File:</b></span> <code style="color: #0E7490; font-size: 0.95rem; font-weight: 700;">{out_name}</code>'
                 f'</div>',
                 unsafe_allow_html=True
             )
         with col_hdr_right:
-            st.markdown(f'<div style="text-align: right; padding-top: 4px;">{date_pill}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align: right; padding-top: 2px;">{date_pill}</div>', unsafe_allow_html=True)
+
+        # Full KPI Metric Strip (Vendor Input, Clean Output, QC Excluded, NANP, Rates to -1)
+        st.markdown(
+            f'<div class="kpi-strip" style="margin: 8px 0 12px 0;">'
+            f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
+            f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
+            f'{dedup_chip}'
+            f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
+            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1)</span><span class="kpi-val">{nanp_ex:,}</span></div>'
+            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
         # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
         if has_mm:
