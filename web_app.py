@@ -861,14 +861,6 @@ def get_avatar_base64(filename):
             return ""
     return ""
 
-# Handle avatar toggle via query param
-if "action" in st.query_params and st.query_params["action"] == "avatar":
-    st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
-    try:
-        del st.query_params["action"]
-    except Exception:
-        pass
-
 # ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
 top_title_col, top_user_info, top_avatar_col = st.columns([3.3, 0.7, 0.28])
 
@@ -903,11 +895,39 @@ with top_user_info:
 with top_avatar_col:
     st.markdown(f"""
     <style>
+    div.st-key-avatar_overlay_btn {{
+        width: 48px !important;
+        height: 48px !important;
+        margin: -48px auto 0 auto !important;
+        position: relative !important;
+        z-index: 10 !important;
+    }}
+    div.st-key-avatar_overlay_btn button {{
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        max-width: 48px !important;
+        max-height: 48px !important;
+        opacity: 0 !important;
+        cursor: pointer !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }}
+    div.st-key-avatar_overlay_btn button:hover {{
+        background: transparent !important;
+        border: none !important;
+    }}
+    div.st-key-top_logout_btn {{
+        margin-top: 4px !important;
+    }}
     div.st-key-top_logout_btn button {{
         width: 48px !important;
         min-width: 48px !important;
         max-width: 48px !important;
-        margin: 3px auto 0 auto !important;
+        margin: 0 auto !important;
         height: 22px !important;
         min-height: 22px !important;
         padding: 0 !important;
@@ -919,6 +939,7 @@ with top_avatar_col:
         background-color: #FFFFFF !important;
         color: #475569 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+        display: block !important;
     }}
     div.st-key-top_logout_btn button:hover {{
         background-color: #FEF2F2 !important;
@@ -926,16 +947,18 @@ with top_avatar_col:
         color: #DC2626 !important;
     }}
     </style>
-    <div style="display: flex; justify-content: center; align-items: center;">
-        <a href="?action=avatar" target="_self" title="Click to change your avatar" style="display: block; cursor: pointer; text-decoration: none;">
-            <img src="data:image/png;base64,{active_avatar_b64}" 
-                 style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
-                 alt="Avatar" />
-        </a>
+    <div style="display: flex; justify-content: center; align-items: center; width: 48px; height: 48px; margin: 0 auto;">
+        <img src="data:image/png;base64,{active_avatar_b64}" 
+             style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
+             alt="Avatar" />
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, help="Logout from portal"):
+    if st.button("", key="avatar_overlay_btn", help="Click anywhere on avatar to change your avatar"):
+        st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+        st.rerun()
+    
+    if st.button("🚪 Logout", key="top_logout_btn", help="Logout from portal"):
         clear_current_session()
         components.html("""
         <script>
