@@ -201,8 +201,9 @@ def detect_header_row_and_columns(df_raw):
                 'billing increment', 'minimum increments', 'billing step', 'min billing time', 'min inc', 'min/inc',
                 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
                 'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc',
-                'rounding', 'round', 'round off', 'rounding rule'
-            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding']:
+                'rounding', 'round', 'round off', 'rounding rule', 'min (sec)', 'min(sec)', 'increment (sec)', 'increment(sec)',
+                'minimum', 'initial'
+            ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding', 'min', 'inc']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
                     kw_score += 4
@@ -437,10 +438,11 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         inc_col_idx = None
         for idx, col_name in enumerate(header_names):
             c_name = str(col_name).lower().strip()
-            c_clean = re.sub(r'[^a-z0-9]', ' ', c_name).strip()
-            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or c_clean in ['mc', 'min', 'initial', 'init', 'first', 'min volume']) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
+            c_clean = re.sub(r'[^a-z0-9]+', ' ', c_name).strip()
+            words = set(c_clean.split())
+            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or any(w in words for w in ['mc', 'min', 'initial', 'init', 'first'])) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci']):
                 min_col_idx = idx
-            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration']) or c_clean in ['ci', 'inc', 'recur', 'next', 'interval', 'step']) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
+            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration', 'inc sec', 'increment sec']) or any(w in words for w in ['ci', 'inc', 'recur', 'next', 'step'])) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
                 inc_col_idx = idx
 
         # If only one increment or minimum column exists without separate pair, treat as combined pulse column
