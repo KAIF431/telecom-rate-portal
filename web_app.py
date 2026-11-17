@@ -1150,16 +1150,90 @@ def get_historical_csv_bytes(filename, excel_bytes=None):
             pass
     return None, csv_fname
 
-if is_admin:
-    admin_nav_mode = st.radio(
-        "Navigation Mode:",
-        ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
-        horizontal=True,
-        key="main_admin_nav_toggle",
-        label_visibility="collapsed"
-    )
+@st.cache_data(show_spinner=False)
+def get_cached_template_file(filename):
+    p = os.path.join(TEMPLATE_DIR, filename)
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return b""
 
-    if admin_nav_mode == "👑 Admin Management Panel":
+sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
+qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
+country_billing_bytes = get_cached_template_file("Country Billing.xlsx")
+separate_codes_bytes = get_cached_template_file("Separate_codes_sample_ratesheet.xls")
+
+admin_nav_mode = "⚡ Rate Deck Standardizer"
+
+# Navigation Row: Left has Rate Deck Standardizer, Right has the Master Sheets Dropdown
+nav_col_left, nav_col_right = st.columns([3.2, 1.2])
+
+with nav_col_left:
+    if is_admin:
+        admin_nav_mode = st.radio(
+            "Navigation Mode:",
+            ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
+            horizontal=True,
+            key="main_admin_nav_toggle",
+            label_visibility="collapsed"
+        )
+    else:
+        st.markdown(
+            '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
+            '⚡ Rate Deck Standardizer'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+with nav_col_right:
+    with st.popover("📥 Master Sheets & Formats ▾", use_container_width=True, help="Download standard sample format, QC rules, and country billing"):
+        st.markdown(
+            '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
+            '📁 Master Telecom Reference Sheets'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        if sample_bytes:
+            st.download_button(
+                label="📄 Vendor Sample Sheet (.xlsx)",
+                data=sample_bytes,
+                file_name="Vendor Sample sheet.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="nav_pop_dl_sample",
+                use_container_width=True
+            )
+        if qc_bytes:
+            st.download_button(
+                label="📑 QC Exception Sheet (.xlsx)",
+                data=qc_bytes,
+                file_name="QC exception Vlookup.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="nav_pop_dl_qc",
+                use_container_width=True
+            )
+        if country_billing_bytes:
+            st.download_button(
+                label="📊 Country Billing Master (.xlsx)",
+                data=country_billing_bytes,
+                file_name="Country Billing.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="nav_pop_dl_billing",
+                use_container_width=True
+            )
+        if separate_codes_bytes:
+            st.download_button(
+                label="📁 Separate Codes Ratesheet (.xls)",
+                data=separate_codes_bytes,
+                file_name="Separate_codes_sample_ratesheet.xls",
+                mime="application/vnd.ms-excel",
+                key="nav_pop_dl_sep_codes",
+                use_container_width=True
+            )
+
+if is_admin and admin_nav_mode == "👑 Admin Management Panel":
         st.markdown("## 👑 Admin Control Panel")
         st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & audit trail.")
         
@@ -1668,20 +1742,6 @@ if is_admin:
 
         st.stop()
 
-@st.cache_data(show_spinner=False)
-def get_cached_template_file(filename):
-    p = os.path.join(TEMPLATE_DIR, filename)
-    if os.path.exists(p):
-        try:
-            with open(p, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
-    return b""
-
-sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
-qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
-
 st.write("")
 
 qc_codes = load_qc_exception_codes()
@@ -1987,36 +2047,14 @@ if st.session_state.processed_results:
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
-# File Uploader in dedicated card with resources
+# File Uploader in dedicated card
 with st.container(border=True):
-    col_card_hdr, col_dl_samp, col_dl_qc = st.columns([3, 1.2, 1.2])
-    with col_card_hdr:
-        st.markdown("""
-        <div style="margin-bottom: 4px;">
-            <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Vendor Rate Sheet(s)</span>
-            <div style="font-size: 0.82rem; color: #64748B;">Supports up to 10 files (.xlsx, .xls, .csv) or ZIP archive (max 500MB)</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_dl_samp:
-        if sample_bytes:
-            st.download_button(
-                label="📄 Sample Format",
-                data=sample_bytes,
-                file_name="Vendor Sample sheet.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_dl_sample_fmt",
-                use_container_width=True
-            )
-    with col_dl_qc:
-        if qc_bytes:
-            st.download_button(
-                label="📑 QC Codes",
-                data=qc_bytes,
-                file_name="QC exception Vlookup.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_dl_qc_codes",
-                use_container_width=True
-            )
+    st.markdown("""
+    <div style="margin-bottom: 6px;">
+        <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Vendor Rate Sheet(s)</span>
+        <div style="font-size: 0.82rem; color: #64748B;">Supports up to 10 files (.xlsx, .xls, .csv) or ZIP archive (max 500MB)</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
         "Upload Vendor Rate Sheet(s) (Max 10 files or ZIP Archive)",
