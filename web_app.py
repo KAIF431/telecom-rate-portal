@@ -365,6 +365,13 @@ st.set_page_config(
 # Custom Styling (Theme 4: Deep Ocean Teal & Frost - Cloud Terminal / Tech Precision)
 st.markdown("""
 <style>
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        max-width: 98% !important;
+    }
     .stApp {
         background-color: #F0F9FF !important;
     }
@@ -850,7 +857,7 @@ def get_avatar_base64(filename):
     return ""
 
 # ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
-top_title_col, top_profile_col = st.columns([2.6, 1.4])
+top_title_col, top_profile_col = st.columns([3.2, 0.8])
 
 with top_title_col:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
@@ -869,62 +876,58 @@ with top_profile_col:
     u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
     u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
     
-    # RouteTrust right-side pattern: Avatar next to Name, and Logout right underneath the Name
     st.markdown("""
     <style>
     button[key="top_logout_btn"], button[key="btn_toggle_avatar_picker"] {
         padding: 2px 6px !important;
-        min-height: 26px !important;
-        height: 26px !important;
-        font-size: 0.72rem !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        font-size: 0.70rem !important;
         line-height: 1 !important;
         border-radius: 6px !important;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    prof_card_col1, prof_card_col2 = st.columns([0.8, 2.2])
-    with prof_card_col1:
-        st.markdown(f"""
-        <div style="display: flex; align-items: center; justify-content: center; padding-top: 3px;">
+    st.markdown(f"""
+    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-start; text-align: right; margin-bottom: 4px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="line-height: 1.2;">
+                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; white-space: nowrap;">
+                    {u_display_name}
+                </div>
+                <div style="font-size: 0.65rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
+                    {u_role}
+                </div>
+            </div>
             <img src="data:image/png;base64,{active_avatar_b64}" 
                  style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18);" 
                  alt="Avatar" />
         </div>
-        """, unsafe_allow_html=True)
-    with prof_card_col2:
-        st.markdown(f"""
-        <div style="line-height: 1.2; margin-bottom: 4px;">
-            <div style="font-weight: 700; color: #0C4A6E; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                {u_display_name}
-            </div>
-            <div style="font-size: 0.67rem; color: #0284C7; font-weight: 600; text-transform: uppercase;">
-                {u_role}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        btn_lo_sub, btn_av_sub = st.columns([1, 1])
-        with btn_lo_sub:
-            if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, type="secondary"):
-                clear_current_session()
-                components.html("""
-                <script>
-                setTimeout(function() {
-                    try {
-                        parent.window.location.reload();
-                    } catch(e) {
-                        try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-                    }
-                }, 150);
-                </script>
-                <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
-                """, height=50)
-                st.stop()
-        with btn_av_sub:
-            if st.button("🖼️ Avatar", key="btn_toggle_avatar_picker", use_container_width=True, help="Change your profile avatar"):
-                st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
-                st.rerun()
+    </div>
+    """, unsafe_allow_html=True)
+    
+    btn_lo_sub, btn_av_sub = st.columns([1, 1])
+    with btn_lo_sub:
+        if st.button("🚪 Logout", key="top_logout_btn", use_container_width=True, type="secondary"):
+            clear_current_session()
+            components.html("""
+            <script>
+            setTimeout(function() {
+                try {
+                    parent.window.location.reload();
+                } catch(e) {
+                    try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+                }
+            }, 150);
+            </script>
+            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
+            """, height=50)
+            st.stop()
+    with btn_av_sub:
+        if st.button("🖼️ Avatar", key="btn_toggle_avatar_picker", use_container_width=True, help="Change your profile avatar"):
+            st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+            st.rerun()
 
 # Expandable Profile Avatar Selector
 if st.session_state.get("show_avatar_picker", False):
