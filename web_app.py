@@ -1640,10 +1640,10 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
             with st.form("admin_create_user_form", clear_on_submit=False):
                 cu_col1, cu_col2 = st.columns(2)
                 with cu_col1:
-                    nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. arhamas")
-                    nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. Arhama Shaikh")
+                    nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. newuser")
+                    nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. User Name")
                 with cu_col2:
-                    nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. arhama@0621")
+                    nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. User@123")
                     nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
                 nu_email = st.text_input("Email (Optional)", key="main_nu_email")
                 
