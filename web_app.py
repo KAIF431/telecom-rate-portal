@@ -1683,126 +1683,125 @@ def render_executive_deck_card(idx, item, is_single=False):
     date_badge_type = item.get("date_badge_type", "green")
     date_badge_label = item.get("date_badge_label", "Live")
     if date_badge_type == "red":
-        date_pill = f'<span style="background: #FEF2F2; color: #DC2626; border: 1.5px solid #F87171; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🔴 {date_badge_label}</span>'
+        date_pill = f'<span style="background: #FEF2F2; color: #DC2626; border: 1.5px solid #F87171; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; white-space: nowrap; display: inline-block;">🔴 {date_badge_label}</span>'
     elif date_badge_type == "orange":
-        date_pill = f'<span style="background: #FFF7ED; color: #EA580C; border: 1.5px solid #FB923C; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🟠 {date_badge_label}</span>'
+        date_pill = f'<span style="background: #FFF7ED; color: #EA580C; border: 1.5px solid #FB923C; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; white-space: nowrap; display: inline-block;">🟠 {date_badge_label}</span>'
     else:
-        date_pill = f'<span style="background: #F0FDF4; color: #16A34A; border: 1.5px solid #4ADE80; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🟢 {date_badge_label}</span>'
+        date_pill = f'<span style="background: #F0FDF4; color: #16A34A; border: 1.5px solid #4ADE80; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; white-space: nowrap; display: inline-block;">🟢 {date_badge_label}</span>'
 
     mismatches = item.get("mismatches", [])
     has_mm = len(mismatches) > 0
 
-    qc_pill = f'<span style="background: #FEF3C7; color: #B45309; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">⚠️ {qc_ex:,} Excluded</span>' if qc_ex > 0 else ""
-    minus1_pill = f'<span style="background: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">🚫 {minus1_ex:,} Blocked (-1)</span>' if minus1_ex > 0 else ""
-    dedup_pill = f'<span style="background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">✂️ {dedup_ex:,} Dups</span>' if dedup_ex > 0 else ""
+    qc_pill = f'<span style="background: #FEF3C7; color: #B45309; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">⚠️ {qc_ex:,} Excluded</span>' if qc_ex > 0 else ""
+    minus1_pill = f'<span style="background: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">🚫 {minus1_ex:,} Blocked (-1)</span>' if minus1_ex > 0 else ""
+    dedup_pill = f'<span style="background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">✂️ {dedup_ex:,} Dups</span>' if dedup_ex > 0 else ""
 
     prefix_label = f"📁 #{idx+1} " if not is_single else "📁 "
 
-    card_html = f'''
-    <div style="background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 12px 16px; margin: 10px 0 6px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <div style="font-size: 0.94rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px;">
-                <span>{prefix_label}</span>
-                <span style="font-family: monospace; color: #0E7490;">{out_name}</span>
-            </div>
-            <div>
-                {date_pill}
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 0.78rem;">
-            <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✅ {clean_rows_display:,} Ready</span>
-            {qc_pill}
-            {minus1_pill}
-            {dedup_pill}
-        </div>
-    </div>
-    '''
-    st.markdown(card_html, unsafe_allow_html=True)
+    with st.container(border=True):
+        col_hdr_left, col_hdr_right = st.columns([3.2, 1.4])
+        with col_hdr_left:
+            st.markdown(
+                f'<div style="font-size: 0.96rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">'
+                f'<span>{prefix_label}</span><span style="font-family: monospace; color: #0E7490;">{out_name}</span>'
+                f'</div>'
+                f'<div style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem;">'
+                f'<span style="background: #E0F2FE; color: #0369A1; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✅ {clean_rows_display:,} Ready</span>'
+                f'{qc_pill}'
+                f'{minus1_pill}'
+                f'{dedup_pill}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with col_hdr_right:
+            st.markdown(f'<div style="text-align: right; padding-top: 4px;">{date_pill}</div>', unsafe_allow_html=True)
 
-    # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
-    if has_mm:
-        st.markdown(f'''
-        <div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 8px; padding: 8px 12px; margin: 4px 0 8px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-            <span style="font-weight: 700; color: #92400E; font-size: 0.84rem;">
-                ⚠️ <b>{len(mismatches)} Destination(s) Billing Mismatch:</b> Vendor billing differs from your standard master (<code>billingkaif.xlsx</code>).
-            </span>
-        </div>
-        ''', unsafe_allow_html=True)
+        # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
+        if has_mm:
+            st.markdown(
+                f'<div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 8px; padding: 8px 12px; margin: 10px 0 8px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">'
+                f'<span style="font-weight: 700; color: #92400E; font-size: 0.84rem;">'
+                f'⚠️ <b>{len(mismatches)} Destination(s) Billing Mismatch:</b> Vendor billing differs from your standard master (<code>billingkaif.xlsx</code>).'
+                f'</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
-        col_btn_fix, col_btn_view = st.columns([1.6, 2.4])
-        with col_btn_fix:
-            btn_fix_label = f"⚡ Fix All {len(mismatches)} to Standard Billing" if len(mismatches) > 1 else "⚡ Fix to Standard Billing"
-            if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
-                df_curr = item.get("df_clean")
-                if df_curr is not None:
-                    df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches)
-                    new_xl_bytes = core_engine.generate_target_excel_bytes(df_fixed)
-                    new_csv_bytes = core_engine.generate_target_csv_bytes(df_fixed)
-                    
-                    cp = item.get("cached_path")
-                    if cp:
-                        with open(cp, "wb") as f_x:
-                            f_x.write(new_xl_bytes)
-                    cp_csv = item.get("cached_csv_path")
-                    if cp_csv:
-                        with open(cp_csv, "wb") as f_c:
-                            f_c.write(new_csv_bytes)
-                    
-                    item["df_clean"] = df_fixed
-                    item["mismatches"] = []
-                    item["has_mismatch"] = False
+            col_btn_fix, col_btn_view = st.columns([1.6, 2.4])
+            with col_btn_fix:
+                btn_fix_label = f"⚡ Fix All {len(mismatches)} to Standard Billing" if len(mismatches) > 1 else "⚡ Fix to Standard Billing"
+                if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
+                    df_curr = item.get("df_clean")
+                    if df_curr is not None:
+                        df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches)
+                        new_xl_bytes = core_engine.generate_target_excel_bytes(df_fixed)
+                        new_csv_bytes = core_engine.generate_target_csv_bytes(df_fixed)
+                        
+                        cp = item.get("cached_path")
+                        if cp:
+                            with open(cp, "wb") as f_x:
+                                f_x.write(new_xl_bytes)
+                        cp_csv = item.get("cached_csv_path")
+                        if cp_csv:
+                            with open(cp_csv, "wb") as f_c:
+                                f_c.write(new_csv_bytes)
+                        
+                        item["df_clean"] = df_fixed
+                        item["mismatches"] = []
+                        item["has_mismatch"] = False
 
-                    if len(st.session_state.processed_results) > 1 and st.session_state.get("batch_zip_xl_path"):
-                        try:
-                            with zipfile.ZipFile(st.session_state.batch_zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
-                                for p_item in st.session_state.processed_results:
-                                    cp_i = p_item.get("cached_path")
-                                    if cp_i and os.path.exists(cp_i):
-                                        zf_xl.write(cp_i, arcname=p_item["filename"])
-                        except Exception:
-                            pass
+                        if len(st.session_state.processed_results) > 1 and st.session_state.get("batch_zip_xl_path"):
+                            try:
+                                with zipfile.ZipFile(st.session_state.batch_zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
+                                    for p_item in st.session_state.processed_results:
+                                        cp_i = p_item.get("cached_path")
+                                        if cp_i and os.path.exists(cp_i):
+                                            zf_xl.write(cp_i, arcname=p_item["filename"])
+                            except Exception:
+                                pass
 
-                    st.success(f"✅ All {len(mismatches)} destinations updated to standard billing successfully!")
-                    time.sleep(0.8)
-                    st.rerun()
+                        st.success(f"✅ All {len(mismatches)} destinations updated to standard billing successfully!")
+                        time.sleep(0.8)
+                        st.rerun()
 
-        with col_btn_view:
-            with st.expander(f"🔍 View {len(mismatches)} Mismatched Destination(s)", expanded=False):
-                mm_table = []
-                for mm in mismatches[:100]:
-                    mm_table.append({
-                        "Destination": mm["destination"],
-                        "Dial Code": mm["dial_code"],
-                        "Vendor Billing": mm["vendor_pulse"],
-                        "Your Standard": mm["standard_pulse"]
-                    })
-                st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
+            with col_btn_view:
+                with st.expander(f"🔍 View {len(mismatches)} Mismatched Destination(s)", expanded=False):
+                    mm_table = []
+                    for mm in mismatches[:100]:
+                        mm_table.append({
+                            "Destination": mm["destination"],
+                            "Dial Code": mm["dial_code"],
+                            "Vendor Billing": mm["vendor_pulse"],
+                            "Your Standard": mm["standard_pulse"]
+                        })
+                    st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
 
-    # Download Buttons side-by-side
-    c_dl1, c_dl2 = st.columns(2)
-    with c_dl1:
-        st.download_button(
-            label="📊 Download Excel (.xlsx)",
-            data=out_bytes,
-            file_name=out_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"exec_dl_excel_{idx}_{is_single}",
-            type="primary",
-            use_container_width=True
-        )
-    with c_dl2:
-        csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
-        cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
-        csv_data = read_disk_bytes(cached_csv_p)
-        st.download_button(
-            label="📄 Download CSV (.csv)",
-            data=csv_data,
-            file_name=csv_name,
-            mime="text/csv",
-            key=f"exec_dl_csv_{idx}_{is_single}",
-            type="secondary",
-            use_container_width=True
-        )
+        st.write("")
+        # Download Buttons side-by-side
+        c_dl1, c_dl2 = st.columns(2)
+        with c_dl1:
+            st.download_button(
+                label="📊 Download Excel (.xlsx)",
+                data=out_bytes,
+                file_name=out_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"exec_dl_excel_{idx}_{is_single}",
+                type="primary",
+                use_container_width=True
+            )
+        with c_dl2:
+            csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
+            cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
+            csv_data = read_disk_bytes(cached_csv_p)
+            st.download_button(
+                label="📄 Download CSV (.csv)",
+                data=csv_data,
+                file_name=csv_name,
+                mime="text/csv",
+                key=f"exec_dl_csv_{idx}_{is_single}",
+                type="secondary",
+                use_container_width=True
+            )
 
 # Display persistent results AT THE TOP (Never hidden below the fold!)
 if st.session_state.processed_results:
