@@ -1811,78 +1811,39 @@ def render_executive_deck_card(idx, item, is_single=False):
     ) if dedup_ex > 0 else ""
 
     prefix_tag = f'<span style="background: #E2E8F0; color: #475569; font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">#{idx+1}</span>' if not is_single else ""
-    orig_name = item.get("original_filename") or item.get("vendor_name") or ""
+    orig_name = item.get("original_filename") or item.get("vendor_name") or out_name
 
     with st.container(border=True):
-        col_hdr_left, col_hdr_date, col_hdr_stats = st.columns([2.9, 1.2, 0.9])
-        with col_hdr_left:
-            if orig_name:
-                st.markdown(
-                    f'<div style="font-size: 0.85rem; color: #475569; display: flex; align-items: center; gap: 6px; padding-top: 5px; flex-wrap: wrap;">'
-                    f'{prefix_tag}'
-                    f'<span style="color: #64748B; font-weight: 600;">📥 Uploaded:</span> '
-                    f'<code style="color: #0369A1; font-weight: 700; font-size: 0.84rem; background: #E0F2FE; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">{orig_name}</code> '
-                    f'<span style="color: #94A3B8; font-weight: 800; font-size: 0.90rem;">➔</span> '
-                    f'<span style="color: #0D9488; font-weight: 700; font-size: 0.84rem;">Ready to Download:</span>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    f'<div style="font-size: 0.88rem; font-weight: 700; color: #0D9488; display: flex; align-items: center; gap: 6px; padding-top: 5px;">'
-                    f'{prefix_tag}<span>⚡ Standardized Output Ready:</span>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-        with col_hdr_date:
-            st.markdown(f'<div style="text-align: right; padding-top: 5px;">{date_pill}</div>', unsafe_allow_html=True)
-        with col_hdr_stats:
-            with st.popover("📊 Stats ▾", use_container_width=True, key=f"popover_stats_{idx}_{is_single}"):
-                st.markdown(
-                    f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
-                    f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
-                    f'📊 Row Breakdown & QC Stats'
-                    f'</div>'
-                    f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px;">'
-                    f'<span style="color: #0369A1; font-weight: 700;">📥 VENDOR INPUT</span>'
-                    f'<span style="color: #0C4A6E; font-weight: 800; font-size: 0.95rem;">{initial_rows:,}</span>'
-                    f'</div>'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
-                    f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
-                    f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
-                    f'</div>'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
-                    f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
-                    f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
-                    f'</div>'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
-                    f'<span style="color: #475569; font-weight: 700;">🚫 NANP (+1)</span>'
-                    f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{nanp_ex:,}</span>'
-                    f'</div>'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
-                    f'<span style="color: #475569; font-weight: 700;">🚫 RATES TO -1</span>'
-                    f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{minus1_ex:,}</span>'
-                    f'</div>'
-                    f'{dedup_chip}'
-                    f'</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-        # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
         if has_mm:
-            col_mm_msg, col_mm_view, col_mm_fix = st.columns([2.5, 1.1, 1.4])
-            with col_mm_msg:
+            st.markdown(f"""
+            <style>
+            div.st-key-popover_mm_{idx}_{is_single} button {{
+                background-color: #FFFBEB !important;
+                border: 1.5px solid #FCD34D !important;
+                color: #B45309 !important;
+                font-weight: 700 !important;
+                font-size: 0.78rem !important;
+            }}
+            div.st-key-popover_mm_{idx}_{is_single} button:hover {{
+                background-color: #FEF3C7 !important;
+                border-color: #F59E0B !important;
+                color: #78350F !important;
+            }}
+            </style>
+            """, unsafe_allow_html=True)
+
+            c_name, c_mm, c_fix, c_stats, c_date = st.columns([2.3, 1.2, 1.2, 0.8, 1.1])
+            with c_name:
                 st.markdown(
-                    f'<div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; padding: 5px 12px; font-weight: 700; color: #92400E; font-size: 0.82rem; display: flex; align-items: center; min-height: 34px;">'
-                    f'⚠️ {len(mismatches)} Destination(s) Billing Mismatch found'
+                    f'<div style="display: flex; align-items: center; gap: 6px; min-height: 38px; font-weight: 700; color: #0C4A6E; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+                    f'{prefix_tag}📁 {orig_name}'
                     f'</div>',
                     unsafe_allow_html=True
                 )
-            with col_mm_view:
-                with st.popover(f"🔍 View ({len(mismatches)})", use_container_width=True):
-                    st.markdown(f"**{len(mismatches)} Mismatched Destinations:**")
+            with c_mm:
+                with st.popover(f"⚠️ {len(mismatches)} Mismatch ▾", use_container_width=True, key=f"popover_mm_{idx}_{is_single}"):
+                    st.markdown(f"**⚠️ {len(mismatches)} Billing Mismatches Found:**")
+                    st.caption("Vendor pulse differs from standard master (billingkaif.xlsx)")
                     mm_table = []
                     for mm in mismatches[:100]:
                         mm_table.append({
@@ -1892,8 +1853,8 @@ def render_executive_deck_card(idx, item, is_single=False):
                             "Standard": mm["standard_pulse"]
                         })
                     st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
-            with col_mm_fix:
-                btn_fix_label = f"⚡ Fix to Standard ({len(mismatches)})"
+            with c_fix:
+                btn_fix_label = "⚡ Fix Standard"
                 if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
                     df_curr = item.get("df_clean")
                     if df_curr is not None:
@@ -1924,9 +1885,98 @@ def render_executive_deck_card(idx, item, is_single=False):
                             except Exception:
                                 pass
 
-                        st.success(f"✅ All {len(mismatches)} destinations updated to standard billing successfully!")
+                        st.success("✅ Standard billing applied successfully!")
                         time.sleep(0.8)
                         st.rerun()
+            with c_stats:
+                with st.popover("📊 Stats ▾", use_container_width=True, key=f"popover_stats_{idx}_{is_single}"):
+                    st.markdown(
+                        f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
+                        f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
+                        f'📊 Row Breakdown & QC Stats'
+                        f'</div>'
+                        f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px;">'
+                        f'<span style="color: #0369A1; font-weight: 700;">📥 VENDOR INPUT</span>'
+                        f'<span style="color: #0C4A6E; font-weight: 800; font-size: 0.95rem;">{initial_rows:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                        f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
+                        f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
+                        f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
+                        f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                        f'<span style="color: #475569; font-weight: 700;">🚫 NANP (+1)</span>'
+                        f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{nanp_ex:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                        f'<span style="color: #475569; font-weight: 700;">🚫 RATES TO -1</span>'
+                        f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{minus1_ex:,}</span>'
+                        f'</div>'
+                        f'{dedup_chip}'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+            with c_date:
+                st.markdown(
+                    f'<div style="display: flex; align-items: center; justify-content: flex-end; min-height: 38px;">'
+                    f'{date_pill}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+        else:
+            c_name, c_stats, c_date = st.columns([3.5, 0.9, 1.2])
+            with c_name:
+                st.markdown(
+                    f'<div style="display: flex; align-items: center; gap: 6px; min-height: 38px; font-weight: 700; color: #0C4A6E; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+                    f'{prefix_tag}📁 {orig_name}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            with c_stats:
+                with st.popover("📊 Stats ▾", use_container_width=True, key=f"popover_stats_{idx}_{is_single}"):
+                    st.markdown(
+                        f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
+                        f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
+                        f'📊 Row Breakdown & QC Stats'
+                        f'</div>'
+                        f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px;">'
+                        f'<span style="color: #0369A1; font-weight: 700;">📥 VENDOR INPUT</span>'
+                        f'<span style="color: #0C4A6E; font-weight: 800; font-size: 0.95rem;">{initial_rows:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                        f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
+                        f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
+                        f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
+                        f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                        f'<span style="color: #475569; font-weight: 700;">🚫 NANP (+1)</span>'
+                        f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{nanp_ex:,}</span>'
+                        f'</div>'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                        f'<span style="color: #475569; font-weight: 700;">🚫 RATES TO -1</span>'
+                        f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{minus1_ex:,}</span>'
+                        f'</div>'
+                        f'{dedup_chip}'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+            with c_date:
+                st.markdown(
+                    f'<div style="display: flex; align-items: center; justify-content: flex-end; min-height: 38px;">'
+                    f'{date_pill}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
         # Download Buttons: Excel (carrying full standardized name) + CSV
         c_dl1, c_dl2 = st.columns([3.5, 1.5])
@@ -1964,8 +2014,8 @@ if st.session_state.processed_results:
     with col_hdr:
         elapsed_badge = f'<span style="background: #DCFCE7; color: #166534; font-weight: 700; font-size: 0.78rem; padding: 2px 10px; border-radius: 12px; border: 1px solid #86EFAC;">⏱️ {elapsed_sec:.2f}s</span>' if elapsed_sec is not None else ""
         st.markdown(
-            f'<div style="display: flex; align-items: center; gap: 10px; background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 6px 14px; margin: 2px 0;">'
-            f'<span style="font-weight: 700; color: #166534; font-size: 0.90rem;">🎉 {len(results)} Sheet(s) Standardized Successfully</span>'
+            f'<div style="display: inline-flex; align-items: center; gap: 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 20px; padding: 4px 14px; margin: 2px 0;">'
+            f'<span style="font-weight: 700; color: #166534; font-size: 0.88rem;">🎉 {len(results)} Sheet(s) Standardized Successfully</span>'
             f'{elapsed_badge}'
             f'</div>',
             unsafe_allow_html=True
