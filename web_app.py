@@ -861,6 +861,14 @@ def get_avatar_base64(filename):
             return ""
     return ""
 
+# Handle avatar toggle via query param
+if "action" in st.query_params and st.query_params["action"] == "avatar":
+    st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+    try:
+        del st.query_params["action"]
+    except Exception:
+        pass
+
 # ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
 top_title_col, top_profile_col = st.columns([3.35, 0.65])
 
@@ -883,46 +891,15 @@ with top_profile_col:
     
     st.markdown(f"""
     <style>
-    div.st-key-avatar_clickable_btn {{
-        display: flex !important;
-        justify-content: flex-end !important;
-    }}
-    div.st-key-avatar_clickable_btn > button {{
-        background-image: url('data:image/png;base64,{active_avatar_b64}') !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        width: 48px !important;
-        height: 48px !important;
-        min-width: 48px !important;
-        max-width: 48px !important;
-        min-height: 48px !important;
-        max-height: 48px !important;
-        border-radius: 8px !important;
-        border: 1.5px solid #0E7490 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        cursor: pointer !important;
-        box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18) !important;
-        transition: transform 0.15s ease, border-color 0.15s ease !important;
-    }}
-    div.st-key-avatar_clickable_btn > button:hover {{
-        border-color: #0284C7 !important;
-        transform: scale(1.05) !important;
-        box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3) !important;
-    }}
-    div.st-key-avatar_clickable_btn > button p {{
-        display: none !important;
-    }}
     div.st-key-top_logout_btn {{
         display: flex !important;
         justify-content: flex-end !important;
-        margin-top: 3px !important;
+        margin-top: 4px !important;
     }}
     div.st-key-top_logout_btn > button {{
-        width: 48px !important;
-        min-width: 48px !important;
-        max-width: 48px !important;
+        width: 50px !important;
+        min-width: 50px !important;
+        max-width: 50px !important;
         height: 22px !important;
         min-height: 22px !important;
         padding: 0 !important;
@@ -941,39 +918,40 @@ with top_profile_col:
         color: #DC2626 !important;
     }}
     </style>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-start; text-align: right;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="line-height: 1.2;">
+                <div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; white-space: nowrap;">
+                    {u_display_name}
+                </div>
+                <div style="font-size: 0.65rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
+                    {u_role}
+                </div>
+            </div>
+            <a href="?action=avatar" target="_self" title="Click to change your avatar" style="display: block; cursor: pointer; text-decoration: none;">
+                <img src="data:image/png;base64,{active_avatar_b64}" 
+                     style="width: 50px; height: 50px; min-width: 50px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
+                     alt="Avatar" />
+            </a>
+        </div>
+    </div>
     """, unsafe_allow_html=True)
     
-    col_u_info, col_u_av = st.columns([1.6, 1.0])
-    with col_u_info:
-        st.markdown(f"""
-        <div style="text-align: right; padding-top: 6px; line-height: 1.2;">
-            <div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                {u_display_name}
-            </div>
-            <div style="font-size: 0.65rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
-                {u_role}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_u_av:
-        if st.button(" ", key="avatar_clickable_btn", help="Click to change your avatar"):
-            st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
-            st.rerun()
-        if st.button("🚪 Exit", key="top_logout_btn", help="Logout"):
-            clear_current_session()
-            components.html("""
-            <script>
-            setTimeout(function() {
-                try {
-                    parent.window.location.reload();
-                } catch(e) {
-                    try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-                }
-            }, 150);
-            </script>
-            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
-            """, height=50)
-            st.stop()
+    if st.button("🚪 Logout", key="top_logout_btn", help="Logout from portal"):
+        clear_current_session()
+        components.html("""
+        <script>
+        setTimeout(function() {
+            try {
+                parent.window.location.reload();
+            } catch(e) {
+                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
+            }
+        }, 150);
+        </script>
+        <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
+        """, height=50)
+        st.stop()
 
 # Expandable Profile Avatar Selector
 if st.session_state.get("show_avatar_picker", False):
