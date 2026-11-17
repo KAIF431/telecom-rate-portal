@@ -18,6 +18,7 @@ from streamlit_cookies_controller import CookieController
 controller = CookieController()
 
 import auth_manager as am
+import billing_manager as bm
 try:
     importlib.reload(am)
 except Exception:
@@ -1114,9 +1115,10 @@ if is_admin:
         st.markdown("## 👑 Admin Control Panel")
         st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & audit trail.")
         
-        a_tab1, a_tab_hist, a_tab_edit, a_tab2, a_tab_del, a_tab3, a_tab4 = st.tabs([
+        a_tab1, a_tab_hist, a_tab_billing, a_tab_edit, a_tab2, a_tab_del, a_tab3, a_tab4 = st.tabs([
             "👥 All Users (IDs & Passwords)",
             "📜 User Activity & Processing History",
+            "👑 Master Billing Rules (billingkaif)",
             "✏️ Edit User Names",
             "➕ Create New User",
             "🗑️ Delete User",
@@ -1363,6 +1365,105 @@ if is_admin:
                         key="btn_download_audit_csv"
                     )
 
+
+        with a_tab_billing:
+            st.subheader("👑 Master Billing Rules Manager (`billingkaif.xlsx`)")
+            st.caption("View, search, edit, and add official company billing rules for any destination. When market rules change (e.g. Indonesia 60/1 -> 60/60), update them here without touching code.")
+            
+            bm_data = bm.load_master_billing()
+            raw_rules = bm_data.get("raw_list", [])
+            
+            b_sub1, b_sub2, b_sub3 = st.tabs(["🔍 Search & Edit Rule", "➕ Add New Destination Rule", "📁 Bulk Upload New Sheet"])
+            
+            with b_sub1:
+                st.markdown(f"**Total Master Rules:** `{len(raw_rules):,}` destinations")
+                q_dest = st.text_input("Search Destination (e.g. Indonesia, Brazil, AWCC):", key="admin_search_billing_q", placeholder="Type country or destination name...")
+                
+                matches = []
+                if q_dest and q_dest.strip():
+                    q_low = q_dest.strip().lower()
+                    matches = [r for r in raw_rules if q_low in str(r.get("destination", "")).lower()]
+                else:
+                    matches = raw_rules[:20]
+                    
+                if matches:
+                    st.markdown(f"Found **{len(matches)}** destination(s):")
+                    match_names = [m["destination"] for m in matches]
+                    sel_to_edit = st.selectbox("Select Destination to Edit:", match_names, key="admin_sel_billing_edit")
+                    curr_rule = next((m for m in matches if m["destination"] == sel_to_edit), None)
+                    
+                    if curr_rule:
+                        b_ed1, b_ed2, b_ed3 = st.columns([2, 1, 1])
+                        with b_ed1:
+                            st.info(f"**Destination:** `{curr_rule['destination']}` | **Current:** `{curr_rule['minimum']} / {curr_rule['increment']}`")
+                        with b_ed2:
+                            new_min_val = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=int(curr_rule['minimum']), key=f"b_input_min_{sel_to_edit}")
+                        with b_ed3:
+                            new_inc_val = st.number_input("Increment (sec):", min_value=1, max_value=300, value=int(curr_rule['increment']), key=f"b_input_inc_{sel_to_edit}")
+                            
+                        b_btn_c1, b_btn_c2 = st.columns([1, 1])
+                        with b_btn_c1:
+                            if st.button(f"💾 Save Changes ({new_min_val}/{new_inc_val})", type="primary", use_container_width=True, key=f"b_btn_save_{sel_to_edit}"):
+                                ok_u, msg_u = bm.update_or_add_master_rule(sel_to_edit, new_min_val, new_inc_val)
+                                if ok_u:
+                                    st.success(msg_u)
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error(msg_u)
+                        with b_btn_c2:
+                            if st.button("🗑️ Delete Rule", type="secondary", use_container_width=True, key=f"b_btn_del_{sel_to_edit}"):
+                                ok_d, msg_d = bm.delete_master_rule(sel_to_edit)
+                                st.success(msg_d)
+                                time.sleep(1)
+                                st.rerun()
+            
+            with b_sub2:
+                st.markdown("#### ➕ Add New Destination Rule")
+                with st.form("admin_add_billing_form", clear_on_submit=True):
+                    add_d_name = st.text_input("Destination Name:", placeholder="e.g. INDONESIA FIXED SURABAYA")
+                    col_a1, col_a2 = st.columns(2)
+                    with col_a1:
+                        add_min = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=60)
+                    with col_a2:
+                        add_inc = st.number_input("Increment (sec):", min_value=1, max_value=300, value=1)
+                    if st.form_submit_button("➕ Add to Master Rules", type="primary"):
+                        if add_d_name and add_d_name.strip():
+                            ok_a, msg_a = bm.update_or_add_master_rule(add_d_name.strip(), add_min, add_inc)
+                            if ok_a:
+                                st.success(msg_a)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(msg_a)
+                        else:
+                            st.warning("Destination name cannot be empty.")
+
+            with b_sub3:
+                st.markdown("#### 📁 Bulk Upload Updated `billingkaif.xlsx`")
+                st.caption("Upload your new Excel file with 3 columns (Destinations, Minimum, Increment) to replace or update all master rules in 1 second.")
+                up_b_file = st.file_uploader("Choose Excel file (.xlsx):", type=["xlsx"], key="admin_billing_uploader")
+                if up_b_file is not None:
+                    if st.button("⚡ Replace All Rules with Uploaded Sheet", type="primary", key="admin_btn_apply_billing_file"):
+                        ok_f, msg_f = bm.save_new_master_excel(up_b_file)
+                        if ok_f:
+                            st.success(msg_f)
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg_f)
+                
+                st.divider()
+                if os.path.exists(bm.MASTER_EXCEL_PATH):
+                    with open(bm.MASTER_EXCEL_PATH, "rb") as b_f:
+                        st.download_button(
+                            label="📥 Download Current Master Rules (.xlsx)",
+                            data=b_f.read(),
+                            file_name="billingkaif_master.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="admin_btn_dl_master_billing"
+                        )
+
         with a_tab_edit:
             st.subheader("✏️ Edit User Display Name & Avatar")
             st.caption("Change the full name and assign profile avatar for Admin (yourself) or any user. Changes reflect immediately across the portal.")
@@ -1566,6 +1667,143 @@ if st.session_state.get("just_processed") and st.session_state.processed_results
         except Exception:
             pass
 
+
+def render_executive_deck_card(idx, item, is_single=False):
+    out_name = item["filename"]
+    cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
+    out_bytes = read_disk_bytes(cached_p)
+    stats = item.get("stats", {})
+
+    clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
+    qc_ex = stats.get('qc_excluded', 0)
+    minus1_ex = stats.get('rates_minus1_count', 0)
+    dedup_ex = stats.get('dedup_excluded', 0)
+
+    # Date Badge
+    date_badge_type = item.get("date_badge_type", "green")
+    date_badge_label = item.get("date_badge_label", "Live")
+    if date_badge_type == "red":
+        date_pill = f'<span style="background: #FEF2F2; color: #DC2626; border: 1.5px solid #F87171; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🔴 {date_badge_label}</span>'
+    elif date_badge_type == "orange":
+        date_pill = f'<span style="background: #FFF7ED; color: #EA580C; border: 1.5px solid #FB923C; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🟠 {date_badge_label}</span>'
+    else:
+        date_pill = f'<span style="background: #F0FDF4; color: #16A34A; border: 1.5px solid #4ADE80; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.80rem; white-space: nowrap;">🟢 {date_badge_label}</span>'
+
+    mismatches = item.get("mismatches", [])
+    has_mm = len(mismatches) > 0
+
+    qc_pill = f'<span style="background: #FEF3C7; color: #B45309; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">⚠️ {qc_ex:,} Excluded</span>' if qc_ex > 0 else ""
+    minus1_pill = f'<span style="background: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">🚫 {minus1_ex:,} Blocked (-1)</span>' if minus1_ex > 0 else ""
+    dedup_pill = f'<span style="background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600;">✂️ {dedup_ex:,} Dups</span>' if dedup_ex > 0 else ""
+
+    prefix_label = f"📁 #{idx+1} " if not is_single else "📁 "
+
+    card_html = f'''
+    <div style="background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 12px 16px; margin: 10px 0 6px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="font-size: 0.94rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px;">
+                <span>{prefix_label}</span>
+                <span style="font-family: monospace; color: #0E7490;">{out_name}</span>
+            </div>
+            <div>
+                {date_pill}
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 0.78rem;">
+            <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; padding: 2px 8px; border-radius: 6px;">✅ {clean_rows_display:,} Ready</span>
+            {qc_pill}
+            {minus1_pill}
+            {dedup_pill}
+        </div>
+    </div>
+    '''
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
+    if has_mm:
+        st.markdown(f'''
+        <div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 8px; padding: 8px 12px; margin: 4px 0 8px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+            <span style="font-weight: 700; color: #92400E; font-size: 0.84rem;">
+                ⚠️ <b>{len(mismatches)} Destination(s) Billing Mismatch:</b> Vendor billing differs from your standard master (<code>billingkaif.xlsx</code>).
+            </span>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        col_btn_fix, col_btn_view = st.columns([1.6, 2.4])
+        with col_btn_fix:
+            btn_fix_label = f"⚡ Fix All {len(mismatches)} to Standard Billing" if len(mismatches) > 1 else "⚡ Fix to Standard Billing"
+            if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
+                df_curr = item.get("df_clean")
+                if df_curr is not None:
+                    df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches)
+                    new_xl_bytes = core_engine.generate_target_excel_bytes(df_fixed)
+                    new_csv_bytes = core_engine.generate_target_csv_bytes(df_fixed)
+                    
+                    cp = item.get("cached_path")
+                    if cp:
+                        with open(cp, "wb") as f_x:
+                            f_x.write(new_xl_bytes)
+                    cp_csv = item.get("cached_csv_path")
+                    if cp_csv:
+                        with open(cp_csv, "wb") as f_c:
+                            f_c.write(new_csv_bytes)
+                    
+                    item["df_clean"] = df_fixed
+                    item["mismatches"] = []
+                    item["has_mismatch"] = False
+
+                    if len(st.session_state.processed_results) > 1 and st.session_state.get("batch_zip_xl_path"):
+                        try:
+                            with zipfile.ZipFile(st.session_state.batch_zip_xl_path, "w", zipfile.ZIP_DEFLATED) as zf_xl:
+                                for p_item in st.session_state.processed_results:
+                                    cp_i = p_item.get("cached_path")
+                                    if cp_i and os.path.exists(cp_i):
+                                        zf_xl.write(cp_i, arcname=p_item["filename"])
+                        except Exception:
+                            pass
+
+                    st.success(f"✅ All {len(mismatches)} destinations updated to standard billing successfully!")
+                    time.sleep(0.8)
+                    st.rerun()
+
+        with col_btn_view:
+            with st.expander(f"🔍 View {len(mismatches)} Mismatched Destination(s)", expanded=False):
+                mm_table = []
+                for mm in mismatches[:100]:
+                    mm_table.append({
+                        "Destination": mm["destination"],
+                        "Dial Code": mm["dial_code"],
+                        "Vendor Billing": mm["vendor_pulse"],
+                        "Your Standard": mm["standard_pulse"]
+                    })
+                st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
+
+    # Download Buttons side-by-side
+    c_dl1, c_dl2 = st.columns(2)
+    with c_dl1:
+        st.download_button(
+            label="📊 Download Excel (.xlsx)",
+            data=out_bytes,
+            file_name=out_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"exec_dl_excel_{idx}_{is_single}",
+            type="primary",
+            use_container_width=True
+        )
+    with c_dl2:
+        csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
+        cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
+        csv_data = read_disk_bytes(cached_csv_p)
+        st.download_button(
+            label="📄 Download CSV (.csv)",
+            data=csv_data,
+            file_name=csv_name,
+            mime="text/csv",
+            key=f"exec_dl_csv_{idx}_{is_single}",
+            type="secondary",
+            use_container_width=True
+        )
+
 # Display persistent results AT THE TOP (Never hidden below the fold!)
 if st.session_state.processed_results:
     results = st.session_state.processed_results
@@ -1659,126 +1897,12 @@ if st.session_state.processed_results:
             })
         st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
-        with st.expander(f"🔍 Individual File Downloads & Detailed KPI Breakdown ({len(results)} Sheets)", expanded=False):
-            for idx, item in enumerate(results):
-                out_name = item["filename"]
-                cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
-                out_bytes = read_disk_bytes(cached_p)
-                stats = item.get("stats", {})
-
-                clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
-                initial_rows = stats.get('initial_rows', clean_rows_display)
-                qc_ex = stats.get('qc_excluded', 0)
-                nanp_ex = stats.get('nanp_excluded', 0)
-                dedup_ex = stats.get('dedup_excluded', 0)
-                minus1_ex = stats.get('rates_minus1_count', 0)
-                future_eff = stats.get('future_eff_date')
-
-                future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>' if future_eff else ""
-                dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
-
-                card_html = (
-                    f'<div class="deck-result-card" style="margin-bottom: 8px;">'
-                    f'<div class="deck-title-bar">'
-                    f'<span class="deck-name">📁 #{idx+1} <b>File:</b> <code style="color: #0E7490; font-size: 0.95rem; font-weight: 700;">{out_name}</code></span>'
-                    f'{future_eff_badge}'
-                    f'</div>'
-                    f'<div class="kpi-strip">'
-                    f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
-                    f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
-                    f'{dedup_chip}'
-                    f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
-                    f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1)</span><span class="kpi-val">{nanp_ex:,}</span></div>'
-                    f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
-                    f'</div>'
-                    f'</div>'
-                )
-                st.markdown(card_html, unsafe_allow_html=True)
-
-                col_dl_excel, col_dl_csv = st.columns(2)
-                with col_dl_excel:
-                    st.download_button(
-                        label=f"📊 Download Excel (.xlsx)",
-                        data=out_bytes,
-                        file_name=out_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=f"top_dl_btn_excel_{idx}",
-                        type="secondary",
-                        use_container_width=True
-                    )
-                with col_dl_csv:
-                    csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
-                    cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
-                    csv_data = read_disk_bytes(cached_csv_p)
-                    st.download_button(
-                        label=f"📄 Download CSV (.csv)",
-                        data=csv_data,
-                        file_name=csv_name,
-                        mime="text/csv",
-                        key=f"top_dl_btn_csv_{idx}",
-                        type="secondary",
-                        use_container_width=True
-                    )
+        st.markdown("#### 📁 Standardized Rate Decks & Downloads:")
+        for idx, item in enumerate(results):
+            render_executive_deck_card(idx, item, is_single=False)
     else:
         item = results[0]
-        out_name = item["filename"]
-        cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
-        out_bytes = read_disk_bytes(cached_p)
-        stats = item.get("stats", {})
-
-        clean_rows_display = stats.get('final_clean_rows', item.get('rows_count', 0))
-        initial_rows = stats.get('initial_rows', clean_rows_display)
-        qc_ex = stats.get('qc_excluded', 0)
-        nanp_ex = stats.get('nanp_excluded', 0)
-        dedup_ex = stats.get('dedup_excluded', 0)
-        minus1_ex = stats.get('rates_minus1_count', 0)
-        future_eff = stats.get('future_eff_date')
-
-        future_eff_badge = f'<span class="deck-badge-eff">📅 Eff. Date: {future_eff}</span>' if future_eff else ""
-        dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
-
-        card_html = (
-            f'<div class="deck-result-card">'
-            f'<div class="deck-title-bar">'
-            f'<span class="deck-name">📁 <b>Standardized File:</b> <code style="color: #0E7490; font-size: 1.05rem; font-weight: 700;">{out_name}</code></span>'
-            f'{future_eff_badge}'
-            f'</div>'
-            f'<div class="kpi-strip">'
-            f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
-            f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
-            f'{dedup_chip}'
-            f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
-            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1) FILTERED</span><span class="kpi-val">{nanp_ex:,}</span></div>'
-            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
-            f'</div>'
-            f'</div>'
-        )
-        st.markdown(card_html, unsafe_allow_html=True)
-
-        col_dl_excel, col_dl_csv = st.columns(2)
-        with col_dl_excel:
-            st.download_button(
-                label="📊 Download Excel (.xlsx)",
-                data=out_bytes,
-                file_name=out_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="top_dl_btn_excel_0",
-                type="primary",
-                use_container_width=True
-            )
-        with col_dl_csv:
-            csv_name = item.get("csv_filename") or core_engine.build_csv_output_filename(item.get("vendor_name", out_name))
-            cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
-            csv_data = read_disk_bytes(cached_csv_p)
-            st.download_button(
-                label="📄 Download CSV (.csv)",
-                data=csv_data,
-                file_name=csv_name,
-                mime="text/csv",
-                key="top_dl_btn_csv_0",
-                type="primary",
-                use_container_width=True
-            )
+        render_executive_deck_card(0, item, is_single=True)
     st.markdown("---")
 
 if "uploader_key" not in st.session_state:
@@ -1954,11 +2078,39 @@ if uploaded_files:
                 final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
                 final_csv_filename = core_engine.build_csv_output_filename(user_base)
 
+                # Audit billing against master standard
+                has_mm, mm_list, mm_summary = bm.audit_dataframe_billing(df_clean)
+
+                # Compute accurate date badge
+                today_dt = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).date()
+                eff_date_obj = None
+                if '_dt_obj' in df_clean.columns:
+                    v_dates = [d for d in df_clean['_dt_obj'] if d is not None]
+                    if v_dates:
+                        from collections import Counter
+                        eff_date_obj = Counter(v_dates).most_common(1)[0][0]
+
+                date_badge_type = "green"
+                date_badge_label = "Live"
+                if eff_date_obj:
+                    date_display_str = eff_date_obj.strftime("%d-%b-%Y")
+                    if eff_date_obj > today_dt:
+                        date_badge_type = "red"
+                        date_badge_label = f"Future: {date_display_str}"
+                    elif eff_date_obj.year < today_dt.year:
+                        date_badge_type = "orange"
+                        date_badge_label = f"Past: {date_display_str}"
+                    else:
+                        date_badge_type = "green"
+                        date_badge_label = f"Live: {date_display_str}"
+                else:
+                    raw_dates = df_clean['Eff. Date'].dropna().tolist() if 'Eff. Date' in df_clean.columns else []
+                    if raw_dates:
+                        date_badge_label = f"Date: {raw_dates[0]}"
+
                 excel_bytes = core_engine.generate_target_excel_bytes(df_clean)
                 csv_bytes = core_engine.generate_target_csv_bytes(df_clean)
                 clean_rows_count = len(df_clean)
-                del df_clean
-                gc.collect()
 
                 # Guaranteed Instant Auto-Save directly to user's Windows Downloads folder
                 saved_paths = []
@@ -2022,7 +2174,13 @@ if uploaded_files:
                     "cached_csv_path": cached_csv_path,
                     "stats": stats,
                     "rows_count": clean_rows_count,
-                    "saved_paths": saved_paths
+                    "saved_paths": saved_paths,
+                    "df_clean": df_clean,
+                    "date_badge_type": date_badge_type,
+                    "date_badge_label": date_badge_label,
+                    "has_mismatch": has_mm,
+                    "mismatches": mm_list,
+                    "mismatch_summary": mm_summary
                 })
 
                 progress_bar.progress((f_idx + 1) / len(raw_files))
