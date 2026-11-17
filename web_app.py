@@ -571,29 +571,34 @@ st.markdown("""
     .kpi-subtle .kpi-label { color: #475569 !important; }
     .kpi-subtle .kpi-val { color: #0C4A6E !important; }
 
-    /* Accessible Logout Button Styling */
-    button[key="top_logout_btn"] {
-        border: 1px solid #FCA5A5 !important;
-        color: #B91C1C !important;
-        background: #FEF2F2 !important;
-        font-weight: 600 !important;
-    }
-    button[key="top_logout_btn"]:hover {
-        background: #FEE2E2 !important;
-        border-color: #EF4444 !important;
-        color: #991B1B !important;
-    }
-
+    /* Subtle Compact Buttons for Top Profile: Logout & Avatar */
+    div.st-key-top_logout_btn > button,
+    div.st-key-btn_toggle_avatar_picker > button,
+    button[key="top_logout_btn"],
     button[key="btn_toggle_avatar_picker"] {
-        border: 1px solid #BAE6FD !important;
-        color: #0E7490 !important;
-        background: #F0F9FF !important;
+        padding: 1px 8px !important;
+        min-height: 22px !important;
+        height: 22px !important;
+        font-size: 0.68rem !important;
         font-weight: 600 !important;
+        line-height: 1 !important;
+        border-radius: 6px !important;
+        border: 1px solid #CBD5E1 !important;
+        background-color: #FFFFFF !important;
+        color: #475569 !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
     }
+    div.st-key-top_logout_btn > button:hover,
+    button[key="top_logout_btn"]:hover {
+        background-color: #FEF2F2 !important;
+        border-color: #F87171 !important;
+        color: #DC2626 !important;
+    }
+    div.st-key-btn_toggle_avatar_picker > button:hover,
     button[key="btn_toggle_avatar_picker"]:hover {
-        background: #E0F2FE !important;
-        border-color: #0E7490 !important;
-        color: #0C4A6E !important;
+        background-color: #F0F9FF !important;
+        border-color: #38BDF8 !important;
+        color: #0284C7 !important;
     }
 
     /* Subtle professional micro-animations (pure animations, preserving exact site colors) */
@@ -857,7 +862,7 @@ def get_avatar_base64(filename):
     return ""
 
 # ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
-top_title_col, top_profile_col = st.columns([3.2, 0.8])
+top_title_col, top_profile_col = st.columns([3.35, 0.65])
 
 with top_title_col:
     st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
@@ -875,19 +880,6 @@ with top_profile_col:
     active_avatar_b64 = get_avatar_base64(active_avatar_file)
     u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
     u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
-    
-    st.markdown("""
-    <style>
-    button[key="top_logout_btn"], button[key="btn_toggle_avatar_picker"] {
-        padding: 2px 6px !important;
-        min-height: 24px !important;
-        height: 24px !important;
-        font-size: 0.70rem !important;
-        line-height: 1 !important;
-        border-radius: 6px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
     
     st.markdown(f"""
     <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-start; text-align: right; margin-bottom: 4px;">
