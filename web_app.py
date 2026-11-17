@@ -1694,34 +1694,59 @@ def render_executive_deck_card(idx, item, is_single=False):
     mismatches = item.get("mismatches", [])
     has_mm = len(mismatches) > 0
 
-    dedup_chip = f'<div class="kpi-chip kpi-danger"><span class="kpi-label">DUPLICATES REMOVED</span><span class="kpi-val">{dedup_ex:,}</span></div>' if dedup_ex > 0 else ""
+    dedup_chip = (
+        f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px;">'
+        f'<span style="color: #991B1B; font-weight: 700;">✂️ DUPLICATES REMOVED</span>'
+        f'<span style="color: #DC2626; font-weight: 800; font-size: 0.95rem;">{dedup_ex:,}</span>'
+        f'</div>'
+    ) if dedup_ex > 0 else ""
 
     prefix_label = f"📁 #{idx+1} " if not is_single else "📁 "
 
     with st.container(border=True):
-        col_hdr_left, col_hdr_right = st.columns([3.2, 1.4])
+        col_hdr_left, col_hdr_date, col_hdr_stats = st.columns([2.7, 1.3, 0.9])
         with col_hdr_left:
             st.markdown(
-                f'<div style="font-size: 0.98rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">'
-                f'<span>{prefix_label}<b>File:</b></span> <code style="color: #0E7490; font-size: 0.95rem; font-weight: 700;">{out_name}</code>'
+                f'<div style="font-size: 0.96rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; padding-top: 5px;">'
+                f'<span>{prefix_label}<b>File:</b></span> <code style="color: #0E7490; font-size: 0.92rem; font-weight: 700;">{out_name}</code>'
                 f'</div>',
                 unsafe_allow_html=True
             )
-        with col_hdr_right:
-            st.markdown(f'<div style="text-align: right; padding-top: 2px;">{date_pill}</div>', unsafe_allow_html=True)
-
-        # Full KPI Metric Strip (Vendor Input, Clean Output, QC Excluded, NANP, Rates to -1)
-        st.markdown(
-            f'<div class="kpi-strip" style="margin: 8px 0 12px 0;">'
-            f'<div class="kpi-chip kpi-neutral"><span class="kpi-label">VENDOR INPUT</span><span class="kpi-val">{initial_rows:,}</span></div>'
-            f'<div class="kpi-chip kpi-success"><span class="kpi-label">CLEAN OUTPUT</span><span class="kpi-val">{clean_rows_display:,}</span></div>'
-            f'{dedup_chip}'
-            f'<div class="kpi-chip kpi-warning"><span class="kpi-label">QC EXCLUDED</span><span class="kpi-val">{qc_ex:,}</span></div>'
-            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">NANP (+1)</span><span class="kpi-val">{nanp_ex:,}</span></div>'
-            f'<div class="kpi-chip kpi-subtle"><span class="kpi-label">RATES TO -1</span><span class="kpi-val">{minus1_ex:,}</span></div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        with col_hdr_date:
+            st.markdown(f'<div style="text-align: right; padding-top: 5px;">{date_pill}</div>', unsafe_allow_html=True)
+        with col_hdr_stats:
+            with st.popover("📊 Stats ▾", use_container_width=True, key=f"popover_stats_{idx}_{is_single}"):
+                st.markdown(
+                    f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
+                    f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
+                    f'📊 Row Breakdown & QC Stats'
+                    f'</div>'
+                    f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px;">'
+                    f'<span style="color: #0369A1; font-weight: 700;">📥 VENDOR INPUT</span>'
+                    f'<span style="color: #0C4A6E; font-weight: 800; font-size: 0.95rem;">{initial_rows:,}</span>'
+                    f'</div>'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                    f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
+                    f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
+                    f'</div>'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
+                    f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
+                    f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
+                    f'</div>'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                    f'<span style="color: #475569; font-weight: 700;">🚫 NANP (+1)</span>'
+                    f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{nanp_ex:,}</span>'
+                    f'</div>'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                    f'<span style="color: #475569; font-weight: 700;">🚫 RATES TO -1</span>'
+                    f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{minus1_ex:,}</span>'
+                    f'</div>'
+                    f'{dedup_chip}'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
         # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
         if has_mm:
