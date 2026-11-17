@@ -1858,18 +1858,16 @@ def render_executive_deck_card(idx, item, is_single=False):
 
         # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
         if has_mm:
-            st.markdown(
-                f'<div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 8px; padding: 8px 12px; margin: 10px 0 8px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">'
-                f'<span style="font-weight: 700; color: #92400E; font-size: 0.84rem;">'
-                f'⚠️ <b>{len(mismatches)} Destination(s) Billing Mismatch:</b> Vendor billing differs from your standard master (<code>billingkaif.xlsx</code>).'
-                f'</span>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-            col_btn_fix, col_btn_view = st.columns([1.6, 2.4])
-            with col_btn_fix:
-                btn_fix_label = f"⚡ Fix All {len(mismatches)} to Standard Billing" if len(mismatches) > 1 else "⚡ Fix to Standard Billing"
+            col_mm_msg, col_mm_fix, col_mm_view = st.columns([2.3, 1.5, 0.9])
+            with col_mm_msg:
+                st.markdown(
+                    f'<div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; padding: 4px 10px; font-weight: 700; color: #92400E; font-size: 0.80rem; display: flex; align-items: center; min-height: 32px;">'
+                    f'⚠️ {len(mismatches)} Billing Mismatch(es)'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            with col_mm_fix:
+                btn_fix_label = f"⚡ Fix to Standard ({len(mismatches)})"
                 if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
                     df_curr = item.get("df_clean")
                     if df_curr is not None:
@@ -1904,19 +1902,19 @@ def render_executive_deck_card(idx, item, is_single=False):
                         time.sleep(0.8)
                         st.rerun()
 
-            with col_btn_view:
-                with st.expander(f"🔍 View {len(mismatches)} Mismatched Destination(s)", expanded=False):
+            with col_mm_view:
+                with st.popover("🔍 View", use_container_width=True):
+                    st.markdown(f"**{len(mismatches)} Mismatched Destinations:**")
                     mm_table = []
                     for mm in mismatches[:100]:
                         mm_table.append({
                             "Destination": mm["destination"],
                             "Dial Code": mm["dial_code"],
-                            "Vendor Billing": mm["vendor_pulse"],
-                            "Your Standard": mm["standard_pulse"]
+                            "Vendor": mm["vendor_pulse"],
+                            "Standard": mm["standard_pulse"]
                         })
                     st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
 
-        st.write("")
         # Download Buttons side-by-side
         c_dl1, c_dl2 = st.columns(2)
         with c_dl1:
@@ -1949,37 +1947,33 @@ if st.session_state.processed_results:
     elapsed_sec = st.session_state.get("elapsed_time")
     
     st.markdown("---")
-    col_hdr, col_clr = st.columns([3, 1])
-    col_hdr.markdown(f'<div class="badge-success">🎉 {len(results)} Sheet(s) Standardized Successfully! Download below:</div>', unsafe_allow_html=True)
-    
-    if col_clr.button("🗑️ Clear All / Reset", type="secondary", use_container_width=True, key="top_clear_results_btn"):
-        curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
-        clear_user_processed_cache(curr_u)
-        for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
-            z_p = st.session_state.get(z_key)
-            if z_p and os.path.exists(z_p):
-                try:
-                    os.remove(z_p)
-                except Exception:
-                    pass
-            st.session_state[z_key] = None
-        st.session_state.processed_results = None
-        st.session_state.elapsed_time = None
-        st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
-        gc.collect()
-        st.rerun()
-
-    if elapsed_sec is not None:
-        st.markdown(f"""
-        <div style="background: #F0FDF4; border: 1.5px solid #22C55E; border-radius: 8px; padding: 12px 18px; margin: 8px 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 1.05rem; color: #15803D; font-weight: 600;">
-                ⏱️ <b>Processed in:</b> <span style="font-size: 1.35rem; color: #166534; font-weight: 800;">{elapsed_sec:.2f} seconds</span>
-            </span>
-            <span style="font-size: 0.85rem; color: #16A34A; background: #DCFCE7; padding: 5px 14px; border-radius: 20px; font-weight: 700;">
-                ⚡ Ultra-Fast Execution
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
+    col_hdr, col_clr = st.columns([3.8, 1.2])
+    with col_hdr:
+        elapsed_badge = f'<span style="background: #DCFCE7; color: #166534; font-weight: 700; font-size: 0.78rem; padding: 2px 10px; border-radius: 12px; border: 1px solid #86EFAC;">⏱️ {elapsed_sec:.2f}s</span>' if elapsed_sec is not None else ""
+        st.markdown(
+            f'<div style="display: flex; align-items: center; gap: 10px; background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 6px 14px; margin: 2px 0;">'
+            f'<span style="font-weight: 700; color: #166534; font-size: 0.90rem;">🎉 {len(results)} Sheet(s) Standardized Successfully</span>'
+            f'{elapsed_badge}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with col_clr:
+        if st.button("🗑️ Clear / Reset", type="secondary", use_container_width=True, key="top_clear_results_btn"):
+            curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
+            clear_user_processed_cache(curr_u)
+            for z_key in ["batch_zip_xl_path", "batch_zip_csv_path"]:
+                z_p = st.session_state.get(z_key)
+                if z_p and os.path.exists(z_p):
+                    try:
+                        os.remove(z_p)
+                    except Exception:
+                        pass
+                st.session_state[z_key] = None
+            st.session_state.processed_results = None
+            st.session_state.elapsed_time = None
+            st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+            gc.collect()
+            st.rerun()
 
     if len(results) > 1:
         zip_xl_path = st.session_state.get("batch_zip_xl_path")
