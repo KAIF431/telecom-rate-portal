@@ -307,6 +307,7 @@ def save_user_processed_cache(username, results, elapsed_time):
         for r in results:
             data["items"].append({
                 "filename": r["filename"],
+                "original_filename": r.get("original_filename", r.get("vendor_name", "")),
                 "csv_filename": r.get("csv_filename", ""),
                 "vendor_name": r.get("vendor_name", ""),
                 "cached_path": r.get("cached_path", ""),
@@ -1809,17 +1810,30 @@ def render_executive_deck_card(idx, item, is_single=False):
         f'</div>'
     ) if dedup_ex > 0 else ""
 
-    prefix_label = f"📁 #{idx+1} " if not is_single else "📁 "
+    prefix_tag = f'<span style="background: #E2E8F0; color: #475569; font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">#{idx+1}</span>' if not is_single else ""
+    orig_name = item.get("original_filename") or item.get("vendor_name") or ""
 
     with st.container(border=True):
-        col_hdr_left, col_hdr_date, col_hdr_stats = st.columns([2.7, 1.3, 0.9])
+        col_hdr_left, col_hdr_date, col_hdr_stats = st.columns([2.9, 1.2, 0.9])
         with col_hdr_left:
-            st.markdown(
-                f'<div style="font-size: 0.96rem; font-weight: 700; color: #0C4A6E; display: flex; align-items: center; gap: 6px; padding-top: 5px;">'
-                f'<span>{prefix_label}<b>File:</b></span> <code style="color: #0E7490; font-size: 0.92rem; font-weight: 700;">{out_name}</code>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
+            if orig_name:
+                st.markdown(
+                    f'<div style="font-size: 0.85rem; color: #475569; display: flex; align-items: center; gap: 6px; padding-top: 5px; flex-wrap: wrap;">'
+                    f'{prefix_tag}'
+                    f'<span style="color: #64748B; font-weight: 600;">📥 Uploaded:</span> '
+                    f'<code style="color: #0369A1; font-weight: 700; font-size: 0.84rem; background: #E0F2FE; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">{orig_name}</code> '
+                    f'<span style="color: #94A3B8; font-weight: 800; font-size: 0.90rem;">➔</span> '
+                    f'<span style="color: #0D9488; font-weight: 700; font-size: 0.84rem;">Ready to Download:</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div style="font-size: 0.88rem; font-weight: 700; color: #0D9488; display: flex; align-items: center; gap: 6px; padding-top: 5px;">'
+                    f'{prefix_tag}<span>⚡ Standardized Output Ready:</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
         with col_hdr_date:
             st.markdown(f'<div style="text-align: right; padding-top: 5px;">{date_pill}</div>', unsafe_allow_html=True)
         with col_hdr_stats:
@@ -1858,14 +1872,26 @@ def render_executive_deck_card(idx, item, is_single=False):
 
         # Billing mismatch section (ONLY IF MISMATCH EXISTS!)
         if has_mm:
-            col_mm_msg, col_mm_fix, col_mm_view = st.columns([2.3, 1.5, 0.9])
+            col_mm_msg, col_mm_view, col_mm_fix = st.columns([2.5, 1.1, 1.4])
             with col_mm_msg:
                 st.markdown(
-                    f'<div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; padding: 4px 10px; font-weight: 700; color: #92400E; font-size: 0.80rem; display: flex; align-items: center; min-height: 32px;">'
-                    f'⚠️ {len(mismatches)} Billing Mismatch(es)'
+                    f'<div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; padding: 5px 12px; font-weight: 700; color: #92400E; font-size: 0.82rem; display: flex; align-items: center; min-height: 34px;">'
+                    f'⚠️ {len(mismatches)} Destination(s) Billing Mismatch found'
                     f'</div>',
                     unsafe_allow_html=True
                 )
+            with col_mm_view:
+                with st.popover(f"🔍 View ({len(mismatches)})", use_container_width=True):
+                    st.markdown(f"**{len(mismatches)} Mismatched Destinations:**")
+                    mm_table = []
+                    for mm in mismatches[:100]:
+                        mm_table.append({
+                            "Destination": mm["destination"],
+                            "Dial Code": mm["dial_code"],
+                            "Vendor": mm["vendor_pulse"],
+                            "Standard": mm["standard_pulse"]
+                        })
+                    st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
             with col_mm_fix:
                 btn_fix_label = f"⚡ Fix to Standard ({len(mismatches)})"
                 if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
@@ -1902,24 +1928,11 @@ def render_executive_deck_card(idx, item, is_single=False):
                         time.sleep(0.8)
                         st.rerun()
 
-            with col_mm_view:
-                with st.popover("🔍 View", use_container_width=True):
-                    st.markdown(f"**{len(mismatches)} Mismatched Destinations:**")
-                    mm_table = []
-                    for mm in mismatches[:100]:
-                        mm_table.append({
-                            "Destination": mm["destination"],
-                            "Dial Code": mm["dial_code"],
-                            "Vendor": mm["vendor_pulse"],
-                            "Standard": mm["standard_pulse"]
-                        })
-                    st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
-
-        # Download Buttons side-by-side
-        c_dl1, c_dl2 = st.columns(2)
+        # Download Buttons: Excel (carrying full standardized name) + CSV
+        c_dl1, c_dl2 = st.columns([3.5, 1.5])
         with c_dl1:
             st.download_button(
-                label="📊 Download Excel (.xlsx)",
+                label=f"📊 Download: {out_name}",
                 data=out_bytes,
                 file_name=out_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1932,7 +1945,7 @@ def render_executive_deck_card(idx, item, is_single=False):
             cached_csv_p = item.get("cached_csv_path") or os.path.join(OUTPUT_DIR, csv_name)
             csv_data = read_disk_bytes(cached_csv_p)
             st.download_button(
-                label="📄 Download CSV (.csv)",
+                label="📄 Download CSV",
                 data=csv_data,
                 file_name=csv_name,
                 mime="text/csv",
@@ -2277,6 +2290,7 @@ if uploaded_files:
 
                 processed_list.append({
                     "filename": final_filename,
+                    "original_filename": fname,
                     "csv_filename": final_csv_filename,
                     "vendor_name": user_base,
                     "bytes": None,
