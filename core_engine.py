@@ -567,18 +567,31 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
 
     initial_row_count = len(df_data)
 
-    # 2. Vectorized QC Exception Mask (Codes + Destinations: Freephone, Satellite, Inmarsat)
+    # 2. Vectorized QC Exception Mask & Caribbean Whitelist
+    # Caribbean island nations share ITU Country Code +1 (NANP), but are legitimate international A to Z destinations!
+    # They must NEVER be filtered out as USA/Canada domestic decks, nor falsely flagged as QC satellite exceptions (e.g. 876).
+    CARIBBEAN_NANP_PREFIXES = (
+        '1242', '1246', '1264', '1268', '1284', '1345', '1441', '1473',
+        '1649', '1658', '1664', '1721', '1758', '1767', '1784',
+        '1809', '1829', '1849', '1868', '1869', '1876'
+    )
+    carib_dest_pattern = r'\b(?:JAMAICA|BAHAMAS|BARBADOS|DOMINICAN|CAYMAN|BERMUDA|TRINIDAD|ANTIGUA|ANGUILLA|GRENADA|SAINT\s+LUCIA|ST\.?\s*LUCIA|SAINT\s+VINCENT|ST\.?\s*VINCENT|SAINT\s+KITTS|ST\.?\s*KITTS|DOMINICA|MONTSERRAT|TURKS|SINT\s+MAARTEN)\b'
+    
     dest_series = df_data.iloc[:, dest_idx].fillna('').astype(str).str.upper().str.strip()
+    is_caribbean = code_series.str.startswith(CARIBBEAN_NANP_PREFIXES) | dest_series.str.contains(carib_dest_pattern, regex=True, na=False)
+
+    # QC Exception Mask (Codes + Destinations: Freephone, Satellite, Inmarsat)
     qc_tuple = tuple(qc_codes)
     is_qc_code = code_series.str.startswith(qc_tuple)
     qc_dest_pattern = r'\b(?:INTERNATIONAL\s+FREEPHONE|FREEPHONE|FREE\s*PHONE|SATELLITE|INMARSAT)\b'
     is_qc_dest = dest_series.str.contains(qc_dest_pattern, regex=True, na=False)
-    is_qc_mask = is_qc_code | is_qc_dest
+    is_qc_mask = (is_qc_code | is_qc_dest) & ~is_caribbean
 
     # 3. Vectorized USA / Canada / Puerto Rico (+1) Mask
+    # Strictly exclude USA domestic (+1), Canada (+1), and Puerto Rico (+1), preserving Caribbean A to Z
     nanp_pattern = r'\b(?:USA|U\.S\.A|UNITED STATES|AMERICA|CANADA|PUERTO RICO|PR)\b'
-    is_nanp_dest = dest_series.str.contains(nanp_pattern, regex=True, na=False)
-    is_nanp_code = (code_series == '1') | (code_series.str.startswith('1') & (code_series.str.len() >= 4) & code_series.str.isdigit())
+    is_nanp_dest = dest_series.str.contains(nanp_pattern, regex=True, na=False) & ~is_caribbean
+    is_nanp_code = ((code_series == '1') | (code_series.str.startswith('1') & (code_series.str.len() >= 4) & code_series.str.isdigit())) & ~is_caribbean
     is_nanp_mask = is_nanp_dest | is_nanp_code
 
     # Exclusions
