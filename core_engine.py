@@ -178,7 +178,9 @@ def detect_header_row_and_columns(df_raw):
                 'active', 'activation'
             ]) and not any(bad in v for bad in [
                 'expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to',
-                'valid to', 'eff to', 'minimum', 'increment', 'increments', 'pulse', 'billing', 'min/inc'
+                'valid to', 'eff to', 'minimum', 'increment', 'increments', 'pulse', 'billing', 'min/inc',
+                'notice', 'issue', 'creation', 'created', 'file date', 'sent date', 'export', 'generated',
+                'old date', 'prev date', 'previous date', 'last change', 'modify', 'modified', 'download'
             ]) and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
                 is_valid_date_col = True
                 if v in ['active', 'activation']:
@@ -310,14 +312,20 @@ def analyze_vendor_comments(df_slice, status_col_idx):
     tag_str = ", ".join(ordered_tags)
     return True, f"Various {tag_str}"
 
-def should_use_dayfirst(series):
+def should_use_dayfirst(series, today=None):
     """
     Intelligently determines if date parsing should use dayfirst=True:
     - Dot-separated dates (e.g. 04.11.2026) are European DD.MM.YYYY standard
     - Dates where the first integer is > 12 (e.g. 21.09.2026, 25/11/2026) indicate DD/MM/YYYY
     - Dates where the second integer is > 12 (e.g. 11/25/2026) indicate MM/DD/YYYY
     - ISO formats (YYYY-MM-DD) default to dayfirst=False
+    - Ambiguous dates (e.g. 01/12/2026, 05/12/2026):
+      Default to dayfirst=True (standard in India, UK, Europe, UAE, and wholesale telecom).
+      Plus, cross-validates against current date to ensure upcoming future rate notices are never turned into ancient past dates!
     """
+    if today is None:
+        today = datetime.date.today()
+
     has_dot_date = False
     has_first_gt_12 = False
     has_second_gt_12 = False
@@ -347,16 +355,34 @@ def should_use_dayfirst(series):
             elif n2 > 12 and n1 <= 12:
                 has_second_gt_12 = True
 
-    if has_iso and not has_first_gt_12 and not has_dot_date:
+    if has_second_gt_12:
         return False
 
-    if has_second_gt_12:
+    if has_iso and not has_first_gt_12 and not has_dot_date:
         return False
 
     if has_first_gt_12 or has_dot_date:
         return True
 
-    return False
+    # Ambiguous date (e.g. 01/12/2026, 05/12/2026):
+    # In wholesale telecom and Indian business standard, DD/MM/YYYY is the primary standard.
+    # Check if dayfirst=True yields a future/recent date while dayfirst=False yields a date far in the past:
+    try:
+        sample_clean = series.dropna().head(20)
+        p_df = pd.to_datetime(sample_clean, format='mixed', dayfirst=True, errors='coerce').dropna()
+        p_non_df = pd.to_datetime(sample_clean, format='mixed', dayfirst=False, errors='coerce').dropna()
+        if len(p_df) > 0 and len(p_non_df) > 0:
+            d_df = p_df.iloc[0].date()
+            d_non = p_non_df.iloc[0].date()
+            if d_df > today and d_non < today:
+                return True
+            if d_non > today and d_df < today:
+                return False
+    except Exception:
+        pass
+
+    # Default to DD/MM/YYYY (Indian & ITU wholesale telecom standard)
+    return True
 
 def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     """
@@ -585,16 +611,28 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     date_objs = []
     date_strs = []
     if date_idx is not None:
-        use_df = should_use_dayfirst(df_valid.iloc[:, date_idx])
-        parsed_dates = pd.to_datetime(df_valid.iloc[:, date_idx], format='mixed', dayfirst=use_df, errors='coerce')
-        for dt in parsed_dates:
-            if pd.notna(dt):
-                d_val = dt.date()
-                date_objs.append(d_val)
-                date_strs.append(d_val.strftime('%m/%d/%Y'))
-            else:
-                date_objs.append(None)
-                date_strs.append('')
+        date_col = df_valid.iloc[:, date_idx]
+        first_valid = date_col.dropna().iloc[0] if len(date_col.dropna()) > 0 else None
+        if isinstance(first_valid, (datetime.date, datetime.datetime, pd.Timestamp)):
+            for val in date_col:
+                if pd.notna(val):
+                    d_val = val.date() if isinstance(val, (datetime.datetime, pd.Timestamp)) else val
+                    date_objs.append(d_val)
+                    date_strs.append(d_val.strftime('%m/%d/%Y'))
+                else:
+                    date_objs.append(None)
+                    date_strs.append('')
+        else:
+            use_df = should_use_dayfirst(date_col, today=datetime.date.today())
+            parsed_dates = pd.to_datetime(date_col, format='mixed', dayfirst=use_df, errors='coerce')
+            for dt in parsed_dates:
+                if pd.notna(dt):
+                    d_val = dt.date()
+                    date_objs.append(d_val)
+                    date_strs.append(d_val.strftime('%m/%d/%Y'))
+                else:
+                    date_objs.append(None)
+                    date_strs.append('')
     else:
         date_objs = [None] * len(df_valid)
         date_strs = [''] * len(df_valid)

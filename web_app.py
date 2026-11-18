@@ -2262,7 +2262,12 @@ if uploaded_files:
                     v_dates = [d for d in df_clean['_dt_obj'] if d is not None]
                     if v_dates:
                         from collections import Counter
-                        eff_date_obj = Counter(v_dates).most_common(1)[0][0]
+                        # Priority to future dates if any exist in the rate sheet!
+                        future_v_dates = [d for d in v_dates if d > today_dt]
+                        if future_v_dates:
+                            eff_date_obj = Counter(future_v_dates).most_common(1)[0][0]
+                        else:
+                            eff_date_obj = Counter(v_dates).most_common(1)[0][0]
 
                 date_badge_type = "green"
                 date_badge_label = "Live"
@@ -2271,7 +2276,7 @@ if uploaded_files:
                     if eff_date_obj > today_dt:
                         date_badge_type = "red"
                         date_badge_label = f"Future: {date_display_str}"
-                    elif eff_date_obj.year < today_dt.year:
+                    elif eff_date_obj < today_dt:
                         date_badge_type = "orange"
                         date_badge_label = f"Past: {date_display_str}"
                     else:
