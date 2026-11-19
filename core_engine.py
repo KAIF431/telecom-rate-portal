@@ -364,19 +364,26 @@ def should_use_dayfirst(series, today=None):
     if has_first_gt_12 or has_dot_date:
         return True
 
-    # Ambiguous date (e.g. 01/12/2026, 05/12/2026):
-    # In wholesale telecom and Indian business standard, DD/MM/YYYY is the primary standard.
-    # Check if dayfirst=True yields a future/recent date while dayfirst=False yields a date far in the past:
+    # Ambiguous date (e.g. 01/12/2026, 05/12/2026, 12/01/2026, 12/05/2026):
+    # Cross-validate unique date values across the column to ensure upcoming future rate notices are never turned into ancient past dates!
     try:
-        sample_clean = series.dropna().head(20)
-        p_df = pd.to_datetime(sample_clean, format='mixed', dayfirst=True, errors='coerce').dropna()
-        p_non_df = pd.to_datetime(sample_clean, format='mixed', dayfirst=False, errors='coerce').dropna()
-        if len(p_df) > 0 and len(p_non_df) > 0:
-            d_df = p_df.iloc[0].date()
-            d_non = p_non_df.iloc[0].date()
-            if d_df > today and d_non < today:
+        raw_unique = pd.Series(series.dropna().astype(str).unique()).head(100)
+        p_df = pd.to_datetime(raw_unique, format='mixed', dayfirst=True, errors='coerce').dropna()
+        p_non_df = pd.to_datetime(raw_unique, format='mixed', dayfirst=False, errors='coerce').dropna()
+        
+        future_df = sum(1 for dt in p_df if dt.date() > today)
+        future_non = sum(1 for dt in p_non_df if dt.date() > today)
+        
+        if future_non > 0 and future_df == 0:
+            return False
+        if future_df > 0 and future_non == 0:
+            return True
+        if future_df > 0 and future_non > 0:
+            near_df = sum(1 for dt in p_df if 0 < (dt.date() - today).days <= 90)
+            near_non = sum(1 for dt in p_non_df if 0 < (dt.date() - today).days <= 90)
+            if near_df > near_non:
                 return True
-            if d_non > today and d_df < today:
+            elif near_non > near_df:
                 return False
     except Exception:
         pass
@@ -629,9 +636,17 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         if isinstance(first_valid, (datetime.date, datetime.datetime, pd.Timestamp)):
             for val in date_col:
                 if pd.notna(val):
-                    d_val = val.date() if isinstance(val, (datetime.datetime, pd.Timestamp)) else val
+                    if isinstance(val, (datetime.datetime, pd.Timestamp)):
+                        d_val = val.date()
+                    elif isinstance(val, datetime.date):
+                        d_val = val
+                    else:
+                        try:
+                            d_val = pd.to_datetime(val, dayfirst=True, errors='coerce').date()
+                        except Exception:
+                            d_val = None
                     date_objs.append(d_val)
-                    date_strs.append(d_val.strftime('%m/%d/%Y'))
+                    date_strs.append(d_val.strftime('%m/%d/%Y') if d_val else '')
                 else:
                     date_objs.append(None)
                     date_strs.append('')

@@ -2257,17 +2257,44 @@ if uploaded_files:
 
                 # Compute accurate date badge
                 today_dt = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).date()
+                
+                def extract_fn_date(filename):
+                    # Match DD-MM-YYYY, DD.MM.YYYY, DD_MM_YYYY
+                    m_dmy = re.search(r'\b([0-3]?\d)[-_.\/]([0-1]?\d)[-_.\/](202\d)\b', filename)
+                    if m_dmy:
+                        d1, m1, y1 = int(m_dmy.group(1)), int(m_dmy.group(2)), int(m_dmy.group(3))
+                        if 1 <= m1 <= 12 and 1 <= d1 <= 31:
+                            return datetime.date(y1, m1, d1)
+                    # Match YYYYMMDD
+                    m_ymd = re.search(r'\b(202\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b', filename)
+                    if m_ymd:
+                        return datetime.date(int(m_ymd.group(1)), int(m_ymd.group(2)), int(m_ymd.group(3)))
+                    return None
+
                 eff_date_obj = None
                 if '_dt_obj' in df_clean.columns:
-                    v_dates = [d for d in df_clean['_dt_obj'] if d is not None]
+                    v_dates = [d.date() if isinstance(d, datetime.datetime) else d for d in df_clean['_dt_obj'] if d is not None and isinstance(d, (datetime.date, datetime.datetime))]
                     if v_dates:
-                        from collections import Counter
-                        # Priority to future dates if any exist in the rate sheet!
                         future_v_dates = [d for d in v_dates if d > today_dt]
                         if future_v_dates:
-                            eff_date_obj = Counter(future_v_dates).most_common(1)[0][0]
+                            # 1. Priority to FUTURE dates: Always take latest future effective date
+                            eff_date_obj = max(future_v_dates)
+                        elif any(d == today_dt for d in v_dates):
+                            # 2. Priority to TODAY / Live dates
+                            eff_date_obj = today_dt
                         else:
-                            eff_date_obj = Counter(v_dates).most_common(1)[0][0]
+                            # 3. Check filename date: If vendor named file with today's or recent date
+                            fn_d = extract_fn_date(fname)
+                            if fn_d and fn_d >= max(v_dates):
+                                eff_date_obj = fn_d
+                            else:
+                                # Pick latest date in the sheet (NEVER Counter most_common which picks ancient dates!)
+                                eff_date_obj = max(v_dates)
+
+                if not eff_date_obj:
+                    fn_d = extract_fn_date(fname)
+                    if fn_d:
+                        eff_date_obj = fn_d
 
                 date_badge_type = "green"
                 date_badge_label = "Live"
