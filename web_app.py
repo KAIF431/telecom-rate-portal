@@ -21,6 +21,7 @@ import auth_manager as am
 import billing_manager as bm
 try:
     importlib.reload(am)
+    importlib.reload(bm)
 except Exception:
     pass
 
@@ -88,6 +89,10 @@ def save_user_avatar_choice(u_name, avatar_id):
         return False, str(e)
     return True, "Avatar updated."
 import core_engine
+try:
+    importlib.reload(core_engine)
+except Exception:
+    pass
 import secrets
 from config_manager import load_config, add_member, remove_member, set_active_member
 from core_engine import (
@@ -1167,6 +1172,27 @@ qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
 country_billing_bytes = get_cached_template_file("Country Billing.xlsx")
 separate_codes_bytes = get_cached_template_file("Separate_codes_sample_ratesheet.xls")
 
+def safe_get_master_excel_bytes():
+    try:
+        if hasattr(bm, "get_master_excel_bytes"):
+            b = bm.get_master_excel_bytes()
+            if b:
+                return b
+    except Exception:
+        pass
+    for p in [
+        os.path.join(os.path.dirname(__file__), "billing_master.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "Country Billing.xlsx"),
+        r"C:\vendor Rates\Country Billing.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    return f.read()
+            except Exception:
+                pass
+    return country_billing_bytes
+
 admin_nav_mode = "⚡ Rate Deck Standardizer"
 
 # Navigation Row: Left has Rate Deck Standardizer, Right has the Master Sheets Dropdown
@@ -1215,7 +1241,7 @@ with nav_col_right:
                 key="nav_pop_dl_qc",
                 use_container_width=True
             )
-        country_billing_live = bm.get_master_excel_bytes()
+        country_billing_live = safe_get_master_excel_bytes()
         if country_billing_live:
             st.download_button(
                 label="📊 Country Billing Master (.xlsx)",
@@ -1583,7 +1609,7 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                             st.error(msg_f)
                 
                 st.divider()
-                admin_master_bytes = bm.get_master_excel_bytes()
+                admin_master_bytes = safe_get_master_excel_bytes()
                 if admin_master_bytes:
                     st.download_button(
                         label="📥 Download Current Master Rules (.xlsx)",
@@ -1864,7 +1890,7 @@ def render_executive_deck_card(idx, item, is_single=False):
                 if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
                     df_curr = item.get("df_clean")
                     if df_curr is not None:
-                        df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches)
+                        df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
                         new_xl_bytes = core_engine.generate_target_excel_bytes(df_fixed)
                         new_csv_bytes = core_engine.generate_target_csv_bytes(df_fixed)
                         
@@ -2259,7 +2285,20 @@ if uploaded_files:
                 final_csv_filename = core_engine.build_csv_output_filename(user_base)
 
                 # Audit billing against master standard & Auto-learn new dial codes
-                has_mm, mm_list, mm_summary, learned_count = bm.audit_dataframe_billing(df_clean)
+                try:
+                    if hasattr(bm, "audit_dataframe_billing"):
+                        res_audit = bm.audit_dataframe_billing(df_clean)
+                        if isinstance(res_audit, tuple) and len(res_audit) == 4:
+                            has_mm, mm_list, mm_summary, learned_count = res_audit
+                        elif isinstance(res_audit, tuple) and len(res_audit) == 3:
+                            has_mm, mm_list, mm_summary = res_audit
+                            learned_count = 0
+                        else:
+                            has_mm, mm_list, mm_summary, learned_count = False, [], {}, 0
+                    else:
+                        has_mm, mm_list, mm_summary, learned_count = False, [], {}, 0
+                except Exception:
+                    has_mm, mm_list, mm_summary, learned_count = False, [], {}, 0
                 if learned_count > 0:
                     st.toast(f"🧠 Auto-learned & added {learned_count} new dial code(s) to Master Billing!", icon="✅")
 
