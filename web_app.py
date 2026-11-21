@@ -1215,10 +1215,11 @@ with nav_col_right:
                 key="nav_pop_dl_qc",
                 use_container_width=True
             )
-        if country_billing_bytes:
+        country_billing_live = bm.get_master_excel_bytes()
+        if country_billing_live:
             st.download_button(
                 label="📊 Country Billing Master (.xlsx)",
-                data=country_billing_bytes,
+                data=country_billing_live,
                 file_name="Country Billing.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="nav_pop_dl_billing",
@@ -1499,26 +1500,27 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
             b_sub1, b_sub2, b_sub3 = st.tabs(["🔍 Search & Edit Rule", "➕ Add New Destination Rule", "📁 Bulk Upload New Sheet"])
             
             with b_sub1:
-                st.markdown(f"**Total Master Rules:** `{len(raw_rules):,}` destinations")
-                q_dest = st.text_input("Search Destination (e.g. Indonesia, Brazil, AWCC):", key="admin_search_billing_q", placeholder="Type country or destination name...")
+                st.markdown(f"**Total Master Rules:** `{len(raw_rules):,}` dial codes & destinations")
+                q_dest = st.text_input("Search Dial Code or Destination (e.g. 852, 9370, Hong Kong, Indonesia):", key="admin_search_billing_q", placeholder="Type dial code or destination name...")
                 
                 matches = []
                 if q_dest and q_dest.strip():
                     q_low = q_dest.strip().lower()
-                    matches = [r for r in raw_rules if q_low in str(r.get("destination", "")).lower()]
+                    matches = [r for r in raw_rules if q_low in str(r.get("destination", "")).lower() or q_low in str(r.get("dial_code", "")).lower()]
                 else:
-                    matches = raw_rules[:20]
+                    matches = raw_rules[:25]
                     
                 if matches:
-                    st.markdown(f"Found **{len(matches)}** destination(s):")
-                    match_names = [m["destination"] for m in matches]
-                    sel_to_edit = st.selectbox("Select Destination to Edit:", match_names, key="admin_sel_billing_edit")
-                    curr_rule = next((m for m in matches if m["destination"] == sel_to_edit), None)
+                    st.markdown(f"Found **{len(matches):,}** destination(s):")
+                    match_display = [f"[{m.get('dial_code', '')}] {m.get('destination', '')}" if m.get('dial_code') else m.get('destination', '') for m in matches]
+                    sel_to_edit = st.selectbox("Select Rule to Edit:", match_display, key="admin_sel_billing_edit")
+                    sel_idx = match_display.index(sel_to_edit) if sel_to_edit in match_display else 0
+                    curr_rule = matches[sel_idx]
                     
                     if curr_rule:
                         b_ed1, b_ed2, b_ed3 = st.columns([2, 1, 1])
                         with b_ed1:
-                            st.info(f"**Destination:** `{curr_rule['destination']}` | **Current:** `{curr_rule['minimum']} / {curr_rule['increment']}`")
+                            st.info(f"**Code:** `{curr_rule.get('dial_code', '')}` | **Destination:** `{curr_rule['destination']}` | **Current:** `{curr_rule['minimum']} / {curr_rule['increment']}`")
                         with b_ed2:
                             new_min_val = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=int(curr_rule['minimum']), key=f"b_input_min_{sel_to_edit}")
                         with b_ed3:
@@ -1527,7 +1529,7 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                         b_btn_c1, b_btn_c2 = st.columns([1, 1])
                         with b_btn_c1:
                             if st.button(f"💾 Save Changes ({new_min_val}/{new_inc_val})", type="primary", use_container_width=True, key=f"b_btn_save_{sel_to_edit}"):
-                                ok_u, msg_u = bm.update_or_add_master_rule(sel_to_edit, new_min_val, new_inc_val)
+                                ok_u, msg_u = bm.update_or_add_master_rule(curr_rule.get('dial_code', ''), curr_rule['destination'], new_min_val, new_inc_val)
                                 if ok_u:
                                     st.success(msg_u)
                                     time.sleep(1)
@@ -1536,23 +1538,27 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                                     st.error(msg_u)
                         with b_btn_c2:
                             if st.button("🗑️ Delete Rule", type="secondary", use_container_width=True, key=f"b_btn_del_{sel_to_edit}"):
-                                ok_d, msg_d = bm.delete_master_rule(sel_to_edit)
+                                ok_d, msg_d = bm.delete_master_rule(curr_rule.get('dial_code', '') or curr_rule['destination'])
                                 st.success(msg_d)
                                 time.sleep(1)
                                 st.rerun()
             
             with b_sub2:
-                st.markdown("#### ➕ Add New Destination Rule")
+                st.markdown("#### ➕ Add New Dial Code / Destination Rule")
                 with st.form("admin_add_billing_form", clear_on_submit=True):
-                    add_d_name = st.text_input("Destination Name:", placeholder="e.g. INDONESIA FIXED SURABAYA")
+                    add_col_c1, add_col_c2 = st.columns([1, 2])
+                    with add_col_c1:
+                        add_code = st.text_input("Dial Code (Optional):", placeholder="e.g. 8529")
+                    with add_col_c2:
+                        add_d_name = st.text_input("Destination Name:", placeholder="e.g. HONG KONG MOBILE CSL")
                     col_a1, col_a2 = st.columns(2)
                     with col_a1:
-                        add_min = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=60)
+                        add_min = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=1)
                     with col_a2:
                         add_inc = st.number_input("Increment (sec):", min_value=1, max_value=300, value=1)
                     if st.form_submit_button("➕ Add to Master Rules", type="primary"):
-                        if add_d_name and add_d_name.strip():
-                            ok_a, msg_a = bm.update_or_add_master_rule(add_d_name.strip(), add_min, add_inc)
+                        if (add_d_name and add_d_name.strip()) or (add_code and add_code.strip()):
+                            ok_a, msg_a = bm.update_or_add_master_rule(add_code.strip(), add_d_name.strip(), add_min, add_inc)
                             if ok_a:
                                 st.success(msg_a)
                                 time.sleep(1)
@@ -1560,11 +1566,11 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                             else:
                                 st.error(msg_a)
                         else:
-                            st.warning("Destination name cannot be empty.")
+                            st.warning("Dial Code or Destination name cannot be empty.")
 
             with b_sub3:
-                st.markdown("#### 📁 Bulk Upload Updated `billingkaif.xlsx`")
-                st.caption("Upload your new Excel file with 3 columns (Destinations, Minimum, Increment) to replace or update all master rules in 1 second.")
+                st.markdown("#### 📁 Bulk Upload Updated `Country Billing.xlsx`")
+                st.caption("Upload your new Excel file with 4 columns (Dial Code, Summary, Minimum, Increment) or 3 columns (Destinations, Minimum, Increment) to replace all master rules in 1 second.")
                 up_b_file = st.file_uploader("Choose Excel file (.xlsx):", type=["xlsx"], key="admin_billing_uploader")
                 if up_b_file is not None:
                     if st.button("⚡ Replace All Rules with Uploaded Sheet", type="primary", key="admin_btn_apply_billing_file"):
@@ -1577,15 +1583,15 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                             st.error(msg_f)
                 
                 st.divider()
-                if os.path.exists(bm.MASTER_EXCEL_PATH):
-                    with open(bm.MASTER_EXCEL_PATH, "rb") as b_f:
-                        st.download_button(
-                            label="📥 Download Current Master Rules (.xlsx)",
-                            data=b_f.read(),
-                            file_name="billingkaif_master.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="admin_btn_dl_master_billing"
-                        )
+                admin_master_bytes = bm.get_master_excel_bytes()
+                if admin_master_bytes:
+                    st.download_button(
+                        label="📥 Download Current Master Rules (.xlsx)",
+                        data=admin_master_bytes,
+                        file_name="Country Billing.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="admin_btn_dl_master_billing"
+                    )
 
         with a_tab_edit:
             st.subheader("✏️ Edit User Display Name & Avatar")
@@ -2252,8 +2258,10 @@ if uploaded_files:
                 final_filename = core_engine.build_output_filename(user_base, stats['comments_tag'], active_member)
                 final_csv_filename = core_engine.build_csv_output_filename(user_base)
 
-                # Audit billing against master standard
-                has_mm, mm_list, mm_summary = bm.audit_dataframe_billing(df_clean)
+                # Audit billing against master standard & Auto-learn new dial codes
+                has_mm, mm_list, mm_summary, learned_count = bm.audit_dataframe_billing(df_clean)
+                if learned_count > 0:
+                    st.toast(f"🧠 Auto-learned & added {learned_count} new dial code(s) to Master Billing!", icon="✅")
 
                 # Compute accurate date badge
                 today_dt = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).date()
