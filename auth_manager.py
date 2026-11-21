@@ -853,8 +853,9 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
         pass
 
 def get_processing_history(days=None):
-    """Returns all logged processing events, newest first. Safe non-destructive read."""
+    """Returns all logged processing events, newest first. Automatically purges entries > 7 days."""
     try:
+        enforce_seven_day_retention(7)
         if not os.path.exists(HISTORY_FILE):
             return []
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:

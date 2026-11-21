@@ -1779,10 +1779,20 @@ st.write("")
 
 qc_codes = load_qc_exception_codes()
 
-# Initialize active session processed results
-if "processed_results" not in st.session_state:
-    st.session_state.processed_results = None
-    st.session_state.elapsed_time = None
+# Initialize active session processed results (with auto-restore on page refresh)
+if "processed_results" not in st.session_state or st.session_state.processed_results is None:
+    if not st.session_state.get("cache_cleared"):
+        curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
+        cached_items, cached_elapsed = load_user_processed_cache(curr_u)
+        if cached_items:
+            st.session_state.processed_results = cached_items
+            st.session_state.elapsed_time = cached_elapsed
+        else:
+            st.session_state.processed_results = None
+            st.session_state.elapsed_time = None
+    else:
+        st.session_state.processed_results = None
+        st.session_state.elapsed_time = None
 
 # If sheets were just processed, trigger automatic browser download via JS
 if st.session_state.get("just_processed") and st.session_state.processed_results:
@@ -2066,6 +2076,7 @@ if st.session_state.processed_results:
                 st.session_state[z_key] = None
             st.session_state.processed_results = None
             st.session_state.elapsed_time = None
+            st.session_state["cache_cleared"] = True
             st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
             gc.collect()
             st.rerun()
@@ -2492,6 +2503,7 @@ if uploaded_files:
                 )
 
             # Store in session state for this user's browser & disk cache
+            st.session_state.pop("cache_cleared", None)
             st.session_state.processed_results = processed_list
             st.session_state.elapsed_time = elapsed_sec
             st.session_state.just_processed = True
