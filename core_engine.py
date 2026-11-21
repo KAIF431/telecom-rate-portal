@@ -124,8 +124,8 @@ def detect_header_row_and_columns(df_raw):
             # BUT do not capture code columns like 'destination code', 'dest code', 'country code'!)
             elif (
                 (any(k in v for k in ['destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name'])
-                 or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country']))
-                 or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description'])
+                 or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country', 'region']))
+                 or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description', 'region', 'regions', 'region name'])
                      and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
             ) and (any(n in v for n in ['name', 'desc', 'description']) or not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code'])):
                 if 'destination' not in mapping:
@@ -477,16 +477,39 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         min_col_idx = None
         inc_col_idx = None
         for idx, col_name in enumerate(header_names):
+            if idx in [code_idx, dest_idx, date_idx]:
+                continue
             c_name = str(col_name).lower().strip()
             c_clean = re.sub(r'[^a-z0-9]+', ' ', c_name).strip()
             words = set(c_clean.split())
-            if (any(k in c_clean for k in ['minimum', 'initial', 'min volume', 'min duration', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'initial period', 'init period', 'min period', 'first interval', 'first period', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume']) or any(w in words for w in ['mc', 'min', 'initial', 'init', 'first'])) and not any(k in c_clean for k in ['increment', 'incremental', 'incre', 'resolution', 'recurring', 'recur', 'ci', 'additional', 'addl', 'subsequent']):
+            
+            # Strictly never treat rate or currency columns as pulse/min/inc
+            if any(r in c_clean for r in ['rate', 'price', 'cost', 'tariff', 'usd', 'eur', 'currency']) or any(w in words for w in ['rate', 'rates', 'price', 'prices', 'cost', 'costs']):
+                continue
+
+            # Check for Initial / First Increment / Minimum
+            is_min = (
+                any(k in c_clean for k in ['first increment', 'initial increment', 'first interval', 'initial interval', 'first period', 'initial period', 'first duration', 'initial duration', 'first pulse', 'first step', 'min duration', 'min volume', 'min pulse', 'minimal', 'minimal time', 'min time', 'init time', 'min call', 'min charge', 'minimum call', 'minimum charge', 'min sec', 'min length', 'minimum volume', 'minimum'])
+                or (any(w in words for w in ['mc', 'initial', 'init', 'first']) and not any(k in c_clean for k in ['next', 'subsequent', 'additional', 'recurring']))
+                or ('min' in words and not any(m in c_clean for m in ['min rate', 'per min', '$/min', '/min', 'usd min']))
+            ) and not any(k in c_clean for k in ['subsequent', 'additional', 'addl', 'recurring', 'recur', 'next', 'ci'])
+
+            # Check for Subsequent / Recurring / Increment
+            is_inc = (
+                any(k in c_clean for k in ['subsequent increment', 'next increment', 'additional increment', 'recurring increment', 'increment seconds', 'subsequent interval', 'next interval', 'recurring period', 'repeat', 'step duration', 'inc sec', 'increment sec', 'subsequent period', 'subsequent', 'increment', 'incremental'])
+                or any(w in words for w in ['ci', 'recur', 'next', 'step', 'additional', 'addl', 'subsequent', 'increment', 'inc'])
+            ) and not is_min
+
+            if is_min:
                 min_col_idx = idx
-            elif (any(k in c_clean for k in ['increment', 'incremental', 'incre duration', 'inc pulse', 'resolution', 'billing resolution', 'billing res', 'recurring', 'recur', 'recurring period', 'rec period', 'repeat', 'next period', 'next interval', 'call increment', 'charge increment', 'interval', 'intervals', 'step', 'step duration', 'inc sec', 'increment sec', 'additional', 'addl', 'additional period', 'additional interval', 'subsequent', 'subsequent period', 'subsequent interval']) or any(w in words for w in ['ci', 'inc', 'recur', 'next', 'step', 'additional', 'addl', 'subsequent'])) and not any(k in c_clean for k in ['minimum', 'initial', 'minimal', 'mc', 'min volume']):
+            elif is_inc:
                 inc_col_idx = idx
 
+        # If both min and inc exist, clear single pulse_idx so separate pair is used
+        if min_col_idx is not None and inc_col_idx is not None:
+            pulse_idx = None
         # If only one increment or minimum column exists without separate pair, treat as combined pulse column
-        if min_col_idx is None and inc_col_idx is not None and pulse_idx is None:
+        elif min_col_idx is None and inc_col_idx is not None and pulse_idx is None:
             pulse_idx = inc_col_idx
         elif min_col_idx is not None and inc_col_idx is None and pulse_idx is None:
             pulse_idx = min_col_idx
@@ -689,11 +712,21 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                     if nums_i:
                         i_res = int(float(nums_i[0]))
             if m_res is not None and i_res is not None:
-                m_final = max(m_res, i_res)
-                i_final = min(m_res, i_res)
+                if m_res > 0 and i_res > 0:
+                    m_final = max(m_res, i_res)
+                    i_final = min(m_res, i_res)
+                elif m_res > 0 and i_res == 0:
+                    m_final = m_res
+                    i_final = m_res
+                elif i_res > 0 and m_res == 0:
+                    m_final = i_res
+                    i_final = i_res
+                else:
+                    m_final = m_res
+                    i_final = i_res
             else:
-                m_final = m_res
-                i_final = i_res
+                m_final = m_res if m_res is not None else i_res
+                i_final = i_res if i_res is not None else m_res
             mins.append(m_final)
             incs.append(i_final)
     elif pulse_idx is not None:
