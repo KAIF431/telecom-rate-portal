@@ -1176,22 +1176,41 @@ def safe_get_master_excel_bytes():
     try:
         if hasattr(bm, "get_master_excel_bytes"):
             b = bm.get_master_excel_bytes()
-            if b:
+            if b and len(b) > 1000:
                 return b
     except Exception:
         pass
     for p in [
-        os.path.join(os.path.dirname(__file__), "billing_master.xlsx"),
         os.path.join(os.path.dirname(__file__), "templates", "Country Billing.xlsx"),
+        os.path.join(os.path.dirname(__file__), "billing_master.xlsx"),
         r"C:\vendor Rates\Country Billing.xlsx"
     ]:
         if os.path.exists(p):
             try:
                 with open(p, "rb") as f:
-                    return f.read()
+                    c = f.read()
+                    if c and len(c) > 1000:
+                        return c
             except Exception:
                 pass
-    return country_billing_bytes
+    if country_billing_bytes and len(country_billing_bytes) > 1000:
+        return country_billing_bytes
+    # Direct in-memory generation fallback
+    try:
+        if hasattr(bm, "load_master_billing"):
+            data = bm.load_master_billing()
+            raw_list = data.get("raw_list", []) if isinstance(data, dict) else []
+            if raw_list:
+                df = pd.DataFrame(raw_list)
+                df = df.rename(columns={"dial_code": "Dial Code", "destination": "Summary", "minimum": "Minimum", "increment": "Increment"})
+                cols = ["Dial Code", "Summary", "Minimum", "Increment"]
+                df = df[[col for col in cols if col in df.columns]]
+                buf = io.BytesIO()
+                df.to_excel(buf, index=False, engine="openpyxl")
+                return buf.getvalue()
+    except Exception:
+        pass
+    return b""
 
 admin_nav_mode = "⚡ Rate Deck Standardizer"
 
@@ -1249,6 +1268,15 @@ with nav_col_right:
                 file_name="Country Billing.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="nav_pop_dl_billing",
+                use_container_width=True
+            )
+        else:
+            st.download_button(
+                label="📊 Country Billing Master (.xlsx)",
+                data=safe_get_master_excel_bytes(),
+                file_name="Country Billing.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="nav_pop_dl_billing_alt",
                 use_container_width=True
             )
         if separate_codes_bytes:

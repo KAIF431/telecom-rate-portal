@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import re
 import threading
@@ -399,14 +400,32 @@ def get_master_excel_bytes():
     """
     Returns live binary content of the Master Country Billing Excel sheet.
     Can be downloaded by any user or administrator.
+    If on-disk files are not found, dynamically generates the Excel sheet from master rules in memory.
     """
-    for p in [MASTER_EXCEL_PATH, TEMPLATE_EXCEL_PATH, VENDOR_RATES_EXCEL_PATH]:
+    for p in [TEMPLATE_EXCEL_PATH, MASTER_EXCEL_PATH, VENDOR_RATES_EXCEL_PATH]:
         if os.path.exists(p):
             try:
                 with open(p, "rb") as f:
-                    return f.read()
+                    content = f.read()
+                    if content and len(content) > 1000:
+                        return content
             except Exception:
                 pass
+    
+    # In-memory generation fallback from JSON rules
+    try:
+        data = load_master_billing()
+        raw_list = data.get("raw_list", [])
+        if raw_list:
+            df = pd.DataFrame(raw_list)
+            df = df.rename(columns={"dial_code": "Dial Code", "destination": "Summary", "minimum": "Minimum", "increment": "Increment"})
+            cols = ["Dial Code", "Summary", "Minimum", "Increment"]
+            df = df[[c for c in cols if c in df.columns]]
+            buf = io.BytesIO()
+            df.to_excel(buf, index=False, engine="openpyxl")
+            return buf.getvalue()
+    except Exception:
+        pass
     return b""
 
 def update_or_add_master_rule(dial_code, destination, minimum, increment):
