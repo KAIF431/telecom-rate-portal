@@ -228,6 +228,9 @@ def detect_header_row_and_columns(df_raw):
         # Link country + area code or country code standalone
         if ('country_code' in mapping and 'area_code' in mapping) and 'dial_code' not in mapping:
             mapping['dial_code_split'] = True
+        elif 'country_code' in mapping and 'dial_code' in mapping and mapping['country_code'] != mapping['dial_code']:
+            mapping['dial_code_split'] = True
+            mapping['area_code'] = mapping['dial_code']
         elif 'country_code' in mapping and ('dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False)) and 'area_code' not in mapping:
             mapping['dial_code'] = mapping['country_code']
             kw_score += 6
@@ -256,7 +259,10 @@ def detect_header_row_and_columns(df_raw):
             if rate_col is not None and rate_col < sample_rows.shape[1]:
                 for r_val in sample_rows.iloc[:, rate_col]:
                     try:
-                        rf = float(str(r_val).replace('$', '').strip())
+                        rs = str(r_val).replace('$', '').replace('€', '').replace('£', '').strip()
+                        if ',' in rs and '.' not in rs:
+                            rs = rs.replace(',', '.')
+                        rf = float(rs)
                         if 0 <= rf <= 100:
                             valid_rates += 1
                     except:
@@ -561,7 +567,18 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
             df_data = df_data.explode('_split_a').reset_index(drop=True)
             raw_c = df_data.iloc[:, c_col].fillna('').astype(str).str.split('.').str[0].str.strip()
             raw_a_clean = df_data['_split_a'].fillna('').astype(str).str.split('.').str[0].str.strip()
-        raw_code_series = (raw_c + raw_a_clean).str.split('.').str[0].str.strip()
+        
+        def _smart_combine_codes(cc_val, code_val):
+            cc = str(cc_val).strip()
+            cd = str(code_val).strip()
+            if cd and cc:
+                if cd.startswith(cc):
+                    return cd
+                return cc + cd
+            return cc or cd
+
+        combined_codes = [_smart_combine_codes(c, a) for c, a in zip(raw_c, raw_a_clean)]
+        raw_code_series = pd.Series(combined_codes, index=df_data.index).astype(str).str.split('.').str[0].str.strip()
     else:
         code_raw_series = df_data.iloc[:, code_idx].fillna('').astype(str).str.strip()
         if code_raw_series.str.contains(r'[,;]', regex=True, na=False).any():
@@ -644,7 +661,12 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
 
     # 5. Vectorized Rate Logic (>= 1.00 -> -1, <= 0.0 -> -1, empty/block/delete -> -1)
     raw_rates_str = df_valid.iloc[:, rate_idx].fillna('').astype(str).str.lower().str.strip()
-    clean_nums = pd.to_numeric(raw_rates_str.str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+    clean_rates_str = raw_rates_str.str.replace(r'[\$€£₹\s]', '', regex=True)
+    # Handle European comma decimal (e.g. 0,2766 -> 0.2766)
+    has_comma_no_dot = clean_rates_str.str.contains(',', regex=False) & ~clean_rates_str.str.contains('.', regex=False)
+    clean_rates_str = np.where(has_comma_no_dot, clean_rates_str.str.replace(',', '.', regex=False), clean_rates_str)
+    clean_rates_str = pd.Series(clean_rates_str, index=df_valid.index)
+    clean_nums = pd.to_numeric(clean_rates_str.str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
     
     is_empty_or_block = raw_rates_str.isin(['', 'nan', 'none', 'null', '-']) | raw_rates_str.str.contains(r'block|close|na|n/a|del|free', regex=True, na=False)
     
