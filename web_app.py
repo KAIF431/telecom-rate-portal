@@ -2074,19 +2074,502 @@ def render_super_admin_accounts_tabs():
             if st.button("💾 Save Email Dispatcher Settings", type="primary", key="sa_btn_save_email_cfg"):
                 st.success("✅ Email Dispatcher settings recorded! SMTP pipeline will activate on schedule.")
 
+
+# ==============================================================================
+# 👥 CUSTOMER RATE DECK STANDARDIZER ENGINE
+# ==============================================================================
+
+def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif"):
+    import io, re, datetime, time
+    import pandas as pd
+    import billing_manager as bm
+    import core_engine
+
+    t0 = time.time()
+    try:
+        if str(original_filename).lower().endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str)
+        else:
+            df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
+    except Exception as e:
+        return False, f"Could not parse sheet: {e}", None
+
+    initial_rows = len(df)
+    
+    # 1. Flexible column normalization
+    col_map = {}
+    for c in df.columns:
+        cl = str(c).strip().lower()
+        if any(x in cl for x in ['dial code', 'dialcode', 'prefix']) or cl == 'code':
+            if 'Dial Code' not in col_map.values():
+                col_map[c] = 'Dial Code'
+        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']):
+            if 'Summary' not in col_map.values():
+                col_map[c] = 'Summary'
+        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) or cl == 'rate':
+            if 'New Rate' not in col_map.values():
+                col_map[c] = 'New Rate'
+        elif any(x in cl for x in ['minimum', 'pulse1']) or cl == 'min':
+            if 'Minimum' not in col_map.values():
+                col_map[c] = 'Minimum'
+        elif any(x in cl for x in ['increment', 'interval', 'pulse2']) or cl == 'inc':
+            if 'Increment' not in col_map.values():
+                col_map[c] = 'Increment'
+        elif any(x in cl for x in ['effective date', 'effective', 'start date']) or cl == 'date':
+            if 'Effective Date' not in col_map.values():
+                col_map[c] = 'Effective Date'
+        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']):
+            if 'Comments' not in col_map.values():
+                col_map[c] = 'Comments'
+
+    df = df.rename(columns=col_map)
+
+    # Ensure required columns exist
+    if 'Dial Code' not in df.columns or 'Summary' not in df.columns or 'New Rate' not in df.columns:
+        return False, "Uploaded file must contain Dial Code, Destination/Summary, and Rate columns.", None
+
+    if 'Minimum' not in df.columns:
+        df['Minimum'] = '1'
+    if 'Increment' not in df.columns:
+        df['Increment'] = '1'
+    if 'Effective Date' not in df.columns:
+        df['Effective Date'] = str(effective_date_val)
+
+    # Clean strings
+    for col in ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']:
+        df[col] = df[col].astype(str).str.strip()
+
+    # 2. Filter rows where comment contains 'delete'
+    deleted_comments_count = 0
+    if 'Comments' in df.columns:
+        mask_del = df['Comments'].astype(str).str.contains(r'delete', case=False, na=False)
+        deleted_comments_count = int(mask_del.sum())
+        df = df[~mask_del]
+
+    # 3. Filter specifically USA, Canada, Puerto Rico
+    nanp_specific_pattern = r'\b(?:USA|UNITED STATES|CANADA|PUERTO RICO)\b'
+    mask_nanp = df['Summary'].astype(str).str.contains(nanp_specific_pattern, case=False, na=False)
+    nanp_excluded_count = int(mask_nanp.sum())
+    df = df[~mask_nanp]
+
+    # 4. Extract only standard 6 columns in exact order
+    target_cols = ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']
+    df = df[target_cols].copy()
+
+    # 5. Apply destination rate updates & track inc/dec
+    change_summary = []
+    dest_labels_for_name = []
+    total_rows_updated = 0
+    eff_date_str = str(effective_date_val)
+
+    for item in dest_updates:
+        target_dest = str(item.get("destination", "")).strip()
+        new_rate_raw = item.get("rate")
+        if not target_dest or new_rate_raw is None:
+            continue
+        try:
+            new_rate_float = float(str(new_rate_raw).replace("$", "").strip())
+        except Exception:
+            continue
+
+        dest_escaped = re.escape(target_dest)
+        match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
+        matched_count = int(match_mask.sum())
+        if matched_count == 0:
+            match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
+            matched_count = int(match_mask.sum())
+
+        if matched_count > 0:
+            existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
+            old_avg_rate = existing_rates_series.dropna().mean()
+            if pd.isna(old_avg_rate) or old_avg_rate == 0:
+                old_avg_rate = 0.0
+
+            trend = "inc" if new_rate_float >= old_avg_rate else "dec"
+            rate_diff = new_rate_float - old_avg_rate
+
+            df.loc[match_mask, 'New Rate'] = f"{new_rate_float:.4f}"
+            df.loc[match_mask, 'Effective Date'] = eff_date_str
+
+            total_rows_updated += matched_count
+            dest_labels_for_name.append(f"{target_dest} {trend}")
+            change_summary.append({
+                "destination": target_dest,
+                "old_rate": f"{old_avg_rate:.4f}",
+                "new_rate": f"{new_rate_float:.4f}",
+                "trend": trend.upper(),
+                "diff": rate_diff,
+                "rows_updated": matched_count
+            })
+
+    # 6. Check mismatches against Country Master Billing
+    mismatches = []
+    bm_data = bm.load_master_billing() if hasattr(bm, "load_master_billing") else {}
+    if bm_data:
+        mismatches = bm.audit_dataframe_billing(df, bm_data) if hasattr(bm, "audit_dataframe_billing") else []
+
+    # 7. Build smart filename preserving original customer sheet base
+    base_stem = original_filename.rsplit(".", 1)[0]
+    base_clean = re.sub(r'^(?:name\s*[-:]?\s*)', '', base_stem, flags=re.I).strip()
+    
+    u_tag = str(current_username or "kaif").strip().lower()
+    if len(dest_labels_for_name) == 1:
+        suffix = f"{dest_labels_for_name[0]} {u_tag}"
+    elif len(dest_labels_for_name) == 2:
+        suffix = f"{dest_labels_for_name[0]} {dest_labels_for_name[1]} {u_tag}"
+    elif len(dest_labels_for_name) > 2:
+        trends = [c["trend"].lower() for c in change_summary]
+        if all(t == "inc" for t in trends):
+            suffix = f"Various inc {u_tag}"
+        elif all(t == "dec" for t in trends):
+            suffix = f"Various dec {u_tag}"
+        else:
+            suffix = f"Various inc dec {u_tag}"
+    else:
+        suffix = f"standardized {u_tag}"
+
+    suggested_full_name = f"Name - {base_clean} {suffix}"
+    final_xl_filename = f"{suggested_full_name}.xlsx"
+    final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
+
+    # 8. Generate Excel and CSV bytes
+    buf_xl = io.BytesIO()
+    with pd.ExcelWriter(buf_xl, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Customer Rate Deck")
+    xl_bytes = buf_xl.getvalue()
+
+    buf_csv = io.StringIO()
+    df.to_csv(buf_csv, index=False)
+    csv_bytes = buf_csv.getvalue().encode("utf-8")
+
+    elapsed_time = time.time() - t0
+
+    stats = {
+        "initial_rows": initial_rows,
+        "clean_rows": len(df),
+        "deleted_comments_count": deleted_comments_count,
+        "nanp_excluded_count": nanp_excluded_count,
+        "total_rows_updated": total_rows_updated,
+        "destinations_count": len(dest_updates)
+    }
+
+    result = {
+        "df_clean": df,
+        "xl_bytes": xl_bytes,
+        "csv_bytes": csv_bytes,
+        "filename": final_xl_filename,
+        "csv_filename": final_csv_filename,
+        "base_clean": base_clean,
+        "suffix": suffix,
+        "mismatches": mismatches,
+        "has_mismatch": len(mismatches) > 0,
+        "stats": stats,
+        "change_summary": change_summary,
+        "effective_date": eff_date_str,
+        "elapsed_time": elapsed_time
+    }
+    return True, "Success", result
+
+
 def render_customer_standardizer_view():
+    import datetime, time, io
+    import pandas as pd
+    import billing_manager as bm
+    import core_engine
+
+    curr_u = current_user.get("username", "kaif") if isinstance(current_user, dict) else "kaif"
+
+    # 1. DISPLAY PERSISTENT RESULTS AT TOP (Identical to Vendor Portal!)
+    if st.session_state.get("cust_processed_result"):
+        item = st.session_state.cust_processed_result
+        elapsed_sec = item.get("elapsed_time", 0.0)
+        stats = item.get("stats", {})
+        change_summary = item.get("change_summary", [])
+        mismatches = item.get("mismatches", [])
+        has_mm = len(mismatches) > 0
+        
+        st.markdown("---")
+        col_hdr, col_clr = st.columns([3.8, 1.2])
+        with col_hdr:
+            elapsed_badge = f'<span style="background: #DCFCE7; color: #166534; font-weight: 700; font-size: 0.78rem; padding: 2px 10px; border-radius: 12px; border: 1px solid #86EFAC;">⏱️ {elapsed_sec:.2f}s</span>' if elapsed_sec is not None else ""
+            st.markdown(
+                f'<div style="display: inline-flex; align-items: center; gap: 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 20px; padding: 4px 14px; margin: 2px 0;">'
+                f'<span style="font-weight: 700; color: #166534; font-size: 0.88rem;">🎉 Customer Rate Sheet Standardized Successfully</span>'
+                f'{elapsed_badge}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with col_clr:
+            if st.button("🗑️ Clear / Reset", type="secondary", use_container_width=True, key="cust_clear_results_btn"):
+                st.session_state.cust_processed_result = None
+                st.session_state.pop("cust_dest_items", None)
+                st.rerun()
+
+        # Executive Card Container (Identical in style to Vendor Deck Card!)
+        with st.container(border=True):
+            if has_mm:
+                st.markdown("""
+                <style>
+                div.st-key-cust_popover_mm button {
+                    background-color: #FFFBEB !important;
+                    border: 1.5px solid #FCD34D !important;
+                    color: #B45309 !important;
+                    font-weight: 700 !important;
+                    font-size: 0.78rem !important;
+                }
+                div.st-key-cust_popover_mm button:hover {
+                    background-color: #FEF3C7 !important;
+                    border-color: #F59E0B !important;
+                    color: #78350F !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                c_name, c_mm, c_fix, c_stats, c_date = st.columns([2.3, 1.2, 1.2, 0.8, 1.1])
+                with c_name:
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; gap: 6px; min-height: 38px; font-weight: 700; color: #0C4A6E; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+                        f'📁 {item["filename"]}'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                with c_mm:
+                    with st.popover(f"⚠️ {len(mismatches)} Mismatch ▾", use_container_width=True, key="cust_popover_mm"):
+                        st.markdown(f"**⚠️ {len(mismatches)} Billing Mismatches Found:**")
+                        st.caption("Customer pulse differs from standard master (Country Billing.xlsx)")
+                        mm_table = []
+                        for mm in mismatches[:100]:
+                            mm_table.append({
+                                "Destination": mm["destination"],
+                                "Dial Code": mm["dial_code"],
+                                "Sheet Pulse": mm["vendor_pulse"],
+                                "Standard Master": mm["standard_pulse"]
+                            })
+                        st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
+                with c_fix:
+                    if st.button("⚡ Fix Standard", key="cust_btn_fix_std", type="primary", use_container_width=True):
+                        df_curr = item.get("df_clean")
+                        if df_curr is not None:
+                            df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
+                            buf_x = io.BytesIO()
+                            with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
+                                df_fixed.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                            buf_c = io.StringIO()
+                            df_fixed.to_csv(buf_c, index=False)
+                            item["df_clean"] = df_fixed
+                            item["xl_bytes"] = buf_x.getvalue()
+                            item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                            item["mismatches"] = []
+                            item["has_mismatch"] = False
+                            st.success("✅ Standard billing applied successfully!")
+                            time.sleep(0.8)
+                            st.rerun()
+                with c_stats:
+                    with st.popover("📊 Stats ▾", use_container_width=True, key="cust_popover_stats"):
+                        st.markdown(
+                            f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
+                            f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
+                            f'📊 Row Breakdown & Stats'
+                            f'</div>'
+                            f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px;">'
+                            f'<span style="color: #0369A1; font-weight: 700;">📥 INPUT ROWS</span>'
+                            f'<span style="color: #0C4A6E; font-weight: 800; font-size: 0.95rem;">{stats.get("initial_rows", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                            f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
+                            f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{stats.get("clean_rows", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
+                            f'<span style="color: #92400E; font-weight: 700;">🚫 DELETED COMMENTS</span>'
+                            f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{stats.get("deleted_comments_count", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
+                            f'<span style="color: #475569; font-weight: 700;">🚫 USA/CANADA/PR</span>'
+                            f'<span style="color: #0F172A; font-weight: 800; font-size: 0.95rem;">{stats.get("nanp_excluded_count", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                            f'<span style="color: #15803D; font-weight: 700;">⚡ ROWS UPDATED</span>'
+                            f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{stats.get("total_rows_updated", 0):,}</span>'
+                            f'</div>'
+                            f'</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                with c_date:
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; justify-content: flex-end; min-height: 38px;">'
+                        f'<span style="background: #F0FDF4; color: #16A34A; border: 1.5px solid #4ADE80; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; white-space: nowrap;">🟢 {item.get("effective_date")}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+            else:
+                c_name, c_stats, c_date = st.columns([3.5, 0.9, 1.2])
+                with c_name:
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; gap: 6px; min-height: 38px; font-weight: 700; color: #0C4A6E; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+                        f'📁 {item["filename"]}'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                with c_stats:
+                    with st.popover("📊 Stats ▾", use_container_width=True, key="cust_popover_stats_clean"):
+                        st.markdown(
+                            f'<div style="min-width: 250px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">'
+                            f'<div style="font-weight: 700; color: #0C4A6E; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 6px;">'
+                            f'📊 Row Breakdown & Stats'
+                            f'</div>'
+                            f'<div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem;">'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                            f'<span style="color: #15803D; font-weight: 700;">✅ CLEAN OUTPUT</span>'
+                            f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{stats.get("clean_rows", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                            f'<span style="color: #15803D; font-weight: 700;">⚡ ROWS UPDATED</span>'
+                            f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{stats.get("total_rows_updated", 0):,}</span>'
+                            f'</div>'
+                            f'</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                with c_date:
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; justify-content: flex-end; min-height: 38px;">'
+                        f'<span style="background: #F0FDF4; color: #16A34A; border: 1.5px solid #4ADE80; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; white-space: nowrap;">🟢 {item.get("effective_date")}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+            # Executive Summary of Rate Changes Table
+            if change_summary:
+                st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+                st.markdown("**📋 Rate Updates Breakdown:**")
+                c_rows_display = []
+                for cs in change_summary:
+                    c_rows_display.append({
+                        "Destination": cs["destination"],
+                        "Old Rate": cs["old_rate"],
+                        "New Rate": cs["new_rate"],
+                        "Action / Trend": f"📈 +{cs['diff']:.4f} (INC)" if cs["trend"] == "INC" else f"📉 {cs['diff']:.4f} (DEC)",
+                        "Rows Impacted": cs["rows_updated"]
+                    })
+                st.dataframe(pd.DataFrame(c_rows_display), use_container_width=True, hide_index=True)
+
+            # Editable Filename text box
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+            ed_fname_col, ed_btn_col = st.columns([3.6, 1.2])
+            with ed_fname_col:
+                new_name_input = st.text_input("Review / Edit Output Filename:", value=item["filename"].replace(".xlsx", ""), key="cust_fname_edit_input")
+            with ed_btn_col:
+                st.write("")
+                st.write("")
+                if st.button("✏️ Rename Deck", type="secondary", use_container_width=True, key="cust_btn_apply_rename"):
+                    clean_nn = new_name_input.strip()
+                    if clean_nn:
+                        item["filename"] = f"{clean_nn}.xlsx"
+                        item["csv_filename"] = core_engine.build_csv_output_filename(clean_nn)
+                        st.toast("✅ Filename updated!")
+                        st.rerun()
+
+            # Download Buttons Row (Excel + CSV)
+            c_dl1, c_dl2 = st.columns([3.2, 1.8])
+            with c_dl1:
+                st.download_button(
+                    label=f"📊 Download: {item['filename']}",
+                    data=item["xl_bytes"],
+                    file_name=item["filename"],
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="cust_exec_dl_excel",
+                    type="primary",
+                    use_container_width=True
+                )
+            with c_dl2:
+                st.download_button(
+                    label="📄 Download CSV",
+                    data=item["csv_bytes"],
+                    file_name=item["csv_filename"],
+                    mime="text/csv",
+                    key="cust_exec_dl_csv",
+                    type="secondary",
+                    use_container_width=True
+                )
+
+    # 2. UPLOAD & DESTINATION FORM CONTAINER (Matches Vendor Design!)
     with st.container(border=True):
-        st.markdown("### 📤 Upload Customer Rate Decks")
-        st.caption("Drag and drop customer rate sheets (.xlsx, .xls, .csv). Batch upload supported:")
-        cust_files = st.file_uploader(
-            "Upload Customer Rate Deck(s):",
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("Drag and drop customer rate sheet (.xlsx, .xls, .csv). Batch filtering & auto Inc/Dec matching supported:")
+        
+        uploaded_cust_file = st.file_uploader(
+            "Upload Customer Rate Deck",
             type=["xlsx", "xls", "csv"],
-            accept_multiple_files=True,
-            key="cust_standardizer_uploader"
+            key="cust_main_uploader",
+            label_visibility="collapsed"
         )
-        if cust_files:
-            st.success(f"📂 **{len(cust_files)} customer file(s) loaded successfully.**")
-            st.info("⚡ Customer standardizer processing rules will execute here once customer matching rules are configured.")
+        
+        if uploaded_cust_file:
+            st.success(f"📂 **{uploaded_cust_file.name}** loaded successfully ({len(uploaded_cust_file.getvalue())/1024:.1f} KB).")
+            
+            st.markdown("---")
+            st.markdown("##### 🎯 Update Destinations & Rates")
+            st.caption("Enter requested destinations, new rates, and effective date:")
+            
+            if "cust_dest_items" not in st.session_state:
+                st.session_state.cust_dest_items = [{"dest": "", "rate": ""}]
+                
+            for idx, d_item in enumerate(st.session_state.cust_dest_items):
+                c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
+                with c_d1:
+                    d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_dest_in_{idx}")
+                with c_d2:
+                    d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_rate_in_{idx}")
+                with c_d3:
+                    st.write("")
+                    st.write("")
+                    if len(st.session_state.cust_dest_items) > 1:
+                        if st.button("✖", key=f"cust_del_dest_{idx}", help="Remove this destination"):
+                            st.session_state.cust_dest_items.pop(idx)
+                            st.rerun()
+
+            col_add_dest, col_date = st.columns([2, 2])
+            with col_add_dest:
+                if st.button("➕ Add More Destination Rate", type="secondary", key="cust_btn_add_dest_row"):
+                    st.session_state.cust_dest_items.append({"dest": "", "rate": ""})
+                    st.rerun()
+            with col_date:
+                sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_date_selector")
+                
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+            if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
+                valid_updates = []
+                for di in st.session_state.cust_dest_items:
+                    d_val = di.get("dest", "").strip()
+                    r_val = di.get("rate", "").strip()
+                    if d_val and r_val:
+                        valid_updates.append({"destination": d_val, "rate": r_val})
+                        
+                if not valid_updates:
+                    st.warning("⚠️ Please enter at least one Destination and New Rate to update.")
+                else:
+                    with st.spinner("Processing customer rate deck, filtering NANP & checking billing rules..."):
+                        ok, msg, res = process_customer_rate_deck(
+                            uploaded_cust_file.getvalue(),
+                            uploaded_cust_file.name,
+                            valid_updates,
+                            sel_eff_date,
+                            curr_u
+                        )
+                        if ok:
+                            st.session_state.cust_processed_result = res
+                            st.success("✅ Customer rate deck standardized successfully!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
 
 # Sidebar already mounted at top
 
