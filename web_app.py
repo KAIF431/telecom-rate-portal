@@ -2277,9 +2277,9 @@ if uploaded_files:
         clean_v_name = v_name.strip() if v_name else f"File {idx+1}"
         
         if 'a to z' in clean_v_name.lower():
-            preview_filename = f"{clean_v_name} UPdated {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} Updated {active_member}.xlsx"
         else:
-            preview_filename = f"{clean_v_name} A to Z UPdated {active_member}.xlsx"
+            preview_filename = f"{clean_v_name} A to Z Updated {active_member}.xlsx"
             
         preview_csv_name = core_engine.build_csv_output_filename(clean_v_name)
         c2.markdown(f"""

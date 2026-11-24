@@ -368,11 +368,11 @@ def detect_header_row_and_columns(df_raw):
 
 def analyze_vendor_comments(df_slice, status_col_idx):
     if status_col_idx is None:
-        return False, "UPdated"
+        return False, "Updated"
         
     vals = df_slice.iloc[:, status_col_idx].dropna().astype(str).tolist()
     if not vals:
-        return False, "UPdated"
+        return False, "Updated"
         
     found_types = set()
     for v in vals:
@@ -391,7 +391,7 @@ def analyze_vendor_comments(df_slice, status_col_idx):
             found_types.add('new')
 
     if not found_types:
-        return False, "UPdated"
+        return False, "Updated"
 
     ordered_tags = []
     for t in ['inc', 'dec', 'same', 'delete', 'new']:
@@ -1055,7 +1055,7 @@ def build_output_filename(base_name, comments_tag, member_name):
     if not base:
         base = "Rate Deck"
         
-    tag = str(comments_tag or 'UPdated').strip()
+    tag = str(comments_tag or 'Updated').strip()
     member = str(member_name or 'Kaif').strip()
 
     # Clean existing extensions if typed by user
@@ -1081,15 +1081,16 @@ def build_output_filename(base_name, comments_tag, member_name):
     else:
         filename = f"{base} A to Z {tag} {member}.xlsx"
 
+    filename = re.sub(r'\bUPdated\b', 'Updated', filename)
     filename = re.sub(r'\s+', ' ', filename).strip()
     return filename
 
 def build_partial_filename(out_name):
     """
     Transforms a standardized A to Z filename into its corresponding Partial ratesheet name.
-    Preserves vendor name, comments tag (e.g. UPdated, Various inc, dec, new), and member name.
+    Preserves vendor name, comments tag (e.g. Updated, Various inc, dec, new), and member name.
     Example:
-    'Name - LilyX_Rozper A to Z UPdated Kaif.xlsx' -> 'Name - LilyX_Rozper Partial UPdated Kaif.xlsx'
+    'Name - LilyX_Rozper A to Z Updated Kaif.xlsx' -> 'Name - LilyX_Rozper Partial Updated Kaif.xlsx'
     'Name - Vinculum A to Z Various inc, dec Kaif.xlsx' -> 'Name - Vinculum Partial Various inc, dec Kaif.xlsx'
     """
     s = str(out_name or '').strip()
@@ -1101,6 +1102,7 @@ def build_partial_filename(out_name):
             p_name = f"{s[:-5].strip()} Partial.xlsx"
         else:
             p_name = f"{s} Partial"
+    p_name = re.sub(r'\bUPdated\b', 'Updated', p_name)
     return re.sub(r'\s+', ' ', p_name).strip()
 
 
