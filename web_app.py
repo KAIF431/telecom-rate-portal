@@ -446,10 +446,28 @@ st.markdown("""
     div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
     
-    /* Permanently hide Streamlit Sidebar across all devices */
-    [data-testid="stSidebar"] { display: none !important; }
-    [data-testid="collapsedControl"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+    /* Compact, sleek professional sidebar with corner toggle button */
+    [data-testid="stSidebar"] {
+        min-width: 220px !important;
+        max-width: 240px !important;
+        background-color: #F8FAFC !important;
+        border-right: 1.5px solid #E2E8F0 !important;
+    }
+    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
+        visibility: visible !important;
+        display: flex !important;
+        top: 14px !important;
+        left: 14px !important;
+        background: #0E7490 !important;
+        color: #FFFFFF !important;
+        border-radius: 6px !important;
+        box-shadow: 0 2px 6px rgba(14, 116, 144, 0.25) !important;
+        z-index: 999999 !important;
+    }
+    [data-testid="collapsedControl"] svg, [data-testid="stSidebarCollapsedControl"] svg {
+        fill: #FFFFFF !important;
+        stroke: #FFFFFF !important;
+    }
 
     /* Segmented Pill Navigation Control */
     div[role="radiogroup"] {
@@ -1230,595 +1248,827 @@ def safe_get_master_excel_bytes():
         pass
     return b""
 
-admin_nav_mode = "⚡ Rate Deck Standardizer"
+def safe_get_cc_master_bytes():
+    for p in [
+        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet.xlsx"),
+        r"C:\vendor Rates\CC_Rates_Sheet_2026_02_01.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    c = f.read()
+                    if c and len(c) > 1000:
+                        return c, os.path.basename(p)
+            except Exception:
+                pass
+    return b"", "CC_Rates_Sheet.xlsx"
 
-# Navigation Row: Left has Rate Deck Standardizer, Right has the Master Sheets Dropdown
-nav_col_left, nav_col_right = st.columns([3.2, 1.2])
+def safe_get_cli_master_bytes():
+    for p in [
+        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet.xlsx"),
+        r"C:\vendor Rates\CLI_Rate_sheet_2026_02_01.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    c = f.read()
+                    if c and len(c) > 1000:
+                        return c, os.path.basename(p)
+            except Exception:
+                pass
+    return b"", "CLI_Rate_sheet.xlsx"
 
-with nav_col_left:
-    if is_admin:
-        admin_nav_mode = st.radio(
-            "Navigation Mode:",
-            ["⚡ Rate Deck Standardizer", "👑 Admin Management Panel"],
-            horizontal=True,
-            key="main_admin_nav_toggle",
-            label_visibility="collapsed"
-        )
+def render_activity_history_tab(prefix="vend"):
+    st.subheader("📜 User Processing History & Download Center")
+    st.caption("Complete tracking of every rate sheet standardized by all team members with 1-click Excel and CSV downloads.")
+    
+    history = am.get_processing_history()
+    if not history:
+        st.info("ℹ️ No rate sheets processed yet. As users process files, complete activity records will appear here in real time.")
+        return
+
+    def extract_entry_date(ts):
+        if not ts:
+            return None
+        try:
+            s = str(ts).strip()[:10]
+            return datetime.datetime.strptime(s, "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    today = now_ist.date()
+    all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
+    valid_dates = [d for d in all_dates if d is not None]
+    min_available_date = min(valid_dates) if valid_dates else today
+
+    cutoff_7d = today - datetime.timedelta(days=7)
+    sheets_7d = [h for h in history if extract_entry_date(h.get("timestamp")) and extract_entry_date(h.get("timestamp")) >= cutoff_7d]
+    total_sheets = len(sheets_7d)
+    arhama_total = sum(1 for h in sheets_7d if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+    kaif_total = sum(1 for h in sheets_7d if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+    aliba_total = sum(1 for h in sheets_7d if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
+
+    m1, m2, m3, m4, m5 = st.columns([1.5, 1.2, 1.2, 1.2, 1])
+    m1.metric("📁 Rolling 7-Day Sheets", f"{total_sheets:,}")
+    m2.metric("👩 Arhama", f"{arhama_total}")
+    m3.metric("👨 Kaif", f"{kaif_total}")
+    m4.metric("👩 Aliba", f"{aliba_total}")
+    with m5:
+        st.write("")
+        if st.button("🗑️ Clear Log", key=f"{prefix}_clear_hist_btn", use_container_width=True):
+            am.clear_processing_history()
+            st.success("Activity log cleared!")
+            time.sleep(0.8)
+            st.rerun()
+
+    st.info("🕒 **Strict 7-Day Auto-Retention Active:** All rate sheets and audit records are saved for exactly 7 days (168 hours) from upload, after which they are automatically deleted.")
+    st.divider()
+
+    # Date Filter Mode Selector
+    st.markdown("**📅 Filter History by Date:**")
+    date_filter_mode = st.radio(
+        "Choose Date View:",
+        ["⚡ Last 7 Days (Default)", "🌐 All Time", "📆 Date Range"],
+        horizontal=True,
+        key=f"{prefix}_hist_date_filter_mode"
+    )
+
+    sel_start_date = None
+    sel_end_date = None
+
+    if date_filter_mode == "⚡ Last 7 Days (Default)":
+        sel_start_date = today - datetime.timedelta(days=7)
+        sel_end_date = today
+
+    elif date_filter_mode == "📆 Date Range":
+        col_dr1, col_dr2 = st.columns(2)
+        with col_dr1:
+            from_d = st.date_input("From Date:", value=(min_available_date if min_available_date else (today - datetime.timedelta(days=7))), key=f"{prefix}_hist_from_date_input")
+        with col_dr2:
+            to_d = st.date_input("To Date:", value=today, key=f"{prefix}_hist_to_date_input")
+        sel_start_date = min(from_d, to_d)
+        sel_end_date = max(from_d, to_d)
+
+    elif date_filter_mode == "🌐 All Time":
+        sel_start_date = None
+        sel_end_date = None
+
+    # Secondary Filters: User and Keyword Search
+    fc1, fc2 = st.columns([1.5, 2.5])
+    with fc1:
+        user_options = ["All Users", "Arhama", "Kaif", "Aliba"]
+        selected_user = st.selectbox("Filter by User:", user_options, key=f"{prefix}_audit_filter_user")
+    with fc2:
+        filter_kw = st.text_input("Search by Vendor or File Name:", key=f"{prefix}_audit_search_kw", placeholder="Type vendor or filename to search...")
+
+    # Filtering logic
+    filtered = []
+    for entry in history:
+        e_date = extract_entry_date(entry.get("timestamp"))
+        
+        if sel_start_date and sel_end_date:
+            if not e_date or not (sel_start_date <= e_date <= sel_end_date):
+                continue
+        
+        if selected_user != "All Users":
+            u_match = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
+            f_match = str(entry.get("output_filename", "")).lower()
+            sel_low = selected_user.lower()
+            if sel_low not in u_match and sel_low not in f_match:
+                continue
+        
+        if filter_kw:
+            kw_low = filter_kw.strip().lower()
+            v_name = str(entry.get("vendor_name", "")).lower()
+            out_f = str(entry.get("output_filename", "")).lower()
+            u_f = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
+            if kw_low not in v_name and kw_low not in out_f and kw_low not in u_f:
+                continue
+                
+        filtered.append(entry)
+
+    st.markdown(f"**Showing {len(filtered)} Rate Sheet(s) Matching Filter:**")
+
+    if not filtered:
+        st.warning("⚠️ No processing records found for the selected date / filter criteria.")
     else:
-        st.markdown(
-            '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
-            '⚡ Rate Deck Standardizer'
-            '</div>',
-            unsafe_allow_html=True
+        # 1-Click Instant Sheet Download
+        st.markdown("#### ⚡ 1-Click Instant Sheet Download")
+        sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
+        if sheet_options:
+            sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key=f"{prefix}_admin_quick_dl_select")
+            if sel_sheet:
+                xl_bytes = get_historical_file_bytes(sel_sheet)
+                csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
+                
+                c_dl1, c_dl2 = st.columns(2)
+                with c_dl1:
+                    if xl_bytes:
+                        st.download_button(
+                            label=f"📊 Download Excel (.xlsx)",
+                            data=xl_bytes,
+                            file_name=sel_sheet,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"{prefix}_admin_hist_quick_dl_xl_{sel_sheet}",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    else:
+                        st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True, key=f"{prefix}_btn_no_xl_{sel_sheet}")
+                with c_dl2:
+                    if csv_b:
+                        st.download_button(
+                            label=f"📄 Download CSV (.csv)",
+                            data=csv_b,
+                            file_name=csv_fn,
+                            mime="text/csv",
+                            key=f"{prefix}_admin_hist_quick_dl_csv_{sel_sheet}",
+                            use_container_width=True
+                        )
+                    else:
+                        st.button(f"CSV Not in Cache", disabled=True, use_container_width=True, key=f"{prefix}_btn_no_csv_{sel_sheet}")
+
+        st.markdown("---")
+        st.markdown("#### 📜 Complete Activity & History Table")
+
+        table_rows = []
+        for entry in filtered:
+            u_disp = entry.get("user_name") or entry.get("username") or "Unknown"
+            ts = str(entry.get("timestamp", ""))
+            elapsed = entry.get("elapsed_sec", 0)
+
+            time_disp = ""
+            if entry.get("time_range"):
+                time_disp = entry.get("time_range")
+            elif entry.get("start_time") and entry.get("end_time"):
+                time_disp = f"{entry.get('start_time')} - {entry.get('end_time')} ({elapsed}s)"
+            elif len(ts) >= 19:
+                try:
+                    end_dt = datetime.datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S")
+                    start_dt = end_dt - datetime.timedelta(seconds=float(elapsed))
+                    time_disp = f"{start_dt.strftime('%H:%M:%S')} - {end_dt.strftime('%H:%M:%S')} ({elapsed}s)"
+                except Exception:
+                    time_disp = ts[11:19]
+            else:
+                time_disp = ts
+
+            clean_fn = re.sub(r'\bupdated\b', 'Updated', str(entry.get("output_filename", "")), flags=re.IGNORECASE)
+            table_rows.append({
+                "Date": ts[:10] if len(ts) >= 10 else "",
+                "Time (Kitne Baje Se Kitne Baje Tak)": time_disp,
+                "User Name": u_disp,
+                "Vendor / Trunk Name": entry.get("vendor_name"),
+                "Standardized File": clean_fn,
+                "Clean Rows": f"{entry.get('clean_rows', 0):,}",
+                "Blocked Codes": f"{entry.get('qc_excluded', 0):,}",
+                "Duration": f"{elapsed}s"
+            })
+        
+        df_audit = pd.DataFrame(table_rows)
+        st.dataframe(df_audit, use_container_width=True, hide_index=True)
+
+        csv_data = df_audit.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download This History (CSV)",
+            data=csv_data,
+            file_name=f"audit_history_{today.strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key=f"{prefix}_btn_download_audit_csv"
         )
 
-with nav_col_right:
-    with st.popover("📥 Master Sheets & Formats ▾", use_container_width=True, help="Download standard sample format, QC rules, and country billing"):
-        st.markdown(
-            '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
-            '📁 Master Telecom Reference Sheets'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        if sample_bytes:
+def render_billing_rules_tab():
+    st.subheader("👑 Master Billing Rules Manager (`billingkaif.xlsx`)")
+    st.caption("View, search, edit, and add official company billing rules for any destination. When market rules change (e.g. Indonesia 60/1 -> 60/60), update them here without touching code.")
+    
+    bm_data = bm.load_master_billing()
+    raw_rules = bm_data.get("raw_list", [])
+    
+    b_sub1, b_sub2, b_sub3 = st.tabs(["🔍 Search & Edit Rule", "➕ Add New Destination Rule", "📁 Bulk Upload New Sheet"])
+    
+    with b_sub1:
+        st.markdown(f"**Total Master Rules:** `{len(raw_rules):,}` dial codes & destinations")
+        q_dest = st.text_input("Search Dial Code or Destination (e.g. 852, 9370, Hong Kong, Indonesia):", key="admin_search_billing_q", placeholder="Type dial code or destination name...")
+        
+        matches = []
+        if q_dest and q_dest.strip():
+            q_low = q_dest.strip().lower()
+            matches = [r for r in raw_rules if q_low in str(r.get("destination", "")).lower() or q_low in str(r.get("dial_code", "")).lower()]
+        else:
+            matches = raw_rules[:25]
+            
+        if matches:
+            st.markdown(f"Found **{len(matches):,}** destination(s):")
+            match_display = [f"[{m.get('dial_code', '')}] {m.get('destination', '')}" if m.get('dial_code') else m.get('destination', '') for m in matches]
+            sel_to_edit = st.selectbox("Select Rule to Edit:", match_display, key="admin_sel_billing_edit")
+            sel_idx = match_display.index(sel_to_edit) if sel_to_edit in match_display else 0
+            curr_rule = matches[sel_idx]
+            
+            if curr_rule:
+                b_ed1, b_ed2, b_ed3 = st.columns([2, 1, 1])
+                with b_ed1:
+                    st.info(f"**Code:** `{curr_rule.get('dial_code', '')}` | **Destination:** `{curr_rule['destination']}` | **Current:** `{curr_rule['minimum']} / {curr_rule['increment']}`")
+                with b_ed2:
+                    new_min_val = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=int(curr_rule['minimum']), key=f"b_input_min_{sel_to_edit}")
+                with b_ed3:
+                    new_inc_val = st.number_input("Increment (sec):", min_value=1, max_value=300, value=int(curr_rule['increment']), key=f"b_input_inc_{sel_to_edit}")
+                    
+                b_btn_c1, b_btn_c2 = st.columns([1, 1])
+                with b_btn_c1:
+                    if st.button(f"💾 Save Changes ({new_min_val}/{new_inc_val})", type="primary", use_container_width=True, key=f"b_btn_save_{sel_to_edit}"):
+                        ok_u, msg_u = bm.update_or_add_master_rule(curr_rule.get('dial_code', ''), curr_rule['destination'], new_min_val, new_inc_val)
+                        if ok_u:
+                            st.success(msg_u)
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg_u)
+                with b_btn_c2:
+                    if st.button("🗑️ Delete Rule", type="secondary", use_container_width=True, key=f"b_btn_del_{sel_to_edit}"):
+                        ok_d, msg_d = bm.delete_master_rule(curr_rule.get('dial_code', '') or curr_rule['destination'])
+                        st.success(msg_d)
+                        time.sleep(1)
+                        st.rerun()
+    
+    with b_sub2:
+        st.markdown("#### ➕ Add New Dial Code / Destination Rule")
+        with st.form("admin_add_billing_form", clear_on_submit=True):
+            add_col_c1, add_col_c2 = st.columns([1, 2])
+            with add_col_c1:
+                add_code = st.text_input("Dial Code (Optional):", placeholder="e.g. 8529")
+            with add_col_c2:
+                add_d_name = st.text_input("Destination Name:", placeholder="e.g. HONG KONG MOBILE CSL")
+            col_a1, col_a2 = st.columns(2)
+            with col_a1:
+                add_min = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=1)
+            with col_a2:
+                add_inc = st.number_input("Increment (sec):", min_value=1, max_value=300, value=1)
+            if st.form_submit_button("➕ Add to Master Rules", type="primary"):
+                if (add_d_name and add_d_name.strip()) or (add_code and add_code.strip()):
+                    ok_a, msg_a = bm.update_or_add_master_rule(add_code.strip(), add_d_name.strip(), add_min, add_inc)
+                    if ok_a:
+                        st.success(msg_a)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(msg_a)
+                else:
+                    st.warning("Dial Code or Destination name cannot be empty.")
+
+    with b_sub3:
+        st.markdown("#### 📁 Bulk Upload Updated `Country Billing.xlsx`")
+        st.caption("Upload your new Excel file with 4 columns (Dial Code, Summary, Minimum, Increment) or 3 columns (Destinations, Minimum, Increment) to replace all master rules in 1 second.")
+        up_b_file = st.file_uploader("Choose Excel file (.xlsx):", type=["xlsx"], key="admin_billing_uploader")
+        if up_b_file is not None:
+            if st.button("⚡ Replace All Rules with Uploaded Sheet", type="primary", key="admin_btn_apply_billing_file"):
+                ok_f, msg_f = bm.save_new_master_excel(up_b_file)
+                if ok_f:
+                    st.success(msg_f)
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(msg_f)
+        
+        st.divider()
+        admin_master_bytes = safe_get_master_excel_bytes()
+        if admin_master_bytes:
             st.download_button(
-                label="📄 Vendor Sample Sheet (.xlsx)",
-                data=sample_bytes,
-                file_name="Vendor Sample sheet.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="nav_pop_dl_sample",
-                use_container_width=True
-            )
-        if qc_bytes:
-            st.download_button(
-                label="📑 QC Exception Sheet (.xlsx)",
-                data=qc_bytes,
-                file_name="QC exception Vlookup.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="nav_pop_dl_qc",
-                use_container_width=True
-            )
-        country_billing_live = safe_get_master_excel_bytes()
-        if country_billing_live:
-            st.download_button(
-                label="📊 Country Billing Master (.xlsx)",
-                data=country_billing_live,
+                label="📥 Download Current Master Rules (.xlsx)",
+                data=admin_master_bytes,
                 file_name="Country Billing.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="nav_pop_dl_billing",
+                key="admin_btn_dl_master_billing"
+            )
+
+def render_customer_master_az_tab():
+    st.subheader("👑 Master A-Z Sheet (CC & CLI Manager)")
+    st.caption("Manage, download, and dynamically update Master A-Z CC and CLI rate sheets without modifying any application code.")
+    
+    cc_bytes, cc_filename = safe_get_cc_master_bytes()
+    cli_bytes, cli_filename = safe_get_cli_master_bytes()
+    
+    c_m1, c_m2 = st.columns(2)
+    with c_m1:
+        st.markdown(f"""
+        <div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 10px; padding: 16px; margin-bottom: 14px;">
+            <div style="font-weight: 800; color: #166534; font-size: 1.0rem;">📊 Master CC Rates Sheet</div>
+            <div style="color: #15803D; font-size: 0.82rem; margin: 4px 0 8px 0;">Current active file: <code>{cc_filename}</code> ({len(cc_bytes)/1024:.1f} KB)</div>
+            <div style="color: #475569; font-size: 0.78rem;">Live reference deck used for Call Center (CC) destinations and pricing.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if cc_bytes:
+            st.download_button(
+                label=f"📥 Download Current CC Rates Sheet (.xlsx)",
+                data=cc_bytes,
+                file_name=cc_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="cust_az_dl_cc_btn",
+                type="primary",
                 use_container_width=True
             )
         else:
+            st.warning("CC Rates Sheet not found.")
+            
+        st.markdown("##### 🔄 Replace Master CC Rates Sheet")
+        up_cc = st.file_uploader("Upload new CC Rates Sheet (.xlsx):", type=["xlsx"], key="cust_up_cc_sheet")
+        if up_cc is not None:
+            if st.button("⚡ Save & Apply New CC Rates Sheet", type="primary", key="cust_apply_cc_btn", use_container_width=True):
+                target_p = os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx")
+                with open(target_p, "wb") as f:
+                    f.write(up_cc.getvalue())
+                st.success("✅ Master CC Rates Sheet updated successfully! New sheet is now active.")
+                time.sleep(1)
+                st.rerun()
+
+    with c_m2:
+        st.markdown(f"""
+        <div style="background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 10px; padding: 16px; margin-bottom: 14px;">
+            <div style="font-weight: 800; color: #0C4A6E; font-size: 1.0rem;">📊 Master CLI Rates Sheet</div>
+            <div style="color: #0369A1; font-size: 0.82rem; margin: 4px 0 8px 0;">Current active file: <code>{cli_filename}</code> ({len(cli_bytes)/1024:.1f} KB)</div>
+            <div style="color: #475569; font-size: 0.78rem;">Live reference deck used for CLI / Pure conversational routes.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if cli_bytes:
             st.download_button(
-                label="📊 Country Billing Master (.xlsx)",
-                data=safe_get_master_excel_bytes(),
-                file_name="Country Billing.xlsx",
+                label=f"📥 Download Current CLI Rates Sheet (.xlsx)",
+                data=cli_bytes,
+                file_name=cli_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="nav_pop_dl_billing_alt",
+                key="cust_az_dl_cli_btn",
+                type="primary",
                 use_container_width=True
             )
-        if separate_codes_bytes:
-            st.download_button(
-                label="📁 Separate Codes Ratesheet (.xls)",
-                data=separate_codes_bytes,
-                file_name="Separate_codes_sample_ratesheet.xls",
-                mime="application/vnd.ms-excel",
-                key="nav_pop_dl_sep_codes",
-                use_container_width=True
-            )
+        else:
+            st.warning("CLI Rates Sheet not found.")
 
-if is_admin and admin_nav_mode == "👑 Admin Management Panel":
-        st.markdown("## 👑 Admin Control Panel")
-        st.caption("Master controls: Manage all users, view IDs & passwords, review user processing history & audit trail.")
+        st.markdown("##### 🔄 Replace Master CLI Rates Sheet")
+        up_cli = st.file_uploader("Upload new CLI Rates Sheet (.xlsx):", type=["xlsx"], key="cust_up_cli_sheet")
+        if up_cli is not None:
+            if st.button("⚡ Save & Apply New CLI Rates Sheet", type="primary", key="cust_apply_cli_btn", use_container_width=True):
+                target_p = os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx")
+                with open(target_p, "wb") as f:
+                    f.write(up_cli.getvalue())
+                st.success("✅ Master CLI Rates Sheet updated successfully! New sheet is now active.")
+                time.sleep(1)
+                st.rerun()
+
+def render_super_admin_accounts_tabs():
+    st.markdown("## 👑 Super Admin Control Panel")
+    st.caption("Master user management: View all IDs & passwords, edit display names, create/delete accounts, and reset credentials.")
+    
+    sa_tab1, sa_tab_edit, sa_tab2, sa_tab_del, sa_tab3, sa_tab4 = st.tabs([
+        "👥 All Users (IDs & Passwords)",
+        "✏️ Edit User Names",
+        "➕ Create New User",
+        "🗑️ Delete User",
+        "🔑 Reset Passwords",
+        "🔔 Pending Reset Requests"
+    ])
+    
+    with sa_tab1:
+        st.subheader("👥 Registered Users Master Table")
+        st.caption(f"🔑 **Shared Master Authy Key:** `{am.get_master_totp_secret()}` (All accounts authenticate using this key on Admin's device)")
+        all_u = am.get_all_users()
+        u_data = []
+        for uk, uv in all_u.items():
+            u_data.append({
+                "Username": uk,
+                "Name": uv.get("name"),
+                "Password": uv.get("password"),
+                "Role": uv.get("role", "user").upper(),
+                "Avatar": uv.get("avatar", "Default"),
+                "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
+                "Created At": uv.get("created_at")
+            })
+        st.dataframe(pd.DataFrame(u_data), use_container_width=True, hide_index=True)
         
-        a_tab1, a_tab_hist, a_tab_billing, a_tab_edit, a_tab2, a_tab_del, a_tab3, a_tab4 = st.tabs([
-            "👥 All Users (IDs & Passwords)",
-            "📜 User Activity & Processing History",
-            "👑 Master Billing Rules (billingkaif)",
-            "✏️ Edit User Names",
-            "➕ Create New User",
-            "🗑️ Delete User",
-            "🔑 Reset Passwords",
-            "🔔 Pending Reset Requests"
-        ])
-        
-        with a_tab1:
-            st.subheader("👥 Registered Users Master Table")
-            st.caption(f"🔑 **Shared Master Authy Key:** `{am.get_master_totp_secret()}` (All accounts authenticate using this key on Admin's device)")
-            all_u = am.get_all_users()
-            u_data = []
-            for uk, uv in all_u.items():
-                u_data.append({
-                    "Username": uk,
-                    "Name": uv.get("name"),
-                    "Password": uv.get("password"),
-                    "Role": uv.get("role", "user").upper(),
-                    "Avatar": uv.get("avatar", "Default"),
-                    "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
-                    "Created At": uv.get("created_at")
-                })
-            st.dataframe(pd.DataFrame(u_data), use_container_width=True, hide_index=True)
-            
-            act_otp = getattr(am, 'get_last_active_otp', lambda: None)()
-            if act_otp:
-                st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
+        act_otp = getattr(am, 'get_last_active_otp', lambda: None)()
+        if act_otp:
+            st.info(f"📧 **Latest Active Email OTP:** Code: `{act_otp['otp']}` for User: `{act_otp['username']}` (Sent to: {act_otp['target_email']})")
 
-            deletable_u = [u for u in all_u.keys() if u.lower() != "kaif"]
-            if deletable_u:
-                st.divider()
-                st.markdown("**🗑️ Quick User Delete:**")
-                q_del_c1, q_del_c2 = st.columns([3, 1])
-                with q_del_c1:
-                    q_sel = st.selectbox("Select user account to delete:", deletable_u, key="quick_del_user_sel")
-                with q_del_c2:
-                    st.write("")
-                    if st.button("🗑️ Delete This User", type="secondary", use_container_width=True, key=f"btn_quick_del_{q_sel}"):
-                        ok_qd, msg_qd = am.delete_user(q_sel)
-                        if ok_qd:
-                            st.success(msg_qd)
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(msg_qd)
-
-        with a_tab_hist:
-            st.subheader("📜 User Processing History & Download Center")
-            st.caption("Complete tracking of every rate sheet standardized by all team members (Kaif, Arhama, Aliba) with 1-click Excel and CSV downloads.")
-            
-            history = am.get_processing_history()
-            if not history:
-                st.info("ℹ️ No rate sheets processed yet. As users process files, complete activity records will appear here in real time.")
-            else:
-                def extract_entry_date(ts):
-                    if not ts:
-                        return None
-                    try:
-                        s = str(ts).strip()[:10]
-                        return datetime.datetime.strptime(s, "%Y-%m-%d").date()
-                    except Exception:
-                        return None
-
-                now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-                today = now_ist.date()
-                all_dates = [extract_entry_date(h.get("timestamp")) for h in history]
-                valid_dates = [d for d in all_dates if d is not None]
-                min_available_date = min(valid_dates) if valid_dates else today
-                max_available_date = max(valid_dates) if valid_dates else today
-
-                cutoff_7d = today - datetime.timedelta(days=7)
-                sheets_7d = [h for h in history if extract_entry_date(h.get("timestamp")) and extract_entry_date(h.get("timestamp")) >= cutoff_7d]
-                total_sheets = len(sheets_7d)
-                arhama_total = sum(1 for h in sheets_7d if "arhama" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-                kaif_total = sum(1 for h in sheets_7d if "kaif" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-                aliba_total = sum(1 for h in sheets_7d if "aliba" in (str(h.get("username", "")) + str(h.get("user_name", "")) + str(h.get("output_filename", ""))).lower())
-
-                m1, m2, m3, m4, m5 = st.columns([1.5, 1.2, 1.2, 1.2, 1])
-                m1.metric("📁 Rolling 7-Day Sheets", f"{total_sheets:,}")
-                m2.metric("👩 Arhama", f"{arhama_total}")
-                m3.metric("👨 Kaif", f"{kaif_total}")
-                m4.metric("👩 Aliba", f"{aliba_total}")
-                with m5:
-                    st.write("")
-                    if st.button("🗑️ Clear Log", key="main_clear_hist_btn", use_container_width=True):
-                        am.clear_processing_history()
-                        st.success("Activity log cleared!")
-                        time.sleep(0.8)
+        deletable_u = [u for u in all_u.keys() if u.lower() != "kaif"]
+        if deletable_u:
+            st.divider()
+            st.markdown("**🗑️ Quick User Delete:**")
+            q_del_c1, q_del_c2 = st.columns([3, 1])
+            with q_del_c1:
+                q_sel = st.selectbox("Select user account to delete:", deletable_u, key="sa_quick_del_user_sel")
+            with q_del_c2:
+                st.write("")
+                if st.button("🗑️ Delete This User", type="secondary", use_container_width=True, key=f"sa_btn_quick_del_{q_sel}"):
+                    ok_qd, msg_qd = am.delete_user(q_sel)
+                    if ok_qd:
+                        st.success(msg_qd)
+                        time.sleep(1)
                         st.rerun()
+                    else:
+                        st.error(msg_qd)
 
-                st.info("🕒 **Strict 7-Day Auto-Retention Active:** All rate sheets and audit records are saved for exactly 7 days (168 hours) from upload, after which they are automatically deleted.")
-                st.divider()
-
-                # Date Filter Mode Selector (Simplified: Last 7 Days (Default), All Time, Date Range)
-                st.markdown("**📅 Filter History by Date:**")
-                date_filter_mode = st.radio(
-                    "Choose Date View:",
-                    ["⚡ Last 7 Days (Default)", "🌐 All Time", "📆 Date Range"],
-                    horizontal=True,
-                    key="hist_date_filter_mode"
-                )
-
-                sel_start_date = None
-                sel_end_date = None
-
-                if date_filter_mode == "⚡ Last 7 Days (Default)":
-                    sel_start_date = today - datetime.timedelta(days=7)
-                    sel_end_date = today
-
-                elif date_filter_mode == "📆 Date Range":
-                    col_dr1, col_dr2 = st.columns(2)
-                    with col_dr1:
-                        from_d = st.date_input("From Date:", value=(min_available_date if min_available_date else (today - datetime.timedelta(days=7))), key="hist_from_date_input")
-                    with col_dr2:
-                        to_d = st.date_input("To Date:", value=today, key="hist_to_date_input")
-                    sel_start_date = min(from_d, to_d)
-                    sel_end_date = max(from_d, to_d)
-
-                elif date_filter_mode == "🌐 All Time":
-                    sel_start_date = None
-                    sel_end_date = None
-
-                # Secondary Filters: User and Keyword Search
-                fc1, fc2 = st.columns([1.5, 2.5])
-                with fc1:
-                    user_options = ["All Users", "Arhama", "Kaif", "Aliba"]
-                    selected_user = st.selectbox("Filter by User:", user_options, key="audit_filter_user")
-                with fc2:
-                    filter_kw = st.text_input("Search by Vendor or File Name:", key="audit_search_kw", placeholder="Type vendor or filename to search...")
-
-                # Filtering logic
-                filtered = []
-                for entry in history:
-                    e_date = extract_entry_date(entry.get("timestamp"))
-                    
-                    if sel_start_date and sel_end_date:
-                        if not e_date or not (sel_start_date <= e_date <= sel_end_date):
-                            continue
-                    
-                    if selected_user != "All Users":
-                        u_match = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
-                        f_match = str(entry.get("output_filename", "")).lower()
-                        sel_low = selected_user.lower()
-                        if sel_low not in u_match and sel_low not in f_match:
-                            continue
-                    
-                    if filter_kw:
-                        kw_low = filter_kw.strip().lower()
-                        v_name = str(entry.get("vendor_name", "")).lower()
-                        out_f = str(entry.get("output_filename", "")).lower()
-                        u_f = (str(entry.get("user_name", "")) + " " + str(entry.get("username", ""))).lower()
-                        if kw_low not in v_name and kw_low not in out_f and kw_low not in u_f:
-                            continue
-                            
-                    filtered.append(entry)
-
-                st.markdown(f"**Showing {len(filtered)} Rate Sheet(s) Matching Filter:**")
-
-                if not filtered:
-                    st.warning("⚠️ No processing records found for the selected date / filter criteria.")
+    with sa_tab_edit:
+        st.subheader("✏️ Edit User Display Name & Avatar")
+        st.caption("Change the full name and assign profile avatar for Admin (yourself) or any user. Changes reflect immediately across the portal.")
+        all_users_dict = am.get_all_users()
+        selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="sa_edit_u_select")
+        u_info = all_users_dict[selected_edit_u]
+        
+        cur_u_av = u_info.get("avatar") or resolve_user_avatar(selected_edit_u)
+        cur_av_b64 = get_avatar_base64(cur_u_av)
+        
+        e_col1, e_col2 = st.columns([1, 4])
+        with e_col1:
+            st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 10px;">
+                <img src="data:image/png;base64,{cur_av_b64}" style="width: 55px; height: 55px; border-radius: 8px; object-fit: cover; border: 1px solid #0E7490;" />
+                <div style="font-size: 0.70rem; color: #0C4A6E; font-weight: 600; margin-top: 4px;">Current Avatar</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with e_col2:
+            st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
+        
+        new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"sa_input_edit_name_{selected_edit_u}")
+        
+        av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
+        av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
+        cur_idx = av_opts.index(cur_u_av) if cur_u_av in av_opts else 0
+        new_av_val = st.selectbox("Assign Profile Avatar:", av_opts, index=cur_idx, format_func=lambda x: av_dict.get(x, x), key=f"sa_sel_edit_av_{selected_edit_u}")
+        
+        if st.button("💾 Save Updated User Details", type="primary", use_container_width=True, key=f"sa_btn_save_name_{selected_edit_u}"):
+            if new_name_val and new_name_val.strip():
+                ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
+                ok_a, msg_a = save_user_avatar_choice(selected_edit_u, new_av_val)
+                if ok_n and ok_a:
+                    if selected_edit_u == current_user.get("username"):
+                        current_user["name"] = new_name_val.strip()
+                        current_user["avatar"] = new_av_val
+                        if "user" in st.session_state and isinstance(st.session_state.user, dict):
+                            st.session_state.user["name"] = new_name_val.strip()
+                            st.session_state.user["avatar"] = new_av_val
+                    st.success(f"Name and Avatar updated successfully for '{selected_edit_u}'!")
+                    time.sleep(1)
+                    st.rerun()
                 else:
-                    # 1-Click Instant Sheet Download
-                    st.markdown("#### ⚡ 1-Click Instant Sheet Download")
-                    sheet_options = [h["output_filename"] for h in filtered if h.get("output_filename")]
-                    if sheet_options:
-                        sel_sheet = st.selectbox("Select any Rate Sheet to download immediately:", sheet_options, key="admin_quick_dl_select")
-                        if sel_sheet:
-                            xl_bytes = get_historical_file_bytes(sel_sheet)
-                            csv_b, csv_fn = get_historical_csv_bytes(sel_sheet, xl_bytes)
-                            
-                            c_dl1, c_dl2 = st.columns(2)
-                            with c_dl1:
-                                if xl_bytes:
-                                    st.download_button(
-                                        label=f"📊 Download Excel (.xlsx)",
-                                        data=xl_bytes,
-                                        file_name=sel_sheet,
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        key=f"admin_hist_quick_dl_xl_{sel_sheet}",
-                                        type="primary",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.button(f"Excel File Not in Cache", disabled=True, use_container_width=True)
-                            with c_dl2:
-                                if csv_b:
-                                    st.download_button(
-                                        label=f"📄 Download CSV (.csv)",
-                                        data=csv_b,
-                                        file_name=csv_fn,
-                                        mime="text/csv",
-                                        key=f"admin_hist_quick_dl_csv_{sel_sheet}",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.button(f"CSV Not in Cache", disabled=True, use_container_width=True)
+                    st.error(msg_n or msg_a)
+            else:
+                st.warning("Name cannot be empty.")
 
-                    st.markdown("---")
-                    st.markdown("#### 📜 Complete Activity & History Table")
-
-                    table_rows = []
-                    for entry in filtered:
-                        u_disp = entry.get("user_name") or entry.get("username") or "Unknown"
-                        ts = str(entry.get("timestamp", ""))
-                        elapsed = entry.get("elapsed_sec", 0)
-
-                        # Time processing window (Kitne baje se kitne baje tak)
-                        time_disp = ""
-                        if entry.get("time_range"):
-                            time_disp = entry.get("time_range")
-                        elif entry.get("start_time") and entry.get("end_time"):
-                            time_disp = f"{entry.get('start_time')} - {entry.get('end_time')} ({elapsed}s)"
-                        elif len(ts) >= 19:
-                            try:
-                                end_dt = datetime.datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S")
-                                start_dt = end_dt - datetime.timedelta(seconds=float(elapsed))
-                                time_disp = f"{start_dt.strftime('%H:%M:%S')} - {end_dt.strftime('%H:%M:%S')} ({elapsed}s)"
-                            except Exception:
-                                time_disp = ts[11:19]
-                        else:
-                            time_disp = ts
-
-                        table_rows.append({
-                            "Date": ts[:10] if len(ts) >= 10 else "",
-                            "Time (Kitne Baje Se Kitne Baje Tak)": time_disp,
-                            "User Name": u_disp,
-                            "Vendor / Trunk Name": entry.get("vendor_name"),
-                            "Standardized File": entry.get("output_filename"),
-                            "Clean Rows": f"{entry.get('clean_rows', 0):,}",
-                            "Blocked Codes": f"{entry.get('qc_excluded', 0):,}",
-                            "Duration": f"{elapsed}s"
-                        })
-                    
-                    df_audit = pd.DataFrame(table_rows)
-                    st.dataframe(df_audit, use_container_width=True, hide_index=True)
-
-                    # Export Audit Log to CSV
-                    csv_data = df_audit.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Download This History (CSV)",
-                        data=csv_data,
-                        file_name=f"audit_history_{today.strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
-                        key="btn_download_audit_csv"
-                    )
-
-
-        with a_tab_billing:
-            st.subheader("👑 Master Billing Rules Manager (`billingkaif.xlsx`)")
-            st.caption("View, search, edit, and add official company billing rules for any destination. When market rules change (e.g. Indonesia 60/1 -> 60/60), update them here without touching code.")
-            
-            bm_data = bm.load_master_billing()
-            raw_rules = bm_data.get("raw_list", [])
-            
-            b_sub1, b_sub2, b_sub3 = st.tabs(["🔍 Search & Edit Rule", "➕ Add New Destination Rule", "📁 Bulk Upload New Sheet"])
-            
-            with b_sub1:
-                st.markdown(f"**Total Master Rules:** `{len(raw_rules):,}` dial codes & destinations")
-                q_dest = st.text_input("Search Dial Code or Destination (e.g. 852, 9370, Hong Kong, Indonesia):", key="admin_search_billing_q", placeholder="Type dial code or destination name...")
-                
-                matches = []
-                if q_dest and q_dest.strip():
-                    q_low = q_dest.strip().lower()
-                    matches = [r for r in raw_rules if q_low in str(r.get("destination", "")).lower() or q_low in str(r.get("dial_code", "")).lower()]
-                else:
-                    matches = raw_rules[:25]
-                    
-                if matches:
-                    st.markdown(f"Found **{len(matches):,}** destination(s):")
-                    match_display = [f"[{m.get('dial_code', '')}] {m.get('destination', '')}" if m.get('dial_code') else m.get('destination', '') for m in matches]
-                    sel_to_edit = st.selectbox("Select Rule to Edit:", match_display, key="admin_sel_billing_edit")
-                    sel_idx = match_display.index(sel_to_edit) if sel_to_edit in match_display else 0
-                    curr_rule = matches[sel_idx]
-                    
-                    if curr_rule:
-                        b_ed1, b_ed2, b_ed3 = st.columns([2, 1, 1])
-                        with b_ed1:
-                            st.info(f"**Code:** `{curr_rule.get('dial_code', '')}` | **Destination:** `{curr_rule['destination']}` | **Current:** `{curr_rule['minimum']} / {curr_rule['increment']}`")
-                        with b_ed2:
-                            new_min_val = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=int(curr_rule['minimum']), key=f"b_input_min_{sel_to_edit}")
-                        with b_ed3:
-                            new_inc_val = st.number_input("Increment (sec):", min_value=1, max_value=300, value=int(curr_rule['increment']), key=f"b_input_inc_{sel_to_edit}")
-                            
-                        b_btn_c1, b_btn_c2 = st.columns([1, 1])
-                        with b_btn_c1:
-                            if st.button(f"💾 Save Changes ({new_min_val}/{new_inc_val})", type="primary", use_container_width=True, key=f"b_btn_save_{sel_to_edit}"):
-                                ok_u, msg_u = bm.update_or_add_master_rule(curr_rule.get('dial_code', ''), curr_rule['destination'], new_min_val, new_inc_val)
-                                if ok_u:
-                                    st.success(msg_u)
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error(msg_u)
-                        with b_btn_c2:
-                            if st.button("🗑️ Delete Rule", type="secondary", use_container_width=True, key=f"b_btn_del_{sel_to_edit}"):
-                                ok_d, msg_d = bm.delete_master_rule(curr_rule.get('dial_code', '') or curr_rule['destination'])
-                                st.success(msg_d)
-                                time.sleep(1)
-                                st.rerun()
-            
-            with b_sub2:
-                st.markdown("#### ➕ Add New Dial Code / Destination Rule")
-                with st.form("admin_add_billing_form", clear_on_submit=True):
-                    add_col_c1, add_col_c2 = st.columns([1, 2])
-                    with add_col_c1:
-                        add_code = st.text_input("Dial Code (Optional):", placeholder="e.g. 8529")
-                    with add_col_c2:
-                        add_d_name = st.text_input("Destination Name:", placeholder="e.g. HONG KONG MOBILE CSL")
-                    col_a1, col_a2 = st.columns(2)
-                    with col_a1:
-                        add_min = st.number_input("Minimum (sec):", min_value=1, max_value=300, value=1)
-                    with col_a2:
-                        add_inc = st.number_input("Increment (sec):", min_value=1, max_value=300, value=1)
-                    if st.form_submit_button("➕ Add to Master Rules", type="primary"):
-                        if (add_d_name and add_d_name.strip()) or (add_code and add_code.strip()):
-                            ok_a, msg_a = bm.update_or_add_master_rule(add_code.strip(), add_d_name.strip(), add_min, add_inc)
-                            if ok_a:
-                                st.success(msg_a)
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error(msg_a)
-                        else:
-                            st.warning("Dial Code or Destination name cannot be empty.")
-
-            with b_sub3:
-                st.markdown("#### 📁 Bulk Upload Updated `Country Billing.xlsx`")
-                st.caption("Upload your new Excel file with 4 columns (Dial Code, Summary, Minimum, Increment) or 3 columns (Destinations, Minimum, Increment) to replace all master rules in 1 second.")
-                up_b_file = st.file_uploader("Choose Excel file (.xlsx):", type=["xlsx"], key="admin_billing_uploader")
-                if up_b_file is not None:
-                    if st.button("⚡ Replace All Rules with Uploaded Sheet", type="primary", key="admin_btn_apply_billing_file"):
-                        ok_f, msg_f = bm.save_new_master_excel(up_b_file)
-                        if ok_f:
-                            st.success(msg_f)
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(msg_f)
-                
-                st.divider()
-                admin_master_bytes = safe_get_master_excel_bytes()
-                if admin_master_bytes:
-                    st.download_button(
-                        label="📥 Download Current Master Rules (.xlsx)",
-                        data=admin_master_bytes,
-                        file_name="Country Billing.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="admin_btn_dl_master_billing"
-                    )
-
-        with a_tab_edit:
-            st.subheader("✏️ Edit User Display Name & Avatar")
-            st.caption("Change the full name and assign profile avatar for Admin (yourself) or any user. Changes reflect immediately across the portal.")
-            all_users_dict = am.get_all_users()
-            selected_edit_u = st.selectbox("Select User Account to Edit:", list(all_users_dict.keys()), key="main_edit_u_select")
-            u_info = all_users_dict[selected_edit_u]
-            
-            cur_u_av = u_info.get("avatar") or resolve_user_avatar(selected_edit_u)
-            cur_av_b64 = get_avatar_base64(cur_u_av)
-            
-            e_col1, e_col2 = st.columns([1, 4])
-            with e_col1:
-                st.markdown(f"""
-                <div style="text-align: center; padding: 10px; background: #F0F9FF; border: 1.5px solid #BAE6FD; border-radius: 10px;">
-                    <img src="data:image/png;base64,{cur_av_b64}" style="width: 55px; height: 55px; border-radius: 8px; object-fit: cover; border: 1px solid #0E7490;" />
-                    <div style="font-size: 0.70rem; color: #0C4A6E; font-weight: 600; margin-top: 4px;">Current Avatar</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with e_col2:
-                st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
-            
-            new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"main_input_edit_name_{selected_edit_u}")
+    with sa_tab2:
+        st.subheader("➕ Create New User")
+        st.caption(f"ℹ️ New user account will automatically use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
+        with st.form("sa_create_user_form", clear_on_submit=False):
+            cu_col1, cu_col2 = st.columns(2)
+            with cu_col1:
+                nu_uname = st.text_input("Username", key="sa_nu_uname", placeholder="e.g. newuser")
+                nu_name = st.text_input("Full Name", key="sa_nu_name", placeholder="e.g. User Name")
+            with cu_col2:
+                nu_pw = st.text_input("Password (Set Directly)", key="sa_nu_pw", placeholder="e.g. User@123")
+                nu_role = st.selectbox("Role", ["user", "admin"], key="sa_nu_role")
+            nu_email = st.text_input("Email (Optional)", key="sa_nu_email")
             
             av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
             av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
-            cur_idx = av_opts.index(cur_u_av) if cur_u_av in av_opts else 0
-            new_av_val = st.selectbox("Assign Profile Avatar:", av_opts, index=cur_idx, format_func=lambda x: av_dict.get(x, x), key=f"main_sel_edit_av_{selected_edit_u}")
+            nu_avatar = st.selectbox("Initial Profile Avatar:", av_opts, format_func=lambda x: av_dict.get(x, x), key="sa_nu_avatar")
             
-            if st.button("💾 Save Updated User Details", type="primary", use_container_width=True, key=f"main_btn_save_name_{selected_edit_u}"):
-                if new_name_val and new_name_val.strip():
-                    ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
-                    ok_a, msg_a = save_user_avatar_choice(selected_edit_u, new_av_val)
-                    if ok_n and ok_a:
-                        if selected_edit_u == current_user.get("username"):
-                            current_user["name"] = new_name_val.strip()
-                            current_user["avatar"] = new_av_val
-                            if "user" in st.session_state and isinstance(st.session_state.user, dict):
-                                st.session_state.user["name"] = new_name_val.strip()
-                                st.session_state.user["avatar"] = new_av_val
-                        st.success(f"Name and Avatar updated successfully for '{selected_edit_u}'!")
+            submitted = st.form_submit_button("🚀 Create User Account Now", type="primary", use_container_width=True)
+            if submitted:
+                clean_u = (nu_uname or "").strip().lower()
+                clean_p = (nu_pw or "").strip()
+                clean_n = (nu_name or "").strip()
+                if clean_u and clean_p:
+                    ok_cu, msg_cu = am.create_user(clean_u, clean_n, clean_p, nu_role, nu_email.strip())
+                    if ok_cu:
+                        save_user_avatar_choice(clean_u, nu_avatar)
+                        st.success(f"✅ User '{clean_u}' created successfully with role '{nu_role}'!")
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(msg_n or msg_a)
+                        st.error(msg_cu)
                 else:
-                    st.warning("Name cannot be empty.")
+                    st.warning("⚠️ Both Username and Password are required.")
 
-        with a_tab2:
-            st.subheader("➕ Create New User")
-            st.caption(f"ℹ️ New user account will automatically use Admin's Master Authy 2FA (`{am.get_master_totp_secret()}`).")
-            with st.form("admin_create_user_form", clear_on_submit=False):
-                cu_col1, cu_col2 = st.columns(2)
-                with cu_col1:
-                    nu_uname = st.text_input("Username", key="main_nu_uname", placeholder="e.g. newuser")
-                    nu_name = st.text_input("Full Name", key="main_nu_name", placeholder="e.g. User Name")
-                with cu_col2:
-                    nu_pw = st.text_input("Password (Set Directly)", key="main_nu_pw", placeholder="e.g. User@123")
-                    nu_role = st.selectbox("Role", ["user", "admin"], key="main_nu_role")
-                nu_email = st.text_input("Email (Optional)", key="main_nu_email")
-                
-                av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
-                av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
-                nu_avatar = st.selectbox("Initial Profile Avatar:", av_opts, format_func=lambda x: av_dict.get(x, x), key="main_nu_avatar")
-                
-                submitted = st.form_submit_button("🚀 Create User Account Now", type="primary", use_container_width=True)
-                if submitted:
-                    clean_u = (nu_uname or "").strip().lower()
-                    clean_p = (nu_pw or "").strip()
-                    clean_n = (nu_name or "").strip()
-                    if clean_u and clean_p:
-                        ok_cu, msg_cu = am.create_user(clean_u, clean_n, clean_p, nu_role, nu_email.strip())
-                        if ok_cu:
-                            save_user_avatar_choice(clean_u, nu_avatar)
-                            st.success(f"✅ User '{clean_u}' created successfully with role '{nu_role}'!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(msg_cu)
-                    else:
-                        st.warning("⚠️ Both Username and Password are required.")
-
-        with a_tab_del:
-            st.subheader("🗑️ Delete User Account")
-            st.caption("Permanently delete a registered user account. The Master Admin account ('kaif') is protected and cannot be deleted.")
-            all_u_del = am.get_all_users()
-            deletable_users = [u for u in all_u_del.keys() if u.lower() != "kaif"]
-            if not deletable_users:
-                st.info("ℹ️ No other user accounts available to delete. Only Master Admin ('kaif') exists.")
-            else:
-                del_c1, del_c2 = st.columns([2, 1])
-                with del_c1:
-                    sel_del_u = st.selectbox("Select User Account to Delete:", deletable_users, key="admin_sel_del_user")
-                    target_info = all_u_del[sel_del_u]
-                    st.warning(f"⚠️ **Confirm Deletion:** You are about to permanently delete **{sel_del_u}** (Name: `{target_info.get('name')}`, Role: `{target_info.get('role', 'user').upper()}`). This cannot be undone.")
-                with del_c2:
-                    st.write("")
-                    st.write("")
-                    if st.button(f"🗑️ Delete User '{sel_del_u}'", type="secondary", use_container_width=True, key=f"btn_exec_del_{sel_del_u}"):
-                        ok_del, msg_del = am.delete_user(sel_del_u)
-                        if ok_del:
-                            st.success(msg_del)
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(msg_del)
-
-        with a_tab3:
-            st.subheader("🔑 Reset Any User's Password")
-            all_u = am.get_all_users()
-            sel_u = st.selectbox("Select User Account:", list(all_u.keys()), key="main_sel_reset_u")
-            st.info(f"Selected: **{sel_u}** | Current Password: `{all_u[sel_u].get('password', '')}` | Authy Key: `{all_u[sel_u].get('totp_secret', am.get_master_totp_secret())}`")
-            new_pw_main = st.text_input("Enter New Password to Set:", key=f"main_new_pw_input_{sel_u}")
-            if st.button("💾 Save New Password", type="primary", use_container_width=True, key=f"main_btn_save_pw_{sel_u}"):
-                if new_pw_main:
-                    ok_up, msg_up = am.update_password(sel_u, new_pw_main)
-                    if ok_up:
-                        st.success(msg_up)
+    with sa_tab_del:
+        st.subheader("🗑️ Delete User Account")
+        st.caption("Permanently delete a registered user account. The Master Admin account ('kaif') is protected and cannot be deleted.")
+        all_u_del = am.get_all_users()
+        deletable_users = [u for u in all_u_del.keys() if u.lower() != "kaif"]
+        if not deletable_users:
+            st.info("ℹ️ No other user accounts available to delete. Only Master Admin ('kaif') exists.")
+        else:
+            del_c1, del_c2 = st.columns([2, 1])
+            with del_c1:
+                sel_del_u = st.selectbox("Select User Account to Delete:", deletable_users, key="sa_sel_del_user")
+                target_info = all_u_del[sel_del_u]
+                st.warning(f"⚠️ **Confirm Deletion:** You are about to permanently delete **{sel_del_u}** (Name: `{target_info.get('name')}`, Role: `{target_info.get('role', 'user').upper()}`). This cannot be undone.")
+            with del_c2:
+                st.write("")
+                st.write("")
+                if st.button(f"🗑️ Delete User '{sel_del_u}'", type="secondary", use_container_width=True, key=f"sa_btn_exec_del_{sel_del_u}"):
+                    ok_del, msg_del = am.delete_user(sel_del_u)
+                    if ok_del:
+                        st.success(msg_del)
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(msg_up)
+                        st.error(msg_del)
+
+    with sa_tab3:
+        st.subheader("🔑 Reset Any User's Password")
+        all_u = am.get_all_users()
+        sel_u = st.selectbox("Select User Account:", list(all_u.keys()), key="sa_sel_reset_u")
+        st.info(f"Selected: **{sel_u}** | Current Password: `{all_u[sel_u].get('password', '')}` | Authy Key: `{all_u[sel_u].get('totp_secret', am.get_master_totp_secret())}`")
+        new_pw_main = st.text_input("Enter New Password to Set:", key=f"sa_new_pw_input_{sel_u}")
+        if st.button("💾 Save New Password", type="primary", use_container_width=True, key=f"sa_btn_save_pw_{sel_u}"):
+            if new_pw_main:
+                ok_up, msg_up = am.update_password(sel_u, new_pw_main)
+                if ok_up:
+                    st.success(msg_up)
+                    time.sleep(1)
+                    st.rerun()
                 else:
-                    st.warning("Password cannot be blank.")
-
-        with a_tab4:
-            st.subheader("🔔 Password Reset Requests from Users")
-            p_reqs = am.get_pending_reset_requests()
-            if not p_reqs:
-                st.success("✅ No pending reset requests. Everything is up to date!")
+                    st.error(msg_up)
             else:
-                for rq in p_reqs:
-                    st.markdown(f"""
-                    <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
-                        <b>User:</b> {rq['username']} ({rq['name']})<br>
-                        <b>Current Password:</b> <code>{rq.get('current_password', '')}</code><br>
-                        <b>Note:</b> {rq.get('note', 'No note')}<br>
-                        <small style="color: #78350F;">Requested: {rq.get('requested_at', '')}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    new_pw_for_rq = st.text_input(f"New Password for {rq['username']}:", key=f"main_rq_pw_{rq['username']}")
-                    rq_c1, rq_c2 = st.columns(2)
-                    if rq_c1.button(f"Update Password for {rq['username']}", key=f"main_btn_set_{rq['username']}", type="primary", use_container_width=True):
-                        if new_pw_for_rq:
-                            am.update_password(rq['username'], new_pw_for_rq)
-                            st.success(f"Password updated for {rq['username']}!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.warning("Please enter a new password.")
-                    if rq_c2.button(f"Dismiss Request", key=f"main_btn_dism_{rq['username']}", use_container_width=True):
-                        am.dismiss_reset_request(rq['username'])
-                        st.rerun()
-                    st.divider()
+                st.warning("Password cannot be blank.")
 
+    with sa_tab4:
+        st.subheader("🔔 Password Reset Requests from Users")
+        p_reqs = am.get_pending_reset_requests()
+        if not p_reqs:
+            st.success("✅ No pending reset requests. Everything is up to date!")
+        else:
+            for rq in p_reqs:
+                st.markdown(f"""
+                <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
+                    <b>User:</b> {rq['username']} ({rq['name']})<br>
+                    <b>Current Password:</b> <code>{rq.get('current_password', '')}</code><br>
+                    <b>Note:</b> {rq.get('note', 'No note')}<br>
+                    <small style="color: #78350F;">Requested: {rq.get('requested_at', '')}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                new_pw_for_rq = st.text_input(f"New Password for {rq['username']}:", key=f"sa_rq_pw_{rq['username']}")
+                rq_c1, rq_c2 = st.columns(2)
+                if rq_c1.button(f"Update Password for {rq['username']}", key=f"sa_btn_set_{rq['username']}", type="primary", use_container_width=True):
+                    if new_pw_for_rq:
+                        am.update_password(rq['username'], new_pw_for_rq)
+                        st.success(f"Password updated for {rq['username']}!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.warning("Please enter a new password.")
+                if rq_c2.button(f"Dismiss Request", key=f"sa_btn_dism_{rq['username']}", use_container_width=True):
+                    am.dismiss_reset_request(rq['username'])
+                    st.rerun()
+                st.divider()
+
+def render_customer_standardizer_view():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F766E 0%, #0E7490 100%); padding: 18px 22px; border-radius: 12px; margin-bottom: 18px; color: #FFFFFF; box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);">
+        <div style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">👥 Customer Rate Deck Standardizer</div>
+        <div style="font-size: 0.85rem; opacity: 0.92; margin-top: 4px;">Standardize and match customer rate decks against Master A-Z CC & CLI reference sheets.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown("### 📤 Upload Customer Rate Decks")
+        st.caption("Drag and drop customer rate sheets (.xlsx, .xls, .csv). Batch upload supported:")
+        cust_files = st.file_uploader(
+            "Upload Customer Rate Deck(s):",
+            type=["xlsx", "xls", "csv"],
+            accept_multiple_files=True,
+            key="cust_standardizer_uploader"
+        )
+        if cust_files:
+            st.success(f"📂 **{len(cust_files)} customer file(s) loaded successfully.**")
+            st.info("⚡ Customer standardizer processing rules will execute here once customer matching rules are configured.")
+
+# ----------------- SIDEBAR NAVIGATION -----------------
+with st.sidebar:
+    st.markdown("""
+    <div style="padding: 6px 0 10px 0; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 12px;">
+        <div style="font-size: 0.70rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B;">Navigation</div>
+        <div style="font-size: 1.05rem; font-weight: 800; color: #0C4A6E;">🌐 Telecom Hub</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    sidebar_portals = ["🏢 Vendor Portal", "👥 Customer Portal"]
+    if is_admin:
+        sidebar_portals.append("👑 Super Admin (Accounts)")
+        
+    active_portal = st.radio(
+        "Select Portal:",
+        sidebar_portals,
+        index=0,
+        key="app_active_portal_selector",
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    cur_u_av = resolve_user_avatar(current_user.get("username", "kaif"))
+    cur_av_b64 = get_avatar_base64(cur_u_av)
+    st.markdown(f"""
+    <div style="background: #F1F5F9; border-radius: 8px; padding: 10px; font-size: 0.78rem; display: flex; align-items: center; gap: 10px;">
+        <img src="data:image/png;base64,{cur_av_b64}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover;" />
+        <div>
+            <div style="font-weight: 700; color: #0F172A;">{active_member}</div>
+            <div style="font-size: 0.70rem; color: #64748B;">{'👑 Super Admin' if is_admin else '👤 Member'}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ----------------- ROUTER DISPATCH -----------------
+if active_portal == "👑 Super Admin (Accounts)":
+    render_super_admin_accounts_tabs()
+    st.stop()
+
+elif active_portal == "👥 Customer Portal":
+    c_nav_left, c_nav_right = st.columns([3.2, 1.2])
+    with c_nav_left:
+        if is_admin:
+            customer_nav_mode = st.radio(
+                "Customer Navigation:",
+                ["⚡ Customer Rate Standardizer", "👑 Customer Admin Controls"],
+                horizontal=True,
+                key="cust_main_nav_toggle",
+                label_visibility="collapsed"
+            )
+        else:
+            customer_nav_mode = "⚡ Customer Rate Standardizer"
+            st.markdown(
+                '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
+                '⚡ Customer Rate Standardizer'
+                '</div>',
+                unsafe_allow_html=True
+            )
+    with c_nav_right:
+        with st.popover("📥 Customer Master Rates ▾", use_container_width=True, help="Download Master CC and CLI rates sheets"):
+            st.markdown(
+                '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
+                '📁 Master Customer Reference Decks'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            cc_b, cc_fn = safe_get_cc_master_bytes()
+            if cc_b:
+                st.download_button(
+                    label=f"📊 CC Rates Sheet (.xlsx)",
+                    data=cc_b,
+                    file_name=cc_fn,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="cust_pop_dl_cc",
+                    use_container_width=True
+                )
+            cli_b, cli_fn = safe_get_cli_master_bytes()
+            if cli_b:
+                st.download_button(
+                    label=f"📊 CLI Rates Sheet (.xlsx)",
+                    data=cli_b,
+                    file_name=cli_fn,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="cust_pop_dl_cli",
+                    use_container_width=True
+                )
+    
+    if is_admin and customer_nav_mode == "👑 Customer Admin Controls":
+        st.markdown("## 👥 Customer Admin Controls")
+        st.caption("Manage Customer processing activity records and dynamically update Master A-Z CC & CLI ratesheets.")
+        c_tab_hist, c_tab_az = st.tabs([
+            "📜 User Activity & Processing History",
+            "👑 Master A-Z Sheet (CC & CLI Manager)"
+        ])
+        with c_tab_hist:
+            render_activity_history_tab(prefix="cust")
+        with c_tab_az:
+            render_customer_master_az_tab()
+        st.stop()
+    else:
+        render_customer_standardizer_view()
+        st.stop()
+
+elif active_portal == "🏢 Vendor Portal":
+    v_nav_left, v_nav_right = st.columns([3.2, 1.2])
+    with v_nav_left:
+        if is_admin:
+            vendor_nav_mode = st.radio(
+                "Vendor Navigation:",
+                ["⚡ Rate Deck Standardizer", "👑 Vendor Admin Controls"],
+                horizontal=True,
+                key="vend_main_nav_toggle",
+                label_visibility="collapsed"
+            )
+        else:
+            vendor_nav_mode = "⚡ Rate Deck Standardizer"
+            st.markdown(
+                '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
+                '⚡ Rate Deck Standardizer'
+                '</div>',
+                unsafe_allow_html=True
+            )
+    with v_nav_right:
+        with st.popover("📥 Master Sheets & Formats ▾", use_container_width=True, help="Download standard sample format, QC rules, and country billing"):
+            st.markdown(
+                '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
+                '📁 Master Telecom Reference Sheets'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            if sample_bytes:
+                st.download_button(
+                    label="📄 Vendor Sample Sheet (.xlsx)",
+                    data=sample_bytes,
+                    file_name="Vendor Sample sheet.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="vend_pop_dl_sample",
+                    use_container_width=True
+                )
+            if qc_bytes:
+                st.download_button(
+                    label="📑 QC Exception Sheet (.xlsx)",
+                    data=qc_bytes,
+                    file_name="QC exception Vlookup.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="vend_pop_dl_qc",
+                    use_container_width=True
+                )
+            country_billing_live = safe_get_master_excel_bytes()
+            if country_billing_live:
+                st.download_button(
+                    label="📊 Country Billing Master (.xlsx)",
+                    data=country_billing_live,
+                    file_name="Country Billing.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="vend_pop_dl_billing",
+                    use_container_width=True
+                )
+            else:
+                st.download_button(
+                    label="📊 Country Billing Master (.xlsx)",
+                    data=safe_get_master_excel_bytes(),
+                    file_name="Country Billing.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="vend_pop_dl_billing_alt",
+                    use_container_width=True
+                )
+            if separate_codes_bytes:
+                st.download_button(
+                    label="📁 Separate Codes Ratesheet (.xls)",
+                    data=separate_codes_bytes,
+                    file_name="Separate_codes_sample_ratesheet.xls",
+                    mime="application/vnd.ms-excel",
+                    key="vend_pop_dl_sep_codes",
+                    use_container_width=True
+                )
+    
+    if is_admin and vendor_nav_mode == "👑 Vendor Admin Controls":
+        st.markdown("## 🏢 Vendor Admin Controls")
+        st.caption("Review vendor rate deck processing history and manage company billing pulse rules (billingkaif).")
+        v_tab_hist, v_tab_billing = st.tabs([
+            "📜 User Activity & Processing History",
+            "👑 Master Billing Rules (billingkaif)"
+        ])
+        with v_tab_hist:
+            render_activity_history_tab(prefix="vend")
+        with v_tab_billing:
+            render_billing_rules_tab()
         st.stop()
 
 st.write("")
@@ -1866,7 +2116,7 @@ if st.session_state.get("just_processed") and st.session_state.processed_results
 
 
 def render_executive_deck_card(idx, item, is_single=False):
-    out_name = item["filename"]
+    out_name = re.sub(r'\bupdated\b', 'Updated', str(item["filename"]), flags=re.IGNORECASE)
     cached_p = item.get("cached_path") or os.path.join(OUTPUT_DIR, out_name)
     out_bytes = read_disk_bytes(cached_p)
     stats = item.get("stats", {})

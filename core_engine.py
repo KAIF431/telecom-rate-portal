@@ -1081,7 +1081,7 @@ def build_output_filename(base_name, comments_tag, member_name):
     else:
         filename = f"{base} A to Z {tag} {member}.xlsx"
 
-    filename = re.sub(r'\bUPdated\b', 'Updated', filename)
+    filename = re.sub(r'\bupdated\b', 'Updated', filename, flags=re.IGNORECASE)
     filename = re.sub(r'\s+', ' ', filename).strip()
     return filename
 
@@ -1102,7 +1102,7 @@ def build_partial_filename(out_name):
             p_name = f"{s[:-5].strip()} Partial.xlsx"
         else:
             p_name = f"{s} Partial"
-    p_name = re.sub(r'\bUPdated\b', 'Updated', p_name)
+    p_name = re.sub(r'\bupdated\b', 'Updated', p_name, flags=re.IGNORECASE)
     return re.sub(r'\s+', ' ', p_name).strip()
 
 
