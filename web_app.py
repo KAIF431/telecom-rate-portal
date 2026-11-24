@@ -386,12 +386,27 @@ st.set_page_config(
 # Custom Styling (Theme 4: Deep Ocean Teal & Frost - Cloud Terminal / Tech Precision)
 st.markdown("""
 <style>
-    .block-container {
-        padding-top: 1.2rem !important;
+    /* Complete True Full-Screen Layout */
+    [data-testid="stAppViewContainer"] {
+        width: 100% !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+    [data-testid="stAppViewContainer"] > section.main {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 auto !important;
+        padding-left: 0 !important;
+    }
+    .block-container,
+    div[data-testid="stMainBlockContainer"],
+    div.stMainBlockContainer {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-top: 1.0rem !important;
         padding-bottom: 2rem !important;
-        padding-left: 4.2rem !important;
-        padding-right: 1.5rem !important;
-        max-width: 98% !important;
+        padding-left: 3.5rem !important;
+        padding-right: 2rem !important;
     }
     .stApp {
         background-color: #F0F9FF !important;
@@ -450,27 +465,41 @@ st.markdown("""
         height: 48px !important;
         z-index: 999998 !important;
     }
-    section[data-testid="stSidebar"][aria-expanded="false"] {
+    /* When Sidebar is Expanded */
+    section[data-testid="stSidebar"][aria-expanded="true"],
+    [data-testid="stSidebar"][aria-expanded="true"] {
+        min-width: 260px !important;
+        max-width: 280px !important;
+        width: 270px !important;
+        margin-left: 0px !important;
+        transform: none !important;
+        visibility: visible !important;
+        display: block !important;
+        background-color: #F8FAFC !important;
+        border-right: 1.5px solid #E2E8F0 !important;
+        z-index: 999999 !important;
+    }
+
+    /* When Sidebar is Collapsed - 100% OFF-SCREEN and HIDDEN */
+    section[data-testid="stSidebar"][aria-expanded="false"],
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        min-width: 0px !important;
+        max-width: 0px !important;
+        width: 0px !important;
+        margin-left: -500px !important;
+        transform: translateX(-500px) !important;
         border: none !important;
         border-right: none !important;
         box-shadow: none !important;
-    }
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        border-right: 1.5px solid #E2E8F0 !important;
+        visibility: hidden !important;
+        display: none !important;
+        overflow: hidden !important;
     }
     
     [data-testid="stToolbar"] {
         background: transparent !important;
         visibility: visible !important;
         display: flex !important;
-    }
-    
-    /* Sleek Professional Sidebar */
-    [data-testid="stSidebar"] {
-        min-width: 250px !important;
-        max-width: 270px !important;
-        background-color: #F8FAFC !important;
-        z-index: 999999 !important;
     }
 
     /* Steady, Stylish Fixed Corner Sidebar Expand Button - Never Jumps */
@@ -1801,9 +1830,6 @@ def render_customer_master_az_tab():
                 st.rerun()
 
 def render_super_admin_accounts_tabs():
-    st.markdown("## 👑 Super Admin Control Panel")
-    st.caption("Master user management: View all IDs & passwords, edit display names, assign roles, create/delete accounts, and auto-email setup.")
-    
     sa_tab1, sa_tab_edit, sa_tab2, sa_tab_del, sa_tab3, sa_tab4, sa_tab_email = st.tabs([
         "👥 All Users (IDs & Passwords)",
         "✏️ Edit User Names & Roles",
