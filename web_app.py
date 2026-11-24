@@ -2066,8 +2066,8 @@ def render_executive_deck_card(idx, item, is_single=False):
                     unsafe_allow_html=True
                 )
 
-        # Download Buttons: Excel (carrying full standardized name) + CSV
-        c_dl1, c_dl2 = st.columns([3.5, 1.5])
+        # Download Buttons: Excel (Standardized A to Z) + CSV + Partial
+        c_dl1, c_dl2, c_dl3 = st.columns([2.6, 1.2, 1.2])
         with c_dl1:
             st.download_button(
                 label=f"📊 Download: {out_name}",
@@ -2088,6 +2088,18 @@ def render_executive_deck_card(idx, item, is_single=False):
                 file_name=csv_name,
                 mime="text/csv",
                 key=f"exec_dl_csv_{idx}_{is_single}",
+                type="secondary",
+                use_container_width=True
+            )
+        with c_dl3:
+            partial_name = core_engine.build_partial_filename(out_name)
+            st.download_button(
+                label="📑 Partial (.xlsx)",
+                data=out_bytes,
+                file_name=partial_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help=f"Download with Partial filename: {partial_name}",
+                key=f"exec_dl_partial_{idx}_{is_single}",
                 type="secondary",
                 use_container_width=True
             )

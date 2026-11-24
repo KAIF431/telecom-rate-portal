@@ -1084,6 +1084,25 @@ def build_output_filename(base_name, comments_tag, member_name):
     filename = re.sub(r'\s+', ' ', filename).strip()
     return filename
 
+def build_partial_filename(out_name):
+    """
+    Transforms a standardized A to Z filename into its corresponding Partial ratesheet name.
+    Preserves vendor name, comments tag (e.g. UPdated, Various inc, dec, new), and member name.
+    Example:
+    'Name - LilyX_Rozper A to Z UPdated Kaif.xlsx' -> 'Name - LilyX_Rozper Partial UPdated Kaif.xlsx'
+    'Name - Vinculum A to Z Various inc, dec Kaif.xlsx' -> 'Name - Vinculum Partial Various inc, dec Kaif.xlsx'
+    """
+    s = str(out_name or '').strip()
+    p_name = re.sub(r'(_*\s*)\bA\s+to\s+Z\b(\s*_*)', r'\1Partial\2', s, flags=re.IGNORECASE)
+    if 'partial' not in p_name.lower():
+        p_name = re.sub(r'A\s*to\s*Z', 'Partial', s, flags=re.IGNORECASE)
+    if 'partial' not in p_name.lower():
+        if s.lower().endswith('.xlsx'):
+            p_name = f"{s[:-5].strip()} Partial.xlsx"
+        else:
+            p_name = f"{s} Partial"
+    return re.sub(r'\s+', ' ', p_name).strip()
+
 
 def generate_target_csv_bytes(df_clean):
     """
