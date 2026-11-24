@@ -27,25 +27,22 @@ except Exception:
 
 # Bulletproof self-contained avatar resolution
 def resolve_user_avatar(username):
-    u = (str(username) if username else "").strip().lower()
-    if hasattr(am, "get_user_avatar"):
-        try:
-            return am.get_user_avatar(u)
-        except Exception:
-            pass
-    if "kaif" in u:
-        return "avatar_man_glasses.png"
-    elif "arhama" in u:
+    u = str(username or '').strip().lower()
+    if "arhama" in u:
         return "avatar_niqab_classic.png"
+    elif "kaif" in u:
+        return "avatar_man_glasses.png"
     elif "aliba" in u:
         return "avatar_hijab_niqab_dark.png"
-    return "avatar_man_glasses.png"
+    # Assign pleasant deterministic avatar from pool
+    h = sum(ord(c) for c in u) % len(SAFE_AVAILABLE_AVATARS)
+    return SAFE_AVAILABLE_AVATARS[h]["id"]
 
 SAFE_AVAILABLE_AVATARS = [
-    # 🧕 15 Female, Hijab & Niqab Avatars (Arhama, Aliba & Girls)
-    {"id": "avatar_niqab_classic.png", "title": "1. Classic Black Niqab", "category": "Female & Hijab", "badge": "Arhama Default"},
-    {"id": "avatar_hijab_niqab_dark.png", "title": "2. Dark Niqab Veil", "category": "Female & Hijab", "badge": "Aliba Default"},
-    {"id": "avatar_hijab_bw_art.png", "title": "3. Floral Art Silhouette", "category": "Female & Hijab", "badge": "Art Style"},
+    # 🧕 15 Female & Hijab Avatars (Arhama, Aliba & Girls)
+    {"id": "avatar_niqab_classic.png", "title": "1. Classic Black Niqab", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_niqab_dark.png", "title": "2. Dark Niqab Veil", "category": "Female & Hijab", "badge": ""},
+    {"id": "avatar_hijab_bw_art.png", "title": "3. Floral Art Silhouette", "category": "Female & Hijab", "badge": ""},
     {"id": "avatar_hijab_black.png", "title": "4. Black Hijab", "category": "Female & Hijab", "badge": ""},
     {"id": "avatar_hijab_charcoal.png", "title": "5. Charcoal Hijab", "category": "Female & Hijab", "badge": ""},
     {"id": "avatar_hijab_gold.png", "title": "6. Gold Mustard Hijab", "category": "Female & Hijab", "badge": ""},
@@ -60,7 +57,7 @@ SAFE_AVAILABLE_AVATARS = [
     {"id": "avatar_cartoon_modern_woman.png", "title": "15. Modern Chic Girl", "category": "Female & Hijab", "badge": ""},
 
     # 🧔 6 Male & Executive Avatars (Kaif & Boys)
-    {"id": "avatar_man_glasses.png", "title": "16. Bearded Specs (Kaif)", "category": "Male & Executive", "badge": "Kaif Default"},
+    {"id": "avatar_man_glasses.png", "title": "16. Bearded Specs (Kaif)", "category": "Male & Executive", "badge": ""},
     {"id": "avatar_cartoon_beard_suit.png", "title": "17. Suit & Beard", "category": "Male & Executive", "badge": ""},
     {"id": "avatar_cartoon_bearded_specs.png", "title": "18. Executive Specs", "category": "Male & Executive", "badge": ""},
     {"id": "avatar_cartoon_young_man.png", "title": "19. Young Casual", "category": "Male & Executive", "badge": ""},
@@ -383,7 +380,7 @@ st.set_page_config(
     page_title="Vendor Rate Sheet Standardizer",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Custom Styling (Theme 4: Deep Ocean Teal & Frost - Cloud Terminal / Tech Precision)
@@ -435,123 +432,95 @@ st.markdown("""
     footer {visibility: hidden !important; display: none !important;}
     .stDeployButton {display: none !important;}
     [data-testid="stToolbarActions"] {display: none !important; visibility: hidden !important;}
-    [data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
+    [data-testid="stDecoration"] {display: none !important; visibility: hidden !important; height: 0 !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
     [data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
     [data-testid="stManageApp"] {display: none !important; visibility: hidden !important;}
     button:has([data-testid="stIconManageApp"]) {display: none !important; visibility: hidden !important;}
     div[class*="manageApp"], div[class*="ManageApp"] {display: none !important; visibility: hidden !important;}
     .viewerBadge_container__1QSob, div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
-    header {background: transparent !important;}
     
-    /* Ensure Header & Toolbar are visible so stExpandSidebarButton is shown */
-    header[data-testid="stHeader"] {
+    /* Eliminate Ghost Lines (Top Horizontal Line & Collapsed Sidebar Vertical Line) */
+    header, header[data-testid="stHeader"] {
         background: transparent !important;
-        visibility: visible !important;
-        display: block !important;
-        height: 50px !important;
+        border: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+        height: 48px !important;
         z-index: 999998 !important;
     }
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        border: none !important;
+        border-right: none !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        border-right: 1.5px solid #E2E8F0 !important;
+    }
+    
     [data-testid="stToolbar"] {
         background: transparent !important;
         visibility: visible !important;
         display: flex !important;
     }
     
-    /* Header container styling */
-    header[data-testid="stHeader"] {
-        background: transparent !important;
-        visibility: visible !important;
-        display: block !important;
-        height: 50px !important;
-        z-index: 999998 !important;
-    }
-    
-    /* Compact, sleek professional sidebar */
+    /* Sleek Professional Sidebar */
     [data-testid="stSidebar"] {
-        min-width: 230px !important;
-        max-width: 250px !important;
+        min-width: 250px !important;
+        max-width: 270px !important;
         background-color: #F8FAFC !important;
-        border-right: 1.5px solid #E2E8F0 !important;
         z-index: 999999 !important;
     }
 
-    /* High-visibility Corner Sidebar Toggle Button (Supports all Streamlit versions including modern stExpandSidebarButton) */
+    /* Steady, Stylish Fixed Corner Sidebar Expand Button - Never Jumps */
     [data-testid="stExpandSidebarButton"],
     button[data-testid="stExpandSidebarButton"],
-    header [data-testid="stExpandSidebarButton"],
-    header [data-testid="stSidebarCollapseButton"],
-    header [data-testid="stSidebarCollapsedControl"],
-    header [data-testid="collapsedControl"],
-    header button[data-testid="stBaseButton-headerNoPadding"],
-    [data-testid="stSidebarCollapseButton"],
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"],
-    button[data-testid="stSidebarCollapseButton"],
-    button[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stBaseButton-headerNoPadding"],
-    button[aria-label*="sidebar" i],
-    button[aria-label*="Sidebar" i] {
+    header [data-testid="stExpandSidebarButton"] {
         display: inline-flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         position: fixed !important;
-        top: 12px !important;
-        left: 14px !important;
-        background-color: #0E7490 !important;
+        top: 10px !important;
+        left: 12px !important;
+        background: #0E7490 !important;
         color: #FFFFFF !important;
         border: 1.5px solid #0891B2 !important;
         border-radius: 8px !important;
-        box-shadow: 0 3px 10px rgba(14, 116, 144, 0.35) !important;
+        box-shadow: 0 2px 8px rgba(14, 116, 144, 0.3) !important;
         z-index: 99999999 !important;
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
         align-items: center !important;
         justify-content: center !important;
         cursor: pointer !important;
         pointer-events: auto !important;
+        transition: background-color 0.15s ease, transform 0.15s ease !important;
+    }
+    [data-testid="stExpandSidebarButton"]:hover,
+    button[data-testid="stExpandSidebarButton"]:hover {
+        background: #0891B2 !important;
+        transform: scale(1.04) !important;
     }
     [data-testid="stExpandSidebarButton"] svg,
-    [data-testid="stExpandSidebarButton"] span,
-    button[data-testid="stExpandSidebarButton"] svg,
-    button[data-testid="stExpandSidebarButton"] span,
-    header [data-testid="stExpandSidebarButton"] svg,
-    header [data-testid="stSidebarCollapseButton"] svg,
-    header [data-testid="stSidebarCollapsedControl"] svg,
-    header [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapseButton"] svg,
-    [data-testid="stSidebarCollapsedControl"] svg,
-    [data-testid="collapsedControl"] svg,
-    button[data-testid="stSidebarCollapseButton"] svg,
-    button[data-testid="stSidebarCollapsedControl"] svg,
-    button[data-testid="stBaseButton-headerNoPadding"] svg {
+    [data-testid="stExpandSidebarButton"] span {
         fill: #FFFFFF !important;
         stroke: #FFFFFF !important;
         color: #FFFFFF !important;
-        width: 22px !important;
-        height: 22px !important;
-        display: block !important;
-    }
-    header [data-testid="stSidebarCollapseButton"]:hover,
-    header [data-testid="stSidebarCollapsedControl"]:hover,
-    [data-testid="stSidebarCollapseButton"]:hover,
-    [data-testid="stSidebarCollapsedControl"]:hover,
-    button[data-testid="stBaseButton-headerNoPadding"]:hover {
-        background-color: #0891B2 !important;
-        transform: scale(1.05);
+        width: 20px !important;
+        height: 20px !important;
     }
     
-    /* When Sidebar is expanded: Reset close button inside the sidebar */
+    /* Sidebar Close Button Inside Expanded Sidebar */
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
         position: static !important;
-        background-color: transparent !important;
+        background: transparent !important;
         color: #0E7490 !important;
         box-shadow: none !important;
         border: none !important;
-        width: auto !important;
-        height: auto !important;
+        cursor: pointer !important;
     }
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {
         fill: #0E7490 !important;
@@ -559,6 +528,48 @@ st.markdown("""
         color: #0E7490 !important;
     }
 
+    /* Big, Bold, Premium Card-style Portal Buttons in Sidebar */
+    section[data-testid="stSidebar"] div[role="radiogroup"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+        display: flex !important;
+        align-items: center !important;
+        padding: 10px 14px !important;
+        background: #FFFFFF !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+        font-weight: 700 !important;
+        font-size: 0.90rem !important;
+        color: #0F172A !important;
+        transition: all 0.15s ease-in-out !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        border-color: #0E7490 !important;
+        background: #F0F9FF !important;
+        color: #0E7490 !important;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"],
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+        background: #0E7490 !important;
+        border-color: #0891B2 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 2px 6px rgba(14, 116, 144, 0.25) !important;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) span,
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+    }
+    
     /* Segmented Pill Navigation Control */
     div[role="radiogroup"] {
         background: #E0F2FE !important;
@@ -956,8 +967,13 @@ if st.session_state.user is None:
 
 # User is authenticated
 current_user = st.session_state.user or {}
-u_name = current_user.get("username", "kaif")
-is_admin = (current_user.get("role") == "admin")
+u_name = (current_user.get("username") or "kaif").strip().lower()
+user_role = (current_user.get("role") or "user").strip().lower()
+
+# 3-Role Hierarchy: Super Admin (Kaif), Admin, User
+is_super_admin = (u_name == "kaif" or user_role == "super_admin")
+is_admin = is_super_admin or (user_role == "admin")
+is_user = True
 active_member = current_user.get("name", "Kaif")
 
 # Ensure persistent session cookie is saved in browser for F5 reload persistence (run ONCE per login)
@@ -993,17 +1009,110 @@ def get_avatar_base64(filename):
             return ""
     return ""
 
+
+@st.cache_data(show_spinner=False)
+def get_cached_template_file(filename):
+    p = os.path.join(TEMPLATE_DIR, filename)
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return b""
+
+sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
+qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
+country_billing_bytes = get_cached_template_file("Country Billing.xlsx")
+separate_codes_bytes = get_cached_template_file("Separate_codes_sample_ratesheet.xls")
+
+def safe_get_master_excel_bytes():
+    try:
+        if hasattr(bm, "get_master_excel_bytes"):
+            b = bm.get_master_excel_bytes()
+            if b and len(b) > 1000:
+                return b
+    except Exception:
+        pass
+    for p in [
+        os.path.join(os.path.dirname(__file__), "templates", "Country Billing.xlsx"),
+        os.path.join(os.path.dirname(__file__), "billing_master.xlsx"),
+        r"C:\vendor Rates\Country Billing.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    c = f.read()
+                    if c and len(c) > 1000:
+                        return c
+            except Exception:
+                pass
+    if country_billing_bytes and len(country_billing_bytes) > 1000:
+        return country_billing_bytes
+    try:
+        if hasattr(bm, "load_master_billing"):
+            data = bm.load_master_billing()
+            raw_list = data.get("raw_list", []) if isinstance(data, dict) else []
+            if raw_list:
+                df = pd.DataFrame(raw_list)
+                df = df.rename(columns={"dial_code": "Dial Code", "destination": "Summary", "minimum": "Minimum", "increment": "Increment"})
+                cols = ["Dial Code", "Summary", "Minimum", "Increment"]
+                df = df[[col for col in cols if col in df.columns]]
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                    df.to_excel(writer, index=False, sheet_name="Master Billing")
+                return buf.getvalue()
+    except Exception:
+        pass
+    return b""
+
+def safe_get_cc_master_bytes():
+    fn = "A-Z CC Rates.xlsx"
+    for p in [
+        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "A-Z CC Rates.xlsx"),
+        r"C:\vendor Rates\CC_Rates_Sheet_2026_02_01.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    c = f.read()
+                    if c and len(c) > 500:
+                        return c, fn
+            except Exception:
+                pass
+    return None, fn
+
+def safe_get_cli_master_bytes():
+    fn = "A-Z CLI Rates.xlsx"
+    for p in [
+        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "A-Z CLI Rates.xlsx"),
+        r"C:\vendor Rates\CLI_Rate_sheet_2026_02_01.xlsx"
+    ]:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    c = f.read()
+                    if c and len(c) > 500:
+                        return c, fn
+            except Exception:
+                pass
+    return None, fn
+
 # ----------------- SIDEBAR NAVIGATION (MOUNTED FIRST) -----------------
 with st.sidebar:
     st.markdown("""
-    <div style="padding: 6px 0 10px 0; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 12px;">
-        <div style="font-size: 0.70rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B;">Navigation</div>
+    <div style="padding: 4px 0 8px 0; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 10px;">
+        <div style="font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B;">Navigation</div>
         <div style="font-size: 1.05rem; font-weight: 800; color: #0C4A6E;">🌐 Telecom Hub</div>
     </div>
     """, unsafe_allow_html=True)
     
     sidebar_portals = ["🏢 Vendor Portal", "👥 Customer Portal"]
-    if is_admin:
+    if is_super_admin:
         sidebar_portals.append("👑 Super Admin (Accounts)")
         
     if "current_portal_choice" not in st.session_state:
@@ -1022,145 +1131,123 @@ with st.sidebar:
     )
     st.session_state["current_portal_choice"] = active_portal
     
+    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+
+    # 📁 Standard Formats / Standard A-Z Rates Expanders in Sidebar
+    # Live synced whenever Admin replaces sheets!
+    if active_portal in ["🏢 Vendor Portal", "👑 Super Admin (Accounts)"]:
+        with st.expander("📁 Standard Formats ▾", expanded=False):
+            st.caption("Standard Vendor Formats & Exceptions:")
+            if sample_bytes:
+                st.download_button(
+                    label="📄 Vendor Sample Rate Sheet (.xlsx)",
+                    data=sample_bytes,
+                    file_name="Vendor Sample Format.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sb_dl_vendor_sample",
+                    use_container_width=True
+                )
+            if qc_bytes:
+                st.download_button(
+                    label="📑 QC Blocked Codes (.xlsx)",
+                    data=qc_bytes,
+                    file_name="QC Blocked.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sb_dl_qc_blocked",
+                    use_container_width=True
+                )
+            country_billing_live = safe_get_master_excel_bytes()
+            if country_billing_live:
+                st.download_button(
+                    label="📊 Country Master Billing (.xlsx)",
+                    data=country_billing_live,
+                    file_name="Country Billing.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sb_dl_country_billing",
+                    use_container_width=True
+                )
+            if separate_codes_bytes:
+                st.download_button(
+                    label="📁 Separate Codes (.xls)",
+                    data=separate_codes_bytes,
+                    file_name="Separate_codes_sample_ratesheet.xls",
+                    mime="application/vnd.ms-excel",
+                    key="sb_dl_sep_codes",
+                    use_container_width=True
+                )
+
+    if active_portal in ["👥 Customer Portal", "👑 Super Admin (Accounts)"]:
+        with st.expander("📊 Standard A-Z Rates ▾", expanded=False):
+            st.caption("Master Customer Rate Decks:")
+            cc_b, cc_fn = safe_get_cc_master_bytes()
+            if cc_b:
+                st.download_button(
+                    label="📊 CC Rates Sheet (.xlsx)",
+                    data=cc_b,
+                    file_name=cc_fn,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sb_dl_cc_master",
+                    use_container_width=True
+                )
+            cli_b, cli_fn = safe_get_cli_master_bytes()
+            if cli_b:
+                st.download_button(
+                    label="📊 CLI Rates Sheet (.xlsx)",
+                    data=cli_b,
+                    file_name=cli_fn,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sb_dl_cli_master",
+                    use_container_width=True
+                )
+    
     st.markdown("---")
-    cur_u_av = resolve_user_avatar(current_user.get("username", "kaif"))
+    
+    # Bottom User Profile Card
+    curr_u = (current_user.get("username") or "kaif").strip().lower()
+    cur_u_av = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
     cur_av_b64 = get_avatar_base64(cur_u_av)
+    role_display = "👑 Super Admin" if is_super_admin else ("🛡️ Admin" if is_admin else "👤 User")
+    
     st.markdown(f"""
-    <div style="background: #F1F5F9; border-radius: 8px; padding: 10px; font-size: 0.78rem; display: flex; align-items: center; gap: 10px;">
-        <img src="data:image/png;base64,{cur_av_b64}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover;" />
-        <div>
-            <div style="font-weight: 700; color: #0F172A;">{active_member}</div>
-            <div style="font-size: 0.70rem; color: #64748B;">{'👑 Super Admin' if is_admin else '👤 Member'}</div>
+    <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="data:image/png;base64,{cur_av_b64}" style="width: 38px; height: 38px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover;" />
+            <div style="overflow: hidden;">
+                <div style="font-weight: 800; font-size: 0.90rem; color: #0F172A; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">{active_member}</div>
+                <div style="font-size: 0.70rem; font-weight: 700; color: #0284C7;">{role_display}</div>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
-top_title_col, top_user_info, top_avatar_col = st.columns([3.2, 0.65, 0.45])
-
-with top_title_col:
-    if active_portal == "👑 Super Admin (Accounts)":
-        st.markdown('<div class="main-title">👑 Super Admin Control Panel</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-title">Master user management: View all IDs & passwords, edit display names, create/delete accounts, and reset credentials.</div>', unsafe_allow_html=True)
-    elif active_portal == "👥 Customer Portal":
-        st.markdown('<div class="main-title">👥 Customer Rate Sheet Standardizer</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-title">Standardize customer rate decks against Master A-Z CC & CLI ratesheets with zero data loss.</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
-            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Customer Engine</span>
-            <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z Master Matching</span>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center;">
-            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
-            <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
-            <span style="background: #FEF3C7; color: #92400E; font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #FDE68A;">👈 Sidebar Menu (Top-Left)</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
-active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
-active_avatar_b64 = get_avatar_base64(active_avatar_file)
-u_display_name = current_user.get('name', 'User') if isinstance(current_user, dict) else 'User'
-u_role = current_user.get('role', 'user').upper() if isinstance(current_user, dict) else 'USER'
-
-with top_user_info:
-    st.markdown(f"""
-    <div style="text-align: right; padding-top: 6px; line-height: 1.25;">
-        <div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; white-space: nowrap;">
-            {u_display_name}
-        </div>
-        <div style="font-size: 0.68rem; color: #0284C7; font-weight: 700; text-transform: uppercase;">
-            {u_role}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with top_avatar_col:
-    st.markdown(f"""
-    <style>
-    div.st-key-avatar_overlay_btn {{
-        width: 48px !important;
-        height: 48px !important;
-        margin: -48px auto 0 auto !important;
-        position: relative !important;
-        z-index: 10 !important;
-    }}
-    div.st-key-avatar_overlay_btn button {{
-        width: 48px !important;
-        height: 48px !important;
-        min-width: 48px !important;
-        min-height: 48px !important;
-        max-width: 48px !important;
-        max-height: 48px !important;
-        opacity: 0 !important;
-        cursor: pointer !important;
-        border: none !important;
-        background: transparent !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }}
-    div.st-key-avatar_overlay_btn button:hover {{
-        background: transparent !important;
-        border: none !important;
-    }}
-    div.st-key-top_logout_btn {{
-        margin-top: 4px !important;
-    }}
-    div.st-key-top_logout_btn button {{
-        width: 48px !important;
-        min-width: 48px !important;
-        max-width: 48px !important;
-        margin: 0 auto !important;
-        height: 22px !important;
-        min-height: 22px !important;
-        padding: 0 !important;
-        font-size: 0.65rem !important;
-        font-weight: 700 !important;
-        text-align: center !important;
-        border-radius: 5px !important;
-        border: 1px solid #CBD5E1 !important;
-        background-color: #FFFFFF !important;
-        color: #475569 !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
-        display: block !important;
-    }}
-    div.st-key-top_logout_btn button:hover {{
-        background-color: #FEF2F2 !important;
-        border-color: #F87171 !important;
-        color: #DC2626 !important;
-    }}
-    </style>
-    <div style="display: flex; justify-content: center; align-items: center; width: 48px; height: 48px; margin: 0 auto;">
-        <img src="data:image/png;base64,{active_avatar_b64}" 
-             style="width: 48px; height: 48px; min-width: 48px; border-radius: 8px; border: 1.5px solid #0E7490; object-fit: cover; box-shadow: 0 1px 3px rgba(14, 116, 144, 0.18); display: block;" 
-             alt="Avatar" />
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("", key="avatar_overlay_btn", help="Click anywhere on avatar to change your avatar"):
-        st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
-        st.rerun()
-    
-    if st.button("🚪 Logout", key="top_logout_btn", help="Logout from portal"):
-        clear_current_session()
-        components.html("""
-        <script>
-        setTimeout(function() {
-            try {
-                parent.window.location.reload();
-            } catch(e) {
-                try { parent.location.reload(); } catch(e2) { window.location.reload(); }
-            }
-        }, 150);
-        </script>
-        <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
-        """, height=50)
-        st.stop()
+    col_sb_act1, col_sb_act2 = st.columns([1, 1])
+    with col_sb_act1:
+        if st.button("🎨 Avatar", key="sb_btn_toggle_avatar", use_container_width=True, help="Change your profile avatar"):
+            st.session_state["show_avatar_picker"] = not st.session_state.get("show_avatar_picker", False)
+            st.rerun()
+    with col_sb_act2:
+        if st.button("🚪 Logout", key="sb_btn_logout", use_container_width=True, help="Logout from portal"):
+            clear_current_session()
+            components.html("""
+            <script>
+            setTimeout(function() {
+                try { parent.window.location.reload(); } catch(e) { window.location.reload(); }
+            }, 150);
+            </script>
+            <div style="font-family: sans-serif; color: #0E7490; padding: 10px; text-align: center;">Logging out...</div>
+            """, height=50)
+            st.stop()
+
+# ----------------- MAIN PORTAL HEADER (Clean, Full-Width, No Badges) -----------------
+if active_portal == "👑 Super Admin (Accounts)":
+    st.markdown('<div class="main-title">👑 Super Admin Control Panel</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Master user management: View all IDs & passwords, edit display names, create/delete accounts, and security controls.</div>', unsafe_allow_html=True)
+elif active_portal == "👥 Customer Portal":
+    st.markdown('<div class="main-title">👥 Customer Rate Sheet Standardizer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Standardize customer rate decks against Master A-Z CC & CLI ratesheets with zero data loss.</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 # Expandable Profile Avatar Selector
 if st.session_state.get("show_avatar_picker", False):
@@ -1176,7 +1263,7 @@ if st.session_state.get("show_avatar_picker", False):
                 </span>
             </div>
             <div style="font-size: 0.82rem; color: #475569;">
-                Arhama, Aliba, Kaif aur team ke liye sabhi avatars niche available hain. Apne pasandida avatar ke niche <b>'Select'</b> click karein:
+                Apne pasandida avatar ke niche <b>'Select'</b> click karein:
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1195,11 +1282,11 @@ if st.session_state.get("show_avatar_picker", False):
                 cols = st.columns(len(chunk))
                 for idx, av in enumerate(chunk):
                     with cols[idx]:
-                        is_active = (av["id"] == active_avatar_file)
+                        is_active = (av["id"] == cur_u_av)
                         border_col = "#0E7490" if is_active else "#BAE6FD"
                         bg_col = "#E0F2FE" if is_active else "#FFFFFF"
                         b64 = get_avatar_base64(av["id"])
-                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
+                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else ""
                         st.markdown(f"""
                         <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
                             <img src="data:image/png;base64,{b64}" style="width: 52px; height: 52px; border-radius: 8px; object-fit: cover;" />
@@ -1228,11 +1315,11 @@ if st.session_state.get("show_avatar_picker", False):
                 cols = st.columns(len(chunk))
                 for idx, av in enumerate(chunk):
                     with cols[idx]:
-                        is_active = (av["id"] == active_avatar_file)
+                        is_active = (av["id"] == cur_u_av)
                         border_col = "#0E7490" if is_active else "#BAE6FD"
                         bg_col = "#E0F2FE" if is_active else "#FFFFFF"
                         b64 = get_avatar_base64(av["id"])
-                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else f"<div style='font-size: 0.65rem; color: #64748B;'>{av.get('badge','')}</div>"
+                        badge_html = f"<div style='font-size: 0.65rem; color: #0E7490; font-weight: 700;'>★ Active</div>" if is_active else ""
                         st.markdown(f"""
                         <div style="text-align: center; background: {bg_col}; border: 1.5px solid {border_col}; border-radius: 10px; padding: 8px 4px; margin-bottom: 6px;">
                             <img src="data:image/png;base64,{b64}" style="width: 52px; height: 52px; border-radius: 8px; object-fit: cover;" />
@@ -1261,7 +1348,7 @@ if st.session_state.get("show_avatar_picker", False):
                 cols = st.columns(len(chunk))
                 for idx, av in enumerate(chunk):
                     with cols[idx]:
-                        is_active = (av["id"] == active_avatar_file)
+                        is_active = (av["id"] == cur_u_av)
                         border_col = "#0E7490" if is_active else "#BAE6FD"
                         bg_col = "#E0F2FE" if is_active else "#FFFFFF"
                         b64 = get_avatar_base64(av["id"])
@@ -1338,93 +1425,6 @@ def get_historical_csv_bytes(filename, excel_bytes=None):
             pass
     return None, csv_fname
 
-@st.cache_data(show_spinner=False)
-def get_cached_template_file(filename):
-    p = os.path.join(TEMPLATE_DIR, filename)
-    if os.path.exists(p):
-        try:
-            with open(p, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
-    return b""
-
-sample_bytes = get_cached_template_file("Vendor Sample sheet.xlsx")
-qc_bytes = get_cached_template_file("QC exception Vlookup.xlsx")
-country_billing_bytes = get_cached_template_file("Country Billing.xlsx")
-separate_codes_bytes = get_cached_template_file("Separate_codes_sample_ratesheet.xls")
-
-def safe_get_master_excel_bytes():
-    try:
-        if hasattr(bm, "get_master_excel_bytes"):
-            b = bm.get_master_excel_bytes()
-            if b and len(b) > 1000:
-                return b
-    except Exception:
-        pass
-    for p in [
-        os.path.join(os.path.dirname(__file__), "templates", "Country Billing.xlsx"),
-        os.path.join(os.path.dirname(__file__), "billing_master.xlsx"),
-        r"C:\vendor Rates\Country Billing.xlsx"
-    ]:
-        if os.path.exists(p):
-            try:
-                with open(p, "rb") as f:
-                    c = f.read()
-                    if c and len(c) > 1000:
-                        return c
-            except Exception:
-                pass
-    if country_billing_bytes and len(country_billing_bytes) > 1000:
-        return country_billing_bytes
-    # Direct in-memory generation fallback
-    try:
-        if hasattr(bm, "load_master_billing"):
-            data = bm.load_master_billing()
-            raw_list = data.get("raw_list", []) if isinstance(data, dict) else []
-            if raw_list:
-                df = pd.DataFrame(raw_list)
-                df = df.rename(columns={"dial_code": "Dial Code", "destination": "Summary", "minimum": "Minimum", "increment": "Increment"})
-                cols = ["Dial Code", "Summary", "Minimum", "Increment"]
-                df = df[[col for col in cols if col in df.columns]]
-                buf = io.BytesIO()
-                df.to_excel(buf, index=False, engine="openpyxl")
-                return buf.getvalue()
-    except Exception:
-        pass
-    return b""
-
-def safe_get_cc_master_bytes():
-    for p in [
-        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx"),
-        os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet.xlsx"),
-        r"C:\vendor Rates\CC_Rates_Sheet_2026_02_01.xlsx"
-    ]:
-        if os.path.exists(p):
-            try:
-                with open(p, "rb") as f:
-                    c = f.read()
-                    if c and len(c) > 1000:
-                        return c, os.path.basename(p)
-            except Exception:
-                pass
-    return b"", "CC_Rates_Sheet.xlsx"
-
-def safe_get_cli_master_bytes():
-    for p in [
-        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx"),
-        os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet.xlsx"),
-        r"C:\vendor Rates\CLI_Rate_sheet_2026_02_01.xlsx"
-    ]:
-        if os.path.exists(p):
-            try:
-                with open(p, "rb") as f:
-                    c = f.read()
-                    if c and len(c) > 1000:
-                        return c, os.path.basename(p)
-            except Exception:
-                pass
-    return b"", "CLI_Rate_sheet.xlsx"
 
 def render_activity_history_tab(prefix="vend"):
     st.subheader("📜 User Processing History & Download Center")
@@ -1626,7 +1626,7 @@ def render_activity_history_tab(prefix="vend"):
         )
 
 def render_billing_rules_tab():
-    st.subheader("👑 Master Billing Rules Manager (`billingkaif.xlsx`)")
+    st.subheader("👑 Master Billing Rules Manager (`Country Billing.xlsx`)")
     st.caption("View, search, edit, and add official company billing rules for any destination. When market rules change (e.g. Indonesia 60/1 -> 60/60), update them here without touching code.")
     
     bm_data = bm.load_master_billing()
@@ -1802,15 +1802,16 @@ def render_customer_master_az_tab():
 
 def render_super_admin_accounts_tabs():
     st.markdown("## 👑 Super Admin Control Panel")
-    st.caption("Master user management: View all IDs & passwords, edit display names, create/delete accounts, and reset credentials.")
+    st.caption("Master user management: View all IDs & passwords, edit display names, assign roles, create/delete accounts, and auto-email setup.")
     
-    sa_tab1, sa_tab_edit, sa_tab2, sa_tab_del, sa_tab3, sa_tab4 = st.tabs([
+    sa_tab1, sa_tab_edit, sa_tab2, sa_tab_del, sa_tab3, sa_tab4, sa_tab_email = st.tabs([
         "👥 All Users (IDs & Passwords)",
-        "✏️ Edit User Names",
+        "✏️ Edit User Names & Roles",
         "➕ Create New User",
         "🗑️ Delete User",
         "🔑 Reset Passwords",
-        "🔔 Pending Reset Requests"
+        "🔔 Pending Reset Requests",
+        "📧 Auto-Email Dispatcher (Setup)"
     ])
     
     with sa_tab1:
@@ -1824,7 +1825,7 @@ def render_super_admin_accounts_tabs():
                 "Name": uv.get("name"),
                 "Password": uv.get("password"),
                 "Role": uv.get("role", "user").upper(),
-                "Avatar": uv.get("avatar", "Default"),
+                "Avatar": uv.get("avatar", ""),
                 "Authy Key": uv.get("totp_secret", am.get_master_totp_secret()),
                 "Created At": uv.get("created_at")
             })
@@ -1873,7 +1874,15 @@ def render_super_admin_accounts_tabs():
         with e_col2:
             st.info(f"**Username:** `{selected_edit_u}` | **Current Full Name:** `{u_info.get('name')}` | **Role:** `{u_info.get('role', 'user').upper()}`")
         
-        new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"sa_input_edit_name_{selected_edit_u}")
+        ed_c1, ed_c2 = st.columns(2)
+        with ed_c1:
+            new_name_val = st.text_input("New Full Name / Display Name:", value=u_info.get("name", ""), key=f"sa_input_edit_name_{selected_edit_u}")
+        with ed_c2:
+            role_options = ["user", "admin", "super_admin"]
+            role_labels = {"super_admin": "👑 Super Admin", "admin": "🛡️ Admin", "user": "👤 User"}
+            current_r = u_info.get("role", "user")
+            r_idx = role_options.index(current_r) if current_r in role_options else 0
+            new_role_val = st.selectbox("Assign Role:", role_options, index=r_idx, format_func=lambda x: role_labels.get(x, x), key=f"sa_sel_edit_role_{selected_edit_u}")
         
         av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
         av_dict = {a["id"]: f"{a['title']} ({a['category']})" for a in SAFE_AVAILABLE_AVATARS}
@@ -1884,14 +1893,18 @@ def render_super_admin_accounts_tabs():
             if new_name_val and new_name_val.strip():
                 ok_n, msg_n = am.update_user_name(selected_edit_u, new_name_val.strip())
                 ok_a, msg_a = save_user_avatar_choice(selected_edit_u, new_av_val)
+                if hasattr(am, "update_user_role"):
+                    am.update_user_role(selected_edit_u, new_role_val)
                 if ok_n and ok_a:
                     if selected_edit_u == current_user.get("username"):
                         current_user["name"] = new_name_val.strip()
                         current_user["avatar"] = new_av_val
+                        current_user["role"] = new_role_val
                         if "user" in st.session_state and isinstance(st.session_state.user, dict):
                             st.session_state.user["name"] = new_name_val.strip()
                             st.session_state.user["avatar"] = new_av_val
-                    st.success(f"Name and Avatar updated successfully for '{selected_edit_u}'!")
+                            st.session_state.user["role"] = new_role_val
+                    st.success(f"Details updated successfully for '{selected_edit_u}'!")
                     time.sleep(1)
                     st.rerun()
                 else:
@@ -1909,7 +1922,7 @@ def render_super_admin_accounts_tabs():
                 nu_name = st.text_input("Full Name", key="sa_nu_name", placeholder="e.g. User Name")
             with cu_col2:
                 nu_pw = st.text_input("Password (Set Directly)", key="sa_nu_pw", placeholder="e.g. User@123")
-                nu_role = st.selectbox("Role", ["user", "admin"], key="sa_nu_role")
+                nu_role = st.selectbox("Role", ["user", "admin", "super_admin"], format_func=lambda x: {"super_admin": "👑 Super Admin", "admin": "🛡️ Admin", "user": "👤 User"}.get(x, x), key="sa_nu_role")
             nu_email = st.text_input("Email (Optional)", key="sa_nu_email")
             
             av_opts = [a["id"] for a in SAFE_AVAILABLE_AVATARS]
@@ -2006,14 +2019,36 @@ def render_super_admin_accounts_tabs():
                     st.rerun()
                 st.divider()
 
-def render_customer_standardizer_view():
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0F766E 0%, #0E7490 100%); padding: 18px 22px; border-radius: 12px; margin-bottom: 18px; color: #FFFFFF; box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);">
-        <div style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">👥 Customer Rate Deck Standardizer</div>
-        <div style="font-size: 0.85rem; opacity: 0.92; margin-top: 4px;">Standardize and match customer rate decks against Master A-Z CC & CLI reference sheets.</div>
-    </div>
-    """, unsafe_allow_html=True)
+    with sa_tab_email:
+        st.subheader("📧 Automated Rate Sheet Email Dispatcher")
+        st.caption("Configure automated email dispatch so that every standardized rate sheet is instantly emailed upon successful processing.")
+        
+        st.markdown("""
+        <div style="background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px;">
+            <div style="font-weight: 700; color: #92400E; font-size: 0.88rem;">🟡 Status: Upper Setup UI Active (Backend Auto-Email Hook in Next Phase)</div>
+            <div style="font-size: 0.78rem; color: #78350F; margin-top: 3px;">
+                Jab bhi Kaif, Arhama ya Aliba koi bhi rate sheet successfully process karenge, system automated email ke sath finalized Excel file attach karke notification bhej dega. Local history save karne ka magajmari khatam!
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.container(border=True):
+            st.markdown("**⚙️ Email Dispatcher Configuration:**")
+            em_c1, em_c2 = st.columns(2)
+            with em_c1:
+                st.text_input("SMTP Server Host:", value="smtp.gmail.com", disabled=True, key="sa_em_smtp_host")
+                st.text_input("Sender Email Address:", value="kaifofficial4@gmail.com", key="sa_em_sender")
+                st.checkbox("Auto-attach processed Excel file (.xlsx)", value=True, key="sa_em_attach_xlsx")
+            with em_c2:
+                st.text_input("SMTP Port:", value="587 (TLS)", disabled=True, key="sa_em_smtp_port")
+                st.text_input("Default Notification Recipient(s):", value="kaifofficial4@gmail.com", help="Separate multiple emails with commas", key="sa_em_recipients")
+                st.checkbox("Send instant alert upon processing errors / mismatches", value=True, key="sa_em_alert_err")
+                
+            st.info("💡 **Kaif's Workflow:** Processed rate sheets will dispatch directly to your inbox automatically.")
+            if st.button("💾 Save Email Dispatcher Settings", type="primary", key="sa_btn_save_email_cfg"):
+                st.success("✅ Email Dispatcher settings recorded! SMTP pipeline will activate on schedule.")
 
+def render_customer_standardizer_view():
     with st.container(border=True):
         st.markdown("### 📤 Upload Customer Rate Decks")
         st.caption("Drag and drop customer rate sheets (.xlsx, .xls, .csv). Batch upload supported:")
@@ -2035,154 +2070,42 @@ if active_portal == "👑 Super Admin (Accounts)":
     st.stop()
 
 elif active_portal == "👥 Customer Portal":
-    c_nav_left, c_nav_right = st.columns([3.2, 1.2])
-    with c_nav_left:
-        if is_admin:
-            customer_nav_mode = st.radio(
-                "Customer Navigation:",
-                ["⚡ Customer Rate Standardizer", "👑 Customer Admin Controls"],
-                horizontal=True,
-                key="cust_main_nav_toggle",
-                label_visibility="collapsed"
-            )
-        else:
-            customer_nav_mode = "⚡ Customer Rate Standardizer"
-            st.markdown(
-                '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
-                '⚡ Customer Rate Standardizer'
-                '</div>',
-                unsafe_allow_html=True
-            )
-    with c_nav_right:
-        with st.popover("📥 Customer Master Rates ▾", use_container_width=True, help="Download Master CC and CLI rates sheets"):
-            st.markdown(
-                '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
-                '📁 Master Customer Reference Decks'
-                '</div>',
-                unsafe_allow_html=True
-            )
-            cc_b, cc_fn = safe_get_cc_master_bytes()
-            if cc_b:
-                st.download_button(
-                    label=f"📊 CC Rates Sheet (.xlsx)",
-                    data=cc_b,
-                    file_name=cc_fn,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="cust_pop_dl_cc",
-                    use_container_width=True
-                )
-            cli_b, cli_fn = safe_get_cli_master_bytes()
-            if cli_b:
-                st.download_button(
-                    label=f"📊 CLI Rates Sheet (.xlsx)",
-                    data=cli_b,
-                    file_name=cli_fn,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="cust_pop_dl_cli",
-                    use_container_width=True
-                )
+    if is_admin:
+        customer_nav_mode = st.radio(
+            "Customer Navigation:",
+            ["⚡ Customer Rate Standardizer", "👑 Customer Admin Controls"],
+            horizontal=True,
+            key="cust_main_nav_toggle",
+            label_visibility="collapsed"
+        )
+    else:
+        customer_nav_mode = "⚡ Customer Rate Standardizer"
     
     if is_admin and customer_nav_mode == "👑 Customer Admin Controls":
-        st.markdown("## 👥 Customer Admin Controls")
-        st.caption("Manage Customer processing activity records and dynamically update Master A-Z CC & CLI ratesheets.")
-        c_tab_hist, c_tab_az = st.tabs([
-            "📜 User Activity & Processing History",
-            "👑 Master A-Z Sheet (CC & CLI Manager)"
-        ])
-        with c_tab_hist:
-            render_activity_history_tab(prefix="cust")
-        with c_tab_az:
-            render_customer_master_az_tab()
+        st.markdown("## 👥 Customer Admin Controls: Master A-Z Sheet (CC & CLI Manager)")
+        st.caption("Manage and dynamically update Master A-Z CC & CLI ratesheets. Replaced sheets sync live across the entire system.")
+        render_customer_master_az_tab()
         st.stop()
     else:
         render_customer_standardizer_view()
         st.stop()
 
 elif active_portal == "🏢 Vendor Portal":
-    v_nav_left, v_nav_right = st.columns([3.2, 1.2])
-    with v_nav_left:
-        if is_admin:
-            vendor_nav_mode = st.radio(
-                "Vendor Navigation:",
-                ["⚡ Rate Deck Standardizer", "👑 Vendor Admin Controls"],
-                horizontal=True,
-                key="vend_main_nav_toggle",
-                label_visibility="collapsed"
-            )
-        else:
-            vendor_nav_mode = "⚡ Rate Deck Standardizer"
-            st.markdown(
-                '<div style="font-size: 1.05rem; font-weight: 700; color: #0C4A6E; padding: 4px 0;">'
-                '⚡ Rate Deck Standardizer'
-                '</div>',
-                unsafe_allow_html=True
-            )
-    with v_nav_right:
-        with st.popover("📥 Master Sheets & Formats ▾", use_container_width=True, help="Download standard sample format, QC rules, and country billing"):
-            st.markdown(
-                '<div style="font-weight: 700; color: #0C4A6E; font-size: 0.90rem; margin-bottom: 6px; border-bottom: 1.5px solid #E2E8F0; padding-bottom: 4px;">'
-                '📁 Master Telecom Reference Sheets'
-                '</div>',
-                unsafe_allow_html=True
-            )
-            if sample_bytes:
-                st.download_button(
-                    label="📄 Vendor Sample Sheet (.xlsx)",
-                    data=sample_bytes,
-                    file_name="Vendor Sample sheet.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="vend_pop_dl_sample",
-                    use_container_width=True
-                )
-            if qc_bytes:
-                st.download_button(
-                    label="📑 QC Exception Sheet (.xlsx)",
-                    data=qc_bytes,
-                    file_name="QC exception Vlookup.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="vend_pop_dl_qc",
-                    use_container_width=True
-                )
-            country_billing_live = safe_get_master_excel_bytes()
-            if country_billing_live:
-                st.download_button(
-                    label="📊 Country Billing Master (.xlsx)",
-                    data=country_billing_live,
-                    file_name="Country Billing.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="vend_pop_dl_billing",
-                    use_container_width=True
-                )
-            else:
-                st.download_button(
-                    label="📊 Country Billing Master (.xlsx)",
-                    data=safe_get_master_excel_bytes(),
-                    file_name="Country Billing.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="vend_pop_dl_billing_alt",
-                    use_container_width=True
-                )
-            if separate_codes_bytes:
-                st.download_button(
-                    label="📁 Separate Codes Ratesheet (.xls)",
-                    data=separate_codes_bytes,
-                    file_name="Separate_codes_sample_ratesheet.xls",
-                    mime="application/vnd.ms-excel",
-                    key="vend_pop_dl_sep_codes",
-                    use_container_width=True
-                )
+    if is_admin:
+        vendor_nav_mode = st.radio(
+            "Vendor Navigation:",
+            ["⚡ Rate Deck Standardizer", "👑 Vendor Admin Controls"],
+            horizontal=True,
+            key="vend_main_nav_toggle",
+            label_visibility="collapsed"
+        )
+    else:
+        vendor_nav_mode = "⚡ Rate Deck Standardizer"
     
     if is_admin and vendor_nav_mode == "👑 Vendor Admin Controls":
-        st.markdown("## 🏢 Vendor Admin Controls")
-        st.caption("Review vendor rate deck processing history and manage company billing pulse rules (billingkaif).")
-        v_tab_hist, v_tab_billing = st.tabs([
-            "📜 User Activity & Processing History",
-            "👑 Master Billing Rules (billingkaif)"
-        ])
-        with v_tab_hist:
-            render_activity_history_tab(prefix="vend")
-        with v_tab_billing:
-            render_billing_rules_tab()
+        st.markdown("## 🏢 Vendor Admin Controls: Country Master Billing")
+        st.caption("Review and manage company billing pulse rules (Country Master Billing). Live edits sync immediately.")
+        render_billing_rules_tab()
         st.stop()
 
 st.write("")
@@ -2295,7 +2218,7 @@ def render_executive_deck_card(idx, item, is_single=False):
             with c_mm:
                 with st.popover(f"⚠️ {len(mismatches)} Mismatch ▾", use_container_width=True, key=f"popover_mm_{idx}_{is_single}"):
                     st.markdown(f"**⚠️ {len(mismatches)} Billing Mismatches Found:**")
-                    st.caption("Vendor pulse differs from standard master (billingkaif.xlsx)")
+                    st.caption("Vendor pulse differs from standard master (Country Billing.xlsx)")
                     mm_table = []
                     for mm in mismatches[:100]:
                         mm_table.append({

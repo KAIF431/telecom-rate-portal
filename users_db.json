@@ -3,7 +3,7 @@
     "kaif": {
       "username": "kaif",
       "name": "Kaif",
-      "role": "admin",
+      "role": "super_admin",
       "password_hash": "ed4065700662a6f22fdd4c31a440762e:150c6e513ae0b22bca397fc4d6865dd5e2bb024d00dd95066536838c719bda1e",
       "email": "kaifofficial4@gmail.com",
       "created_at": "2026-10-16 13:21:43",

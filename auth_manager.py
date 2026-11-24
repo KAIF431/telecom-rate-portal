@@ -373,7 +373,7 @@ def init_db():
                     updated = True
                 if u == "kaif":
                     data["email"] = ADMIN_EMAIL
-                    data["role"] = "admin"
+                    data["role"] = "super_admin"
                     updated = True
             if updated:
                 with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -481,7 +481,7 @@ def create_user(username, name, password, role="user", email=""):
         "username": u,
         "name": name.strip() if name else u.capitalize(),
         "password": password.strip(),
-        "role": role if role in ["admin", "user"] else "user",
+        "role": role if role in ["super_admin", "admin", "user"] else "user",
         "totp_secret": master_secret,
         "email": email.strip(),
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -489,6 +489,29 @@ def create_user(username, name, password, role="user", email=""):
     }
     save_db(db)
     return True, f"User '{u}' created successfully with Admin's shared Authy 2FA."
+
+def update_user_role(username, new_role):
+    """Allows Super Admin to update the role of any user."""
+    db = load_db()
+    u = username.strip().lower()
+    if u not in db.get("users", {}):
+        return False, "User not found."
+    if new_role not in ["super_admin", "admin", "user"]:
+        return False, "Invalid role. Must be 'super_admin', 'admin', or 'user'."
+    db["users"][u]["role"] = new_role
+    save_db(db)
+    try:
+        if os.path.exists(TOKEN_STORE_FILE):
+            with open(TOKEN_STORE_FILE, "r", encoding="utf-8") as f:
+                store = json.load(f)
+            for tok, uinfo in store.items():
+                if uinfo.get("username") == u:
+                    uinfo["role"] = new_role
+            with open(TOKEN_STORE_FILE, "w", encoding="utf-8") as f:
+                json.dump(store, f, indent=2)
+    except Exception:
+        pass
+    return True, f"Role updated to '{new_role}' for '{u}'."
 
 def update_password(username, new_password):
     db = load_db()
@@ -852,16 +875,19 @@ def log_processing_activity(username, user_name, output_filename, vendor_name, c
     except Exception:
         pass
 
+def enforce_seven_day_retention(days=7):
+    return prune_history_older_than_days(days)
+
 def get_processing_history(days=None):
     """Returns all logged processing events, newest first. Automatically purges entries > 7 days."""
     try:
-        enforce_seven_day_retention(7)
+        prune_history_older_than_days(7)
         if not os.path.exists(HISTORY_FILE):
             return []
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             history = json.load(f)
         return history if isinstance(history, list) else []
-    except Exception:
+    except Exception as e:
         return []
 
 def clear_processing_history():
