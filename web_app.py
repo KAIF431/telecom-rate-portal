@@ -431,20 +431,32 @@ st.markdown("""
         font-size: 1rem;
     }
     /* Hide Streamlit default Deploy button, 3-dots menu, footer, and Manage App button */
-    #MainMenu {visibility: hidden !important; display: none !important;}
+    #MainMenu, [data-testid="stMainMenu"] {visibility: hidden !important; display: none !important;}
     footer {visibility: hidden !important; display: none !important;}
     .stDeployButton {display: none !important;}
-    [data-testid="stToolbar"] {visibility: hidden !important; display: none !important;}
+    [data-testid="stToolbarActions"] {display: none !important; visibility: hidden !important;}
     [data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
     [data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
     [data-testid="stManageApp"] {display: none !important; visibility: hidden !important;}
     button:has([data-testid="stIconManageApp"]) {display: none !important; visibility: hidden !important;}
-    div[class*="manageApp"] {display: none !important; visibility: hidden !important;}
-    div[class*="ManageApp"] {display: none !important; visibility: hidden !important;}
-    .viewerBadge_container__1QSob {display: none !important; visibility: hidden !important;}
-    div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
+    div[class*="manageApp"], div[class*="ManageApp"] {display: none !important; visibility: hidden !important;}
+    .viewerBadge_container__1QSob, div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
+    
+    /* Ensure Header & Toolbar are visible so stExpandSidebarButton is shown */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        visibility: visible !important;
+        display: block !important;
+        height: 50px !important;
+        z-index: 999998 !important;
+    }
+    [data-testid="stToolbar"] {
+        background: transparent !important;
+        visibility: visible !important;
+        display: flex !important;
+    }
     
     /* Header container styling */
     header[data-testid="stHeader"] {
@@ -464,7 +476,10 @@ st.markdown("""
         z-index: 999999 !important;
     }
 
-    /* High-visibility Corner Sidebar Toggle Button (Supports all Streamlit versions) */
+    /* High-visibility Corner Sidebar Toggle Button (Supports all Streamlit versions including modern stExpandSidebarButton) */
+    [data-testid="stExpandSidebarButton"],
+    button[data-testid="stExpandSidebarButton"],
+    header [data-testid="stExpandSidebarButton"],
     header [data-testid="stSidebarCollapseButton"],
     header [data-testid="stSidebarCollapsedControl"],
     header [data-testid="collapsedControl"],
@@ -498,6 +513,11 @@ st.markdown("""
         cursor: pointer !important;
         pointer-events: auto !important;
     }
+    [data-testid="stExpandSidebarButton"] svg,
+    [data-testid="stExpandSidebarButton"] span,
+    button[data-testid="stExpandSidebarButton"] svg,
+    button[data-testid="stExpandSidebarButton"] span,
+    header [data-testid="stExpandSidebarButton"] svg,
     header [data-testid="stSidebarCollapseButton"] svg,
     header [data-testid="stSidebarCollapsedControl"] svg,
     header [data-testid="collapsedControl"] svg,
@@ -986,13 +1006,21 @@ with st.sidebar:
     if is_admin:
         sidebar_portals.append("👑 Super Admin (Accounts)")
         
+    if "current_portal_choice" not in st.session_state:
+        st.session_state["current_portal_choice"] = "🏢 Vendor Portal"
+        
+    def sync_from_sidebar():
+        st.session_state["current_portal_choice"] = st.session_state["app_active_portal_selector"]
+        
     active_portal = st.radio(
         "Select Portal:",
         sidebar_portals,
-        index=0,
+        index=sidebar_portals.index(st.session_state["current_portal_choice"]) if st.session_state["current_portal_choice"] in sidebar_portals else 0,
         key="app_active_portal_selector",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        on_change=sync_from_sidebar
     )
+    st.session_state["current_portal_choice"] = active_portal
     
     st.markdown("---")
     cur_u_av = resolve_user_avatar(current_user.get("username", "kaif"))
@@ -1027,9 +1055,10 @@ with top_title_col:
         st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
         st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
         st.markdown("""
-        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center;">
             <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
             <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
+            <span style="background: #FEF3C7; color: #92400E; font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #FDE68A;">👈 Sidebar Menu (Top-Left)</span>
         </div>
         """, unsafe_allow_html=True)
 
