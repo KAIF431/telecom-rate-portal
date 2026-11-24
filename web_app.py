@@ -392,7 +392,7 @@ st.markdown("""
     .block-container {
         padding-top: 1.2rem !important;
         padding-bottom: 2rem !important;
-        padding-left: 1.5rem !important;
+        padding-left: 4.2rem !important;
         padding-right: 1.5rem !important;
         max-width: 98% !important;
     }
@@ -446,27 +446,97 @@ st.markdown("""
     div[class*="viewerBadge"] {display: none !important; visibility: hidden !important;}
     header {background: transparent !important;}
     
-    /* Compact, sleek professional sidebar with corner toggle button */
+    /* Header container styling */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        visibility: visible !important;
+        display: block !important;
+        height: 50px !important;
+        z-index: 999998 !important;
+    }
+    
+    /* Compact, sleek professional sidebar */
     [data-testid="stSidebar"] {
-        min-width: 220px !important;
-        max-width: 240px !important;
+        min-width: 230px !important;
+        max-width: 250px !important;
         background-color: #F8FAFC !important;
         border-right: 1.5px solid #E2E8F0 !important;
-    }
-    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] {
-        visibility: visible !important;
-        display: flex !important;
-        top: 14px !important;
-        left: 14px !important;
-        background: #0E7490 !important;
-        color: #FFFFFF !important;
-        border-radius: 6px !important;
-        box-shadow: 0 2px 6px rgba(14, 116, 144, 0.25) !important;
         z-index: 999999 !important;
     }
-    [data-testid="collapsedControl"] svg, [data-testid="stSidebarCollapsedControl"] svg {
+
+    /* High-visibility Corner Sidebar Toggle Button (Supports all Streamlit versions) */
+    header [data-testid="stSidebarCollapseButton"],
+    header [data-testid="stSidebarCollapsedControl"],
+    header [data-testid="collapsedControl"],
+    header button[data-testid="stBaseButton-headerNoPadding"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"],
+    button[data-testid="stSidebarCollapseButton"],
+    button[data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stBaseButton-headerNoPadding"],
+    button[aria-label*="sidebar" i],
+    button[aria-label*="Sidebar" i] {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 14px !important;
+        background-color: #0E7490 !important;
+        color: #FFFFFF !important;
+        border: 1.5px solid #0891B2 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 3px 10px rgba(14, 116, 144, 0.35) !important;
+        z-index: 99999999 !important;
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+    }
+    header [data-testid="stSidebarCollapseButton"] svg,
+    header [data-testid="stSidebarCollapsedControl"] svg,
+    header [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="collapsedControl"] svg,
+    button[data-testid="stSidebarCollapseButton"] svg,
+    button[data-testid="stSidebarCollapsedControl"] svg,
+    button[data-testid="stBaseButton-headerNoPadding"] svg {
         fill: #FFFFFF !important;
         stroke: #FFFFFF !important;
+        color: #FFFFFF !important;
+        width: 22px !important;
+        height: 22px !important;
+        display: block !important;
+    }
+    header [data-testid="stSidebarCollapseButton"]:hover,
+    header [data-testid="stSidebarCollapsedControl"]:hover,
+    [data-testid="stSidebarCollapseButton"]:hover,
+    [data-testid="stSidebarCollapsedControl"]:hover,
+    button[data-testid="stBaseButton-headerNoPadding"]:hover {
+        background-color: #0891B2 !important;
+        transform: scale(1.05);
+    }
+    
+    /* When Sidebar is expanded: Reset close button inside the sidebar */
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
+        position: static !important;
+        background-color: transparent !important;
+        color: #0E7490 !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: auto !important;
+        height: auto !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {
+        fill: #0E7490 !important;
+        stroke: #0E7490 !important;
+        color: #0E7490 !important;
     }
 
     /* Segmented Pill Navigation Control */
@@ -903,18 +973,65 @@ def get_avatar_base64(filename):
             return ""
     return ""
 
-# ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
-top_title_col, top_user_info, top_avatar_col = st.columns([3.3, 0.7, 0.28])
-
-with top_title_col:
-    st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
+# ----------------- SIDEBAR NAVIGATION (MOUNTED FIRST) -----------------
+with st.sidebar:
     st.markdown("""
-    <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
-        <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
-        <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
+    <div style="padding: 6px 0 10px 0; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 12px;">
+        <div style="font-size: 0.70rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B;">Navigation</div>
+        <div style="font-size: 1.05rem; font-weight: 800; color: #0C4A6E;">🌐 Telecom Hub</div>
     </div>
     """, unsafe_allow_html=True)
+    
+    sidebar_portals = ["🏢 Vendor Portal", "👥 Customer Portal"]
+    if is_admin:
+        sidebar_portals.append("👑 Super Admin (Accounts)")
+        
+    active_portal = st.radio(
+        "Select Portal:",
+        sidebar_portals,
+        index=0,
+        key="app_active_portal_selector",
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    cur_u_av = resolve_user_avatar(current_user.get("username", "kaif"))
+    cur_av_b64 = get_avatar_base64(cur_u_av)
+    st.markdown(f"""
+    <div style="background: #F1F5F9; border-radius: 8px; padding: 10px; font-size: 0.78rem; display: flex; align-items: center; gap: 10px;">
+        <img src="data:image/png;base64,{cur_av_b64}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover;" />
+        <div>
+            <div style="font-weight: 700; color: #0F172A;">{active_member}</div>
+            <div style="font-size: 0.70rem; color: #64748B;">{'👑 Super Admin' if is_admin else '👤 Member'}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ----------------- MAIN PORTAL HEADER (RouteTrust Right Profile Style) -----------------
+top_title_col, top_user_info, top_avatar_col = st.columns([3.2, 0.65, 0.45])
+
+with top_title_col:
+    if active_portal == "👑 Super Admin (Accounts)":
+        st.markdown('<div class="main-title">👑 Super Admin Control Panel</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-title">Master user management: View all IDs & passwords, edit display names, create/delete accounts, and reset credentials.</div>', unsafe_allow_html=True)
+    elif active_portal == "👥 Customer Portal":
+        st.markdown('<div class="main-title">👥 Customer Rate Sheet Standardizer</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-title">Standardize customer rate decks against Master A-Z CC & CLI ratesheets with zero data loss.</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Customer Engine</span>
+            <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z Master Matching</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+            <span style="background: #E0F2FE; color: #0369A1; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BAE6FD;">Wholesale Telecom Engine</span>
+            <span style="background: #F0FDF4; color: #166534; font-weight: 600; font-size: 0.74rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #BBF7D0;">A to Z + NANP Filter</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 curr_u = (current_user.get("username") or "").strip().lower() if isinstance(current_user, dict) else ""
 active_avatar_file = (current_user.get("avatar") if isinstance(current_user, dict) else None) or resolve_user_avatar(curr_u)
@@ -1881,39 +1998,7 @@ def render_customer_standardizer_view():
             st.success(f"📂 **{len(cust_files)} customer file(s) loaded successfully.**")
             st.info("⚡ Customer standardizer processing rules will execute here once customer matching rules are configured.")
 
-# ----------------- SIDEBAR NAVIGATION -----------------
-with st.sidebar:
-    st.markdown("""
-    <div style="padding: 6px 0 10px 0; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 12px;">
-        <div style="font-size: 0.70rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748B;">Navigation</div>
-        <div style="font-size: 1.05rem; font-weight: 800; color: #0C4A6E;">🌐 Telecom Hub</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    sidebar_portals = ["🏢 Vendor Portal", "👥 Customer Portal"]
-    if is_admin:
-        sidebar_portals.append("👑 Super Admin (Accounts)")
-        
-    active_portal = st.radio(
-        "Select Portal:",
-        sidebar_portals,
-        index=0,
-        key="app_active_portal_selector",
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    cur_u_av = resolve_user_avatar(current_user.get("username", "kaif"))
-    cur_av_b64 = get_avatar_base64(cur_u_av)
-    st.markdown(f"""
-    <div style="background: #F1F5F9; border-radius: 8px; padding: 10px; font-size: 0.78rem; display: flex; align-items: center; gap: 10px;">
-        <img src="data:image/png;base64,{cur_av_b64}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover;" />
-        <div>
-            <div style="font-weight: 700; color: #0F172A;">{active_member}</div>
-            <div style="font-size: 0.70rem; color: #64748B;">{'👑 Super Admin' if is_admin else '👤 Member'}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# Sidebar already mounted at top
 
 # ----------------- ROUTER DISPATCH -----------------
 if active_portal == "👑 Super Admin (Accounts)":
