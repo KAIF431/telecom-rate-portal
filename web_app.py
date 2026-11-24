@@ -139,26 +139,44 @@ def load_excel_safely(f_content, fname):
 def load_csv_safely(f_content, nrows=None):
     """
     Safely loads any CSV file, including ragged vendor sheets with multi-line metadata headers,
-    inconsistent column counts, or unusual delimiters (comma, semicolon, tab, pipe).
+    inconsistent column counts, unusual delimiters (comma, semicolon, tab, pipe),
+    multi-encoding fallbacks (utf-8, latin-1, cp1252), and European decimal commas.
     """
     f_content.seek(0)
     raw = f_content.read()
+    text = ""
     if isinstance(raw, bytes):
-        try:
-            text = raw.decode('utf-8')
-        except Exception:
-            text = raw.decode('latin-1', errors='ignore')
+        for enc in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+            try:
+                text = raw.decode(enc)
+                break
+            except Exception:
+                continue
+        if not text:
+            text = raw.decode('latin-1', errors='replace')
     else:
         text = str(raw)
 
     f_content.seek(0)
 
+    # Detect best delimiter by counting candidates across the first 10 non-empty lines
+    lines = [l for l in text.splitlines() if l.strip()][:10]
+    best_sep = ','
+    if lines:
+        counts = {sep: sum(l.count(sep) for l in lines) for sep in [';', '\t', '|', ',']}
+        if counts[';'] > counts[','] and counts[';'] >= len(lines):
+            best_sep = ';'
+        elif counts['\t'] > counts[','] and counts['\t'] >= len(lines):
+            best_sep = '\t'
+        elif counts['|'] > counts[','] and counts['|'] >= len(lines):
+            best_sep = '|'
+
     try:
-        return pd.read_csv(io.StringIO(text), header=None, low_memory=False, nrows=nrows)
+        return pd.read_csv(io.StringIO(text), sep=best_sep, header=None, low_memory=False, nrows=nrows)
     except Exception:
         pass
 
-    for sep in [',', ';', '\t', '|']:
+    for sep in [best_sep, ',', ';', '\t', '|']:
         try:
             reader = csv.reader(io.StringIO(text), delimiter=sep)
             rows = []
@@ -1526,7 +1544,7 @@ if is_admin and admin_nav_mode == "👑 Admin Management Panel":
                             "Vendor / Trunk Name": entry.get("vendor_name"),
                             "Standardized File": entry.get("output_filename"),
                             "Clean Rows": f"{entry.get('clean_rows', 0):,}",
-                            "QC Excluded": f"{entry.get('qc_excluded', 0):,}",
+                            "Blocked Codes": f"{entry.get('qc_excluded', 0):,}",
                             "Duration": f"{elapsed}s"
                         })
                     
@@ -1975,7 +1993,7 @@ def render_executive_deck_card(idx, item, is_single=False):
                         f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
                         f'</div>'
                         f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
-                        f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
+                        f'<span style="color: #92400E; font-weight: 700;">🚫 BLOCKED CODES</span>'
                         f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
                         f'</div>'
                         f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
@@ -2024,7 +2042,7 @@ def render_executive_deck_card(idx, item, is_single=False):
                         f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{clean_rows_display:,}</span>'
                         f'</div>'
                         f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px;">'
-                        f'<span style="color: #92400E; font-weight: 700;">⚠️ QC EXCLUDED</span>'
+                        f'<span style="color: #92400E; font-weight: 700;">🚫 BLOCKED CODES</span>'
                         f'<span style="color: #B45309; font-weight: 800; font-size: 0.95rem;">{qc_ex:,}</span>'
                         f'</div>'
                         f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">'
@@ -2158,7 +2176,7 @@ if st.session_state.processed_results:
                 "#": idx + 1,
                 "Standardized File": item["filename"],
                 "Clean Rows": f"{s.get('final_clean_rows', item.get('rows_count', 0)):,}",
-                "QC Excluded": f"{s.get('qc_excluded', 0):,}",
+                "Blocked Codes": f"{s.get('qc_excluded', 0):,}",
                 "NANP (+1)": f"{s.get('nanp_excluded', 0):,}",
                 "Status": "✅ Complete"
             })
@@ -2280,23 +2298,31 @@ if uploaded_files:
                 try:
                     if fname.lower().endswith(('.xlsx', '.xlsm', '.xls', '.xlsb')):
                         xl = load_excel_safely(f_content, fname)
-                        best_sheet = None
-                        best_score = -1
-                        for s_name in xl.sheet_names:
-                            try:
-                                temp_sample = xl.parse(s_name, header=None, nrows=40)
-                                if len(temp_sample) < 2:
-                                    continue
-                                _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
-                                score = len(col_map)
-                                if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
-                                    score += 15
-                                if score > best_score:
-                                    best_score = score
-                                    best_sheet = s_name
-                            except Exception:
-                                pass
-                        target_sheet = best_sheet if best_sheet is not None else 0
+                        if len(xl.sheet_names) == 1:
+                            target_sheet = xl.sheet_names[0]
+                        else:
+                            best_sheet = None
+                            best_score = -1
+                            for s_name in xl.sheet_names:
+                                try:
+                                    temp_sample = xl.parse(s_name, header=None, nrows=40)
+                                    if len(temp_sample) < 2:
+                                        continue
+                                    _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
+                                    score = len(col_map)
+                                    if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
+                                        score += 20
+                                    s_clean = str(s_name).strip().lower()
+                                    if any(r in s_clean for r in ['rate', 'tariff', 'price', 'plan']):
+                                        score += 10
+                                    if score > best_score:
+                                        best_score = score
+                                        best_sheet = s_name
+                                        if score >= 25:
+                                            break
+                                except Exception:
+                                    pass
+                            target_sheet = best_sheet if best_sheet is not None else 0
                         df_raw = xl.parse(target_sheet, header=None)
                     elif fname.lower().endswith('.csv'):
                         df_raw = load_csv_safely(f_content)

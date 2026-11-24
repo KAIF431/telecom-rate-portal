@@ -396,18 +396,26 @@ def apply_standard_billing_to_dataframe(df_clean, mismatch_list=None):
     df_copy['Increment'] = incs
     return df_copy
 
+_cached_master_excel_bytes = None
+
 def get_master_excel_bytes():
     """
     Returns live binary content of the Master Country Billing Excel sheet.
     Can be downloaded by any user or administrator.
     If on-disk files are not found, dynamically generates the Excel sheet from master rules in memory.
+    Caches the binary in memory for instant (<0.01s) download on subsequent clicks.
     """
+    global _cached_master_excel_bytes
+    if _cached_master_excel_bytes and len(_cached_master_excel_bytes) > 1000:
+        return _cached_master_excel_bytes
+
     for p in [TEMPLATE_EXCEL_PATH, MASTER_EXCEL_PATH, VENDOR_RATES_EXCEL_PATH]:
         if os.path.exists(p):
             try:
                 with open(p, "rb") as f:
                     content = f.read()
                     if content and len(content) > 1000:
+                        _cached_master_excel_bytes = content
                         return content
             except Exception:
                 pass
@@ -423,7 +431,8 @@ def get_master_excel_bytes():
             df = df[[c for c in cols if c in df.columns]]
             buf = io.BytesIO()
             df.to_excel(buf, index=False, engine="openpyxl")
-            return buf.getvalue()
+            _cached_master_excel_bytes = buf.getvalue()
+            return _cached_master_excel_bytes
     except Exception:
         pass
     return b""

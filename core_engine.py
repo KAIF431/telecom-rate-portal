@@ -131,7 +131,10 @@ def detect_header_row_and_columns(df_raw):
             # (Check BEFORE dial code so 'dst code name', 'dest name', 'code name' are mapped to destination,
             # BUT do not capture code columns like 'destination code', 'dest code', 'country code'!)
             elif (
-                (any(k in v for k in ['destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name', 'area name', 'zone name', 'country name', 'city name'])
+                (any(k in v for k in [
+                    'destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name', 'area name', 'zone name', 'country name', 'city name',
+                    'rate summary', 'rates summary', 'rate center', 'destination summary'
+                ])
                  or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country', 'region', 'area', 'zone', 'city']))
                  or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description', 'region', 'regions', 'region name', 'area', 'zone'])
                      and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
@@ -146,6 +149,7 @@ def detect_header_row_and_columns(df_raw):
                 'dest code', 'dest codes', 'destination code', 'destination codes', 'destcode', 'destcodes',
                 'dst code', 'dst codes', 'dstcode', 'dstcodes', 'dst_code', 'dst. code',
                 'area prefix', 'area prefixes', 'dest prefix', 'destination prefix', 'dial prefix',
+                'rate key', 'rate keys', 'rate_key', 'ratekey', 'code key', 'code keys', 'dial key', 'dial keys', 'prefix key',
                 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
                 'dialed digit', 'dialed digits', 'dialled digit', 'dialled digits', 'dialed number', 'dialed numbers',
                 'calling code', 'call code', 'dial digit', 'dial digits', 'e164'
@@ -176,10 +180,13 @@ def detect_header_row_and_columns(df_raw):
                         mapping['rate_prefix_fallback'] = col_idx
 
             # 4. Rate keywords (exclude table/sheet banners, decks, cards, zones, and previous rates)
-            elif (any(k in v for k in ['new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min', 'allday', 'all day', 'alldays', 'all days', 'flat rate', 'flat']) or '$' in val) \
-                and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective']) \
+            elif (any(k in v for k in [
+                'new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min', 'allday', 'all day', 'alldays', 'all days', 'flat rate', 'flat',
+                'inter rate', 'inter. rate', 'inter_rate', 'inter.rate', 'intra rate', 'intra. rate', 'standard rate', 'indet rate'
+            ]) or '$' in val) \
+                and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective', 'key']) \
                 and not re.search(r'\b(?:current|old|prev|previous|existing|base|diff)\b', v):
-                if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v:
+                if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v or 'inter rate' in v:
                     mapping['rate'] = col_idx
                     kw_score += 7
 
@@ -297,6 +304,65 @@ def detect_header_row_and_columns(df_raw):
             best_total_score = total_score
             best_row_idx = row_idx
             best_mapping = {k: v for k, v in mapping.items() if k != 'dial_code_is_generic_prefix'}
+
+    # Zero-Maintenance Data Pattern Recognition Fallback:
+    # If no standard header keywords matched, scan sample data directly for telecom signatures
+    if not best_mapping or 'dial_code' not in best_mapping:
+        sample_slice = df_raw.iloc[:15].copy()
+        if len(sample_slice) >= 1 and sample_slice.shape[1] >= 2:
+            cand_code = None
+            cand_dest = None
+            cand_rate = None
+            cand_date = None
+
+            for c in range(sample_slice.shape[1]):
+                vals = sample_slice.iloc[:, c].dropna().astype(str).str.strip().tolist()
+                if not vals:
+                    continue
+                # 1. Check for pure numeric dial codes (e.g. 55999, 44123)
+                digit_matches = sum(1 for v in vals if re.match(r'^\+?\d{2,12}$', v.split('.')[0]))
+                if digit_matches / len(vals) >= 0.6 and cand_code is None:
+                    cand_code = c
+                    continue
+
+                # 2. Check for text destination names (contains 3+ letters and not pure numbers)
+                text_matches = sum(1 for v in vals if re.search(r'[a-zA-Z]{3,}', v) and not re.match(r'^\d{4}[-/]', v))
+                if text_matches / len(vals) >= 0.6 and cand_dest is None:
+                    cand_dest = c
+                    continue
+
+                # 3. Check for rates (decimal floats like 0.034 or 0,034)
+                rate_matches = 0
+                for v in vals:
+                    v_clean = re.sub(r'[\$€£\s]', '', v).replace(',', '.')
+                    try:
+                        f_v = float(v_clean)
+                        if 0 <= f_v <= 50.0:
+                            rate_matches += 1
+                    except Exception:
+                        pass
+                if rate_matches / len(vals) >= 0.6 and cand_rate is None:
+                    cand_rate = c
+                    continue
+
+                # 4. Check for dates
+                date_matches = sum(1 for v in vals if re.search(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}', v))
+                if date_matches / len(vals) >= 0.5 and cand_date is None:
+                    cand_date = c
+                    continue
+
+            if cand_code is not None:
+                pat_map = {'dial_code': cand_code}
+                if cand_dest is not None:
+                    pat_map['destination'] = cand_dest
+                if cand_rate is not None:
+                    pat_map['rate'] = cand_rate
+                if cand_date is not None:
+                    pat_map['effective_date'] = cand_date
+                first_code_val = str(df_raw.iloc[0, cand_code]).strip().split('.')[0]
+                if re.match(r'^\+?\d{1,12}$', first_code_val):
+                    return -1, pat_map
+                return 0, pat_map
 
     return best_row_idx, best_mapping
 
@@ -428,8 +494,12 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     """
     header_row_idx, col_map = detect_header_row_and_columns(df_raw)
     
-    df_data = df_raw.iloc[header_row_idx + 1:].copy().reset_index(drop=True)
-    header_names = df_raw.iloc[header_row_idx].values
+    if header_row_idx < 0:
+        df_data = df_raw.copy().reset_index(drop=True)
+        header_names = [f"Col_{i}" for i in range(df_raw.shape[1])]
+    else:
+        df_data = df_raw.iloc[header_row_idx + 1:].copy().reset_index(drop=True)
+        header_names = df_raw.iloc[header_row_idx].values
 
     code_idx = col_map.get('dial_code', 0)
     dest_idx = col_map.get('destination', 1 if code_idx != 1 else 0)
