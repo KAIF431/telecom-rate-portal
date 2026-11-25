@@ -16,7 +16,9 @@ FALLBACK_QC_FILE = r"C:\vendor Rates\QC exception Vlookup.xlsx"
 
 # Default QC Exception codes (Satellite, High Risk, Freephone, and Austria special codes)
 DEFAULT_QC_CODES = [
-    "871", "872", "873", "874", "875", "876", "877", "879", "884", "885", "887", "889",
+    # Global Satellite & Maritime prefixes (ITU-T E.164)
+    "87", "870", "871", "872", "873", "874", "875", "876", "877", "878", "879",
+    "881", "882", "883", "884", "885", "887", "888", "889",
     "969", "979", "999", "1855", "1866", "1877", "1888", "2897", "6993", "6998",
     "388", "800", "991", "808", "684", "1671", "671",
     # Austria Special / High Risk codes
@@ -714,10 +716,10 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     dest_series = df_data.iloc[:, dest_idx].fillna('').astype(str).str.upper().str.strip()
     is_caribbean = code_series.str.startswith(CARIBBEAN_NANP_PREFIXES) | dest_series.str.contains(carib_dest_pattern, regex=True, na=False)
 
-    # QC Exception Mask (Codes + Destinations: Freephone, Satellite, Inmarsat)
+    # QC Exception Mask (Codes + Destinations: Freephone, Satellite, Inmarsat, GMSS, Thuraya, Maritime)
     qc_tuple = tuple(qc_codes)
-    is_qc_code = code_series.str.startswith(qc_tuple)
-    qc_dest_pattern = r'\b(?:INTERNATIONAL\s+FREEPHONE|FREEPHONE|FREE\s*PHONE|SATELLITE|INMARSAT)\b'
+    is_qc_code = code_series.str.startswith(qc_tuple) | code_series.str.startswith('87') | (code_series == '87')
+    qc_dest_pattern = r'\b(?:INTERNATIONAL\s+FREEPHONE|FREEPHONE|FREE\s*PHONE|INMARSAT|IRIDIUM|GLOBALSTAR|THURAYA|MARITIME)\b|SATELLITE'
     is_qc_dest = dest_series.str.contains(qc_dest_pattern, regex=True, na=False)
     is_qc_mask = (is_qc_code | is_qc_dest) & ~is_caribbean
 
