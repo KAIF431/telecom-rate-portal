@@ -2100,22 +2100,22 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     col_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
-        if any(x in cl for x in ['dial code', 'dialcode', 'prefix']) or cl == 'code':
+        if any(x in cl for x in ['rate key', 'dial code', 'dialcode', 'prefix', 'code']):
             if 'Dial Code' not in col_map.values():
                 col_map[c] = 'Dial Code'
-        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']):
+        elif any(x in cl for x in ['rate summary', 'summary', 'destination', 'country', 'description']):
             if 'Summary' not in col_map.values():
                 col_map[c] = 'Summary'
-        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) or cl == 'rate':
+        elif any(x in cl for x in ['inter. rate', 'inter rate', 'new rate', 'current rate', 'tariff', 'price']) or cl == 'rate':
             if 'New Rate' not in col_map.values():
                 col_map[c] = 'New Rate'
-        elif any(x in cl for x in ['minimum', 'pulse1']) or cl == 'min':
+        elif any(x in cl for x in ['dur min', 'minimum', 'pulse1', 'min']):
             if 'Minimum' not in col_map.values():
                 col_map[c] = 'Minimum'
-        elif any(x in cl for x in ['increment', 'interval', 'pulse2']) or cl == 'inc':
+        elif any(x in cl for x in ['dur inc', 'increment', 'interval', 'pulse2', 'inc']):
             if 'Increment' not in col_map.values():
                 col_map[c] = 'Increment'
-        elif any(x in cl for x in ['effective date', 'effective', 'start date']) or cl == 'date':
+        elif any(x in cl for x in ['start date', 'effective date', 'effective', 'date']):
             if 'Effective Date' not in col_map.values():
                 col_map[c] = 'Effective Date'
         elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']):
@@ -2138,6 +2138,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     # Clean strings
     for col in ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']:
         df[col] = df[col].astype(str).str.strip()
+    df['Effective Date'] = df['Effective Date'].astype(str).str.replace(r'\s+\d{2}:\d{2}:\d{2}.*$', '', regex=True)
 
     # 2. Filter rows where comment contains 'delete'
     deleted_comments_count = 0
