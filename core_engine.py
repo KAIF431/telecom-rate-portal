@@ -331,6 +331,8 @@ def detect_header_row_and_columns(df_raw):
             cand_dest = None
             cand_rate = None
             cand_date = None
+            cand_min = None
+            cand_inc = None
 
             for c in range(sample_slice.shape[1]):
                 vals = sample_slice.iloc[:, c].dropna().astype(str).str.strip().tolist()
@@ -368,6 +370,21 @@ def detect_header_row_and_columns(df_raw):
                     cand_date = c
                     continue
 
+                # 5. Check for pulse / increments (e.g. 30, 60, 1, 6)
+                pulse_matches = 0
+                for v in vals:
+                    try:
+                        iv = int(float(v))
+                        if iv in [0, 1, 6, 30, 60]:
+                            pulse_matches += 1
+                    except Exception:
+                        pass
+                if pulse_matches / len(vals) >= 0.6:
+                    if cand_min is None:
+                        cand_min = c
+                    elif cand_inc is None and c != cand_min:
+                        cand_inc = c
+
             if cand_code is not None:
                 pat_map = {'dial_code': cand_code}
                 if cand_dest is not None:
@@ -376,6 +393,9 @@ def detect_header_row_and_columns(df_raw):
                     pat_map['rate'] = cand_rate
                 if cand_date is not None:
                     pat_map['effective_date'] = cand_date
+                if cand_min is not None and cand_inc is not None:
+                    pat_map['min'] = cand_min
+                    pat_map['inc'] = cand_inc
                 first_code_val = str(df_raw.iloc[0, cand_code]).strip().split('.')[0]
                 if re.match(r'^\+?\d{1,12}$', first_code_val):
                     return -1, pat_map
@@ -582,6 +602,9 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         pulse_idx = combined_pulse_col
         min_col_idx = None
         inc_col_idx = None
+    elif 'min' in col_map and 'inc' in col_map:
+        min_col_idx = col_map['min']
+        inc_col_idx = col_map['inc']
     else:
         # Separate min/inc if exists (supports Minimum/Increment, Initial/Recurring, and carrier codes like MC/CI)
         min_col_idx = None
@@ -756,10 +779,12 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
 
     # 3. Vectorized USA / Canada / Puerto Rico (+1) Mask
     # Strictly exclude USA domestic (+1), Canada (+1), and Puerto Rico (+1), preserving Caribbean A to Z
-    nanp_pattern = r'\b(?:USA|U\.S\.A|UNITED STATES|AMERICA|CANADA|PUERTO RICO|PR)\b'
+    # Note: 'PR' abbreviation is strictly bound to +1 country code so that sovereign states like Brazil Paraná (PR) are never excluded!
+    nanp_pattern = r'\b(?:USA|U\.S\.A|UNITED STATES|AMERICA|CANADA|PUERTO\s*RICO)\b'
     is_nanp_dest = dest_series.str.contains(nanp_pattern, regex=True, na=False) & ~is_caribbean
+    is_pr_abbrev = dest_series.str.contains(r'\bPR\b', regex=True, na=False) & code_series.str.startswith('1') & ~is_caribbean
     is_nanp_code = ((code_series == '1') | (code_series.str.startswith('1') & (code_series.str.len() >= 4) & code_series.str.isdigit())) & ~is_caribbean
-    is_nanp_mask = is_nanp_dest | is_nanp_code
+    is_nanp_mask = is_nanp_dest | is_pr_abbrev | is_nanp_code
 
     # Exclusions
     is_excluded_mask = is_qc_mask | is_nanp_mask
@@ -864,8 +889,8 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
                     m_final = i_res
                     i_final = i_res
                 else:
-                    m_final = m_res
-                    i_final = i_res
+                    m_final = m_res if (m_res is not None and m_res > 0) else 1
+                    i_final = i_res if (i_res is not None and i_res > 0) else 1
             else:
                 m_final = m_res if m_res is not None else i_res
                 i_final = i_res if i_res is not None else m_res
