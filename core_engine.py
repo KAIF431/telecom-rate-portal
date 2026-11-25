@@ -125,13 +125,16 @@ def detect_header_row_and_columns(df_raw):
             # 1. Status / Changes (check before rate so 'rate changes' is mapped to status)
             if any(k in v for k in ['rate changes', 'rate change', 'changes', 'status', 'comment', 'action', 'change', 'diff status', 'remarks', 'type', 'notes', 'diff']) \
                 and not any(bad in v for bad in ['table', 'sheet', 'notice']):
-                if 'status' not in mapping or 'change' in v or 'status' in v or 'diff' in v:
+                is_high_status = any(k in v for k in ['rate changes', 'rate change', 'changes', 'status', 'change', 'action', 'diff status', 'diff'])
+                curr_is_high_status = mapping.get('status_is_high', False)
+                if 'status' not in mapping or (is_high_status and not curr_is_high_status):
                     mapping['status'] = col_idx
+                    mapping['status_is_high'] = is_high_status
                     kw_score += 4
 
             # 2. Destination / Summary with 'name', 'desc', 'location', 'country'
             # (Check BEFORE dial code so 'dst code name', 'dest name', 'code name' are mapped to destination,
-            # BUT do not capture code columns like 'destination code', 'dest code', 'country code'!)
+            # BUT do not capture code columns like 'destination code', 'dest code', 'country code', and NOT time zones/bands!)
             elif (
                 (any(k in v for k in [
                     'destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name', 'area name', 'zone name', 'country name', 'city name',
@@ -140,7 +143,8 @@ def detect_header_row_and_columns(df_raw):
                  or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country', 'region', 'area', 'zone', 'city']))
                  or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description', 'region', 'regions', 'region name', 'area', 'zone'])
                      and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
-            ) and (any(n in v for n in ['name', 'desc', 'description']) or not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code', 'area code', 'area prefix'])):
+            ) and (any(n in v for n in ['name', 'desc', 'description']) or not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code', 'area code', 'area prefix'])) \
+              and not any(tb in v for tb in ['time', 'peak', 'offpeak', 'off peak', 'band', 'timezone', 'effective', 'expiry', 'valid']):
                 if 'destination' not in mapping:
                     mapping['destination'] = col_idx
                     kw_score += 7
@@ -150,20 +154,26 @@ def detect_header_row_and_columns(df_raw):
 
             # 3. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
             elif (any(k in v for k in [
+                'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
                 'dial code', 'dial codes', 'dialcode', 'dialcodes',
                 'dest code', 'dest codes', 'destination code', 'destination codes', 'destcode', 'destcodes',
                 'dst code', 'dst codes', 'dstcode', 'dstcodes', 'dst_code', 'dst. code',
                 'region code', 'region codes', 'zone code', 'zone codes', 'city code', 'city codes', 'telecom code',
                 'area prefix', 'area prefixes', 'dest prefix', 'destination prefix', 'dial prefix',
                 'rate key', 'rate keys', 'rate_key', 'ratekey', 'code key', 'code keys', 'dial key', 'dial keys', 'prefix key',
-                'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
                 'dialed digit', 'dialed digits', 'dialled digit', 'dialled digits', 'dialed number', 'dialed numbers',
                 'calling code', 'call code', 'dial digit', 'dial digits', 'e164'
-            ]) or (any(c in v for c in ['code', 'codes', 'prefix', 'dial']) and not any(bad in v for bad in ['name', 'desc', 'description', 'tech', 'trunk prefix', 'routing prefix', 'gateway', 'carrier', 'account']))) and not any(n in v for n in ['name', 'desc', 'description']):
-                if 'dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False):
+            ]) or v in ['code', 'codes', 'dst', 'dst_code', 'dialcode']) \
+                and not any(n in v for n in ['name', 'desc', 'description']) \
+                and not any(c in v for c in ['country code', 'country codes', 'countrycode', 'county code', 'county codes', 'countycode', 'area code', 'area codes', 'areacode', 'areacodes']):
+                
+                is_complete = any(cp in v for cp in ['complete code', 'full code', 'complete dial code', 'dial code', 'dialcode', 'region code', 'dest code', 'destination code'])
+                curr_is_complete = mapping.get('dial_code_is_complete', False)
+                if 'dial_code' not in mapping or (is_complete and not curr_is_complete):
                     mapping['dial_code'] = col_idx
+                    mapping['dial_code_is_complete'] = is_complete
                     mapping['dial_code_is_generic_prefix'] = False
-                    kw_score += 8
+                    kw_score += 10 if is_complete else 8
 
             elif any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode']):
                 if 'country_code' not in mapping:
@@ -310,7 +320,7 @@ def detect_header_row_and_columns(df_raw):
         if total_score > best_total_score:
             best_total_score = total_score
             best_row_idx = row_idx
-            best_mapping = {k: v for k, v in mapping.items() if k != 'dial_code_is_generic_prefix'}
+            best_mapping = {k: v for k, v in mapping.items() if k not in ['dial_code_is_generic_prefix', 'dial_code_is_complete', 'status_is_high']}
 
     # Zero-Maintenance Data Pattern Recognition Fallback:
     # If no standard header keywords matched, scan sample data directly for telecom signatures
