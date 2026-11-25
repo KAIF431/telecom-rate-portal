@@ -144,18 +144,22 @@ def detect_header_row_and_columns(df_raw):
                 if 'destination' not in mapping:
                     mapping['destination'] = col_idx
                     kw_score += 7
+                elif 'destination_detail' not in mapping:
+                    mapping['destination_detail'] = col_idx
+                    kw_score += 4
 
             # 3. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
             elif (any(k in v for k in [
                 'dial code', 'dial codes', 'dialcode', 'dialcodes',
                 'dest code', 'dest codes', 'destination code', 'destination codes', 'destcode', 'destcodes',
                 'dst code', 'dst codes', 'dstcode', 'dstcodes', 'dst_code', 'dst. code',
+                'region code', 'region codes', 'zone code', 'zone codes', 'city code', 'city codes', 'telecom code',
                 'area prefix', 'area prefixes', 'dest prefix', 'destination prefix', 'dial prefix',
                 'rate key', 'rate keys', 'rate_key', 'ratekey', 'code key', 'code keys', 'dial key', 'dial keys', 'prefix key',
                 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
                 'dialed digit', 'dialed digits', 'dialled digit', 'dialled digits', 'dialed number', 'dialed numbers',
                 'calling code', 'call code', 'dial digit', 'dial digits', 'e164'
-            ]) or v in ['code', 'codes', 'dst', 'dst_code', 'dialcode']) and not any(n in v for n in ['name', 'desc', 'description']):
+            ]) or (any(c in v for c in ['code', 'codes', 'prefix', 'dial']) and not any(bad in v for bad in ['name', 'desc', 'description', 'tech', 'trunk prefix', 'routing prefix', 'gateway', 'carrier', 'account']))) and not any(n in v for n in ['name', 'desc', 'description']):
                 if 'dial_code' not in mapping or mapping.get('dial_code_is_generic_prefix', False):
                     mapping['dial_code'] = col_idx
                     mapping['dial_code_is_generic_prefix'] = False
@@ -382,15 +386,15 @@ def analyze_vendor_comments(df_slice, status_col_idx):
         v_low = v.lower().strip()
         if not v_low or v_low in ['nan', 'none', 'null', '']:
             continue
-        if any(k in v_low for k in ['inc', 'increase', 'up']):
+        if any(k in v_low for k in ['inc', 'increase', 'up']) or v_low == 'i':
             found_types.add('inc')
-        elif any(k in v_low for k in ['dec', 'decrease', 'down']):
+        elif any(k in v_low for k in ['dec', 'decrease', 'down']) or v_low == 'd':
             found_types.add('dec')
-        elif any(k in v_low for k in ['same', 'unchange', 'no change']):
+        elif any(k in v_low for k in ['same', 'unchange', 'no change', 'nc']) or v_low == 's':
             found_types.add('same')
-        elif any(k in v_low for k in ['del', 'delete', 'remove', 'block', 'close']):
+        elif any(k in v_low for k in ['del', 'delete', 'remove', 'block', 'close']) or v_low == 'b':
             found_types.add('delete')
-        elif any(k in v_low for k in ['new']):
+        elif any(k in v_low for k in ['new']) or v_low == 'n':
             found_types.add('new')
 
     if not found_types:
@@ -714,7 +718,23 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
     )
     carib_dest_pattern = r'\b(?:JAMAICA|BAHAMAS|BARBADOS|DOMINICAN|CAYMAN|BERMUDA|TRINIDAD|ANTIGUA|ANGUILLA|GRENADA|SAINT\s+LUCIA|ST\.?\s*LUCIA|SAINT\s+VINCENT|ST\.?\s*VINCENT|SAINT\s+KITTS|ST\.?\s*KITTS|DOMINICA|MONTSERRAT|TURKS|SINT\s+MAARTEN)\b'
     
-    dest_series = df_data.iloc[:, dest_idx].fillna('').astype(str).str.upper().str.strip()
+    dest_detail_idx = col_map.get('destination_detail', None)
+    if dest_detail_idx is not None:
+        c_raw = df_data.iloc[:, dest_idx].fillna('').astype(str).str.strip()
+        d_raw = df_data.iloc[:, dest_detail_idx].fillna('').astype(str).str.strip()
+        def _combine_dest(c, d):
+            if not d or d.lower() in ['proper', 'nan', 'none', '-', '']:
+                return c
+            if c.lower() in d.lower():
+                return d
+            return f"{c} {d}".strip()
+        combined_dest_vals = [_combine_dest(c, d) for c, d in zip(c_raw, d_raw)]
+        dest_series = pd.Series(combined_dest_vals, index=df_data.index).str.upper().str.strip()
+        dest_display_series = pd.Series(combined_dest_vals, index=df_data.index)
+    else:
+        dest_series = df_data.iloc[:, dest_idx].fillna('').astype(str).str.upper().str.strip()
+        dest_display_series = df_data.iloc[:, dest_idx].fillna('').astype(str).str.strip()
+
     is_caribbean = code_series.str.startswith(CARIBBEAN_NANP_PREFIXES) | dest_series.str.contains(carib_dest_pattern, regex=True, na=False)
 
     # QC Exception Mask (Codes + Destinations: Freephone, Satellite, Inmarsat, GMSS, Thuraya, Maritime)
@@ -886,8 +906,10 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
             mins = [default_header_min] * len(df_valid)
             incs = [default_header_inc] * len(df_valid)
         else:
-            mins = [None] * len(df_valid)
-            incs = [None] * len(df_valid)
+            # Universal Wholesale Telecom Default is 1/1 (Minimum: 1, Increment: 1)
+            # Never leave pulses as None, ensuring standard 6 columns in every output!
+            mins = [1] * len(df_valid)
+            incs = [1] * len(df_valid)
 
     # 8. Clean Dial Codes
     clean_codes = []
@@ -898,7 +920,7 @@ def fast_process_dataframe(df_raw, qc_codes, source_filename=""):
         else:
             clean_codes.append(c_str)
 
-    valid_summaries = df_valid.iloc[:, dest_idx].fillna('').astype(str).str.strip().tolist()
+    valid_summaries = dest_display_series[valid_mask].fillna('').astype(str).str.strip().tolist()
 
     df_clean = pd.DataFrame({
         'Dial Code': clean_codes,
@@ -991,14 +1013,8 @@ def generate_target_excel_bytes(df_clean):
     mins = df_clean['Minimum'].tolist() if 'Minimum' in df_clean.columns else [None] * len(df_clean)
     incs = df_clean['Increment'].tolist() if 'Increment' in df_clean.columns else [None] * len(df_clean)
 
-    has_billing = any(pd.notna(m) and str(m).strip() not in ['', 'None', 'nan'] for m in mins) or \
-                  any(pd.notna(inc) and str(inc).strip() not in ['', 'None', 'nan'] for inc in incs)
-
-    if has_billing:
-        headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
-    else:
-        headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date']
-
+    # Target standard always has all 6 columns: Dial Code, Summary, New Rate, Eff. Date, Minimum, Increment
+    headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
     ws.append(headers)
 
     fill_22 = PatternFill(fill_type='solid', start_color=Color(indexed=22), end_color=Color(indexed=22))
@@ -1022,13 +1038,9 @@ def generate_target_excel_bytes(df_clean):
         s = sums[i]
         r = float(rates[i])
         d = dt_list[i] if (i < len(dt_list) and dt_list[i] is not None) else None
-        
-        if has_billing:
-            m = mins[i] if (i < len(mins) and mins[i] is not None and pd.notna(mins[i])) else None
-            inc = incs[i] if (i < len(incs) and incs[i] is not None and pd.notna(incs[i])) else None
-            ws.append([c, s, r, d, m, inc])
-        else:
-            ws.append([c, s, r, d])
+        m = mins[i] if (i < len(mins) and mins[i] is not None and pd.notna(mins[i])) else 1
+        inc = incs[i] if (i < len(incs) and incs[i] is not None and pd.notna(incs[i])) else 1
+        ws.append([c, s, r, d, m, inc])
 
         if d is not None:
             ws.cell(row=i + 2, column=4).number_format = 'mm-dd-yy'
@@ -1038,9 +1050,8 @@ def generate_target_excel_bytes(df_clean):
     ws.column_dimensions['B'].width = 44.0
     ws.column_dimensions['C'].width = 14.5
     ws.column_dimensions['D'].width = 13.0
-    if has_billing:
-        ws.column_dimensions['E'].width = 10.0
-        ws.column_dimensions['F'].width = 10.5
+    ws.column_dimensions['E'].width = 10.0
+    ws.column_dimensions['F'].width = 10.5
 
     wb.save(output)
     output.seek(0)
