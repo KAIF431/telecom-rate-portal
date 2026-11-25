@@ -184,8 +184,9 @@ def detect_header_row_and_columns(df_raw):
             # 4. Rate keywords (exclude table/sheet banners, decks, cards, zones, and previous rates)
             elif (any(k in v for k in [
                 'new rate', 'price usd', 'rate usd', 'price', 'prices', 'rate', 'rates', 'tariff', 'tariffs', 'cost', 'charge', 'usd rate', 'rate min', 'rate per min', 'allday', 'all day', 'alldays', 'all days', 'flat rate', 'flat',
-                'inter rate', 'inter. rate', 'inter_rate', 'inter.rate', 'intra rate', 'intra. rate', 'standard rate', 'indet rate'
-            ]) or '$' in val) \
+                'inter rate', 'inter. rate', 'inter_rate', 'inter.rate', 'intra rate', 'intra. rate', 'standard rate', 'indet rate',
+                'dollar', 'dollars', 'usd', 'eur', 'euro', 'euros'
+            ]) or '$' in val or v in ['rate', 'rates', 'price', 'prices', 'tariff', 'usd', 'eur', 'dollar', 'dollars', 'euro', 'euros', 'charge']) \
                 and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective', 'key']) \
                 and not re.search(r'\b(?:current|old|prev|previous|existing|base|diff)\b', v):
                 if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v or 'inter rate' in v:

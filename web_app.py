@@ -3111,7 +3111,7 @@ if uploaded_files:
                             target_sheet = xl.sheet_names[0]
                         else:
                             best_sheet = None
-                            best_score = -1
+                            best_score = -9999
                             for s_name in xl.sheet_names:
                                 try:
                                     temp_sample = xl.parse(s_name, header=None, nrows=40)
@@ -3120,15 +3120,19 @@ if uploaded_files:
                                     _, col_map = core_engine.detect_header_row_and_columns(temp_sample)
                                     score = len(col_map)
                                     if ('dial_code' in col_map or 'dial_code_split' in col_map) and 'rate' in col_map:
-                                        score += 20
+                                        score += 25
+                                    if 'destination' in col_map:
+                                        score += 5
+                                    if 'effective_date' in col_map:
+                                        score += 5
                                     s_clean = str(s_name).strip().lower()
-                                    if any(r in s_clean for r in ['rate', 'tariff', 'price', 'plan']):
-                                        score += 10
+                                    if any(bad in s_clean for bad in ['a num', 'a-num', 'a_num', 'a number', 'orig', 'cover', 'disclaimer', 'note', 'terms', 'instruction', 'faq', 'log']):
+                                        score -= 40
+                                    if any(good in s_clean for good in ['pricing', 'rate', 'rates', 'standard', 'prm', 'premium', 'wholesale', 'amendment', 'a to z', 'tariff', 'deck']):
+                                        score += 15
                                     if score > best_score:
                                         best_score = score
                                         best_sheet = s_name
-                                        if score >= 25:
-                                            break
                                 except Exception:
                                     pass
                             target_sheet = best_sheet if best_sheet is not None else 0
