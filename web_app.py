@@ -2865,6 +2865,20 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
     }
     return True, "Success", result
 
+def on_apply_destination_suggestion(idx, sugg_val, is_new=False):
+    prefix = "cust_new_dest_in" if is_new else "cust_dest_in"
+    items_key = "cust_new_dest_items" if is_new else "cust_dest_items"
+    if items_key in st.session_state and idx < len(st.session_state[items_key]):
+        st.session_state[items_key][idx]["dest"] = sugg_val
+    st.session_state[f"{prefix}_{idx}"] = sugg_val
+
+def on_pick_master_destination(sugg_val, is_new=False):
+    prefix = "cust_new_dest_in" if is_new else "cust_dest_in"
+    items_key = "cust_new_dest_items" if is_new else "cust_dest_items"
+    if items_key in st.session_state and len(st.session_state[items_key]) > 0:
+        st.session_state[items_key][0]["dest"] = sugg_val
+    st.session_state[f"{prefix}_0"] = sugg_val
+
 def render_customer_standardizer_view():
     import datetime, time, io
     import pandas as pd
@@ -3248,11 +3262,12 @@ def render_customer_standardizer_view():
                     master_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
                     picked_d = st.selectbox("Search / Browse Master Destination:", master_d_list, key="cust_pick_master_tab1")
                     if picked_d and picked_d != "-- Select or Type to Search Destination --":
-                        if st.button(f"➕ Use '{picked_d}' in Destination Input", key="btn_apply_picked_t1"):
-                            if st.session_state.cust_dest_items:
-                                st.session_state.cust_dest_items[0]["dest"] = picked_d
-                                st.session_state["cust_dest_in_0"] = picked_d
-                                st.rerun()
+                        st.button(
+                            f"➕ Use '{picked_d}' in Destination Input",
+                            key="btn_apply_picked_t1",
+                            on_click=on_pick_master_destination,
+                            args=(picked_d, False)
+                        )
 
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
                     c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
@@ -3266,10 +3281,14 @@ def render_customer_standardizer_view():
                                 with c_sg1:
                                     st.markdown(f"<span style='font-size: 0.78rem; color: #0E7490; font-weight: 600;'>💡 Did you mean: <b>{suggs[0]}</b>?</span>", unsafe_allow_html=True)
                                 with c_sg2:
-                                    if st.button("Apply", key=f"btn_apply_sugg_{idx}", type="secondary", use_container_width=True):
-                                        st.session_state.cust_dest_items[idx]["dest"] = suggs[0]
-                                        st.session_state[f"cust_dest_in_{idx}"] = suggs[0]
-                                        st.rerun()
+                                    st.button(
+                                        "Apply",
+                                        key=f"btn_apply_sugg_{idx}",
+                                        type="secondary",
+                                        use_container_width=True,
+                                        on_click=on_apply_destination_suggestion,
+                                        args=(idx, suggs[0], False)
+                                    )
                         scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                         curr_sc = d_item.get("scope", "🌐 All")
                         sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
@@ -3383,11 +3402,12 @@ def render_customer_standardizer_view():
                 master_n_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
                 picked_n_d = st.selectbox("Search / Browse Master Destination:", master_n_d_list, key="cust_pick_master_tab2")
                 if picked_n_d and picked_n_d != "-- Select or Type to Search Destination --":
-                    if st.button(f"➕ Use '{picked_n_d}' in Destination Input", key="btn_apply_picked_t2"):
-                        if st.session_state.cust_new_dest_items:
-                            st.session_state.cust_new_dest_items[0]["dest"] = picked_n_d
-                            st.session_state["cust_new_dest_in_0"] = picked_n_d
-                            st.rerun()
+                    st.button(
+                        f"➕ Use '{picked_n_d}' in Destination Input",
+                        key="btn_apply_picked_t2",
+                        on_click=on_pick_master_destination,
+                        args=(picked_n_d, True)
+                    )
 
             for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
                 c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
@@ -3401,10 +3421,14 @@ def render_customer_standardizer_view():
                             with c_sg1:
                                 st.markdown(f"<span style='font-size: 0.78rem; color: #0E7490; font-weight: 600;'>💡 Did you mean: <b>{suggs[0]}</b>?</span>", unsafe_allow_html=True)
                             with c_sg2:
-                                if st.button("Apply", key=f"btn_apply_new_sugg_{idx}", type="secondary", use_container_width=True):
-                                    st.session_state.cust_new_dest_items[idx]["dest"] = suggs[0]
-                                    st.session_state[f"cust_new_dest_in_{idx}"] = suggs[0]
-                                    st.rerun()
+                                st.button(
+                                    "Apply",
+                                    key=f"btn_apply_new_sugg_{idx}",
+                                    type="secondary",
+                                    use_container_width=True,
+                                    on_click=on_apply_destination_suggestion,
+                                    args=(idx, suggs[0], True)
+                                )
                     scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                     curr_sc = d_item.get("scope", "🌐 All")
                     sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
