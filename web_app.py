@@ -2357,16 +2357,91 @@ def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0",
     res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
     return res_df, len(res_df)
 
-def lookup_destination_current_pulse(df, target_dest, scope="All"):
+def get_country_breakouts_from_df(df, query):
     """
-    Looks up current (Minimum, Increment) pulse from dataframe for target_dest.
+    Extracts all Fixed and Mobile breakouts and their exact dial codes from df for query.
+    Returns:
+    {
+        'fixed': [('⭐ All Fixed', [all_fixed_codes], total_rows), ('Ghana Accra', ['23321'], 1), ...],
+        'mobile': [('⭐ All Mobile', [all_mob_codes], total_rows), ('Ghana mobile MTN', ['23324', ...], 15), ...]
+    }
+    """
+    import re
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or not query:
+        return {'fixed': [], 'mobile': []}
+    
+    # Auto-resolve Destination/Summary column
+    sum_col = next((c for c in df.columns if str(c).strip().lower() in ['summary', 'rate summary', 'ratesummary', 'rate sumr', 'destination', 'country', 'description']), None)
+    if not sum_col:
+        sum_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['summary', 'destination', 'rate sum'])), None)
+    # Auto-resolve Dial Code column
+    code_col = next((c for c in df.columns if str(c).strip().lower() in ['dial code', 'dialcode', 'rate key', 'ratekey', 'code', 'prefix']), None)
+    if not code_col:
+        code_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['dial', 'code', 'prefix', 'key'])), None)
+
+    if not sum_col or not code_col:
+        return {'fixed': [], 'mobile': []}
+
+    q = str(query or '').strip().lower()
+    clean_q = re.sub(r'\b(?:fix|fixed|landline|proper|mob|mobile|cellular|cell)\b', '', q, flags=re.I).strip()
+    if not clean_q or len(clean_q) < 2:
+        clean_q = q
+    if len(clean_q) < 2:
+        return {'fixed': [], 'mobile': []}
+
+    c_mask = df[sum_col].astype(str).str.contains(re.escape(clean_q), case=False, na=False)
+    if c_mask.sum() == 0:
+        words = [w for w in re.split(r'[\s\-_]+', clean_q) if len(w) > 1]
+        if words:
+            c_mask = df[sum_col].astype(str).apply(lambda s: all(w in s.lower() for w in words))
+    if c_mask.sum() == 0:
+        return {'fixed': [], 'mobile': []}
+
+    sub = df[c_mask]
+    mob_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
+    is_mob = sub[sum_col].astype(str).str.contains(mob_pattern, case=False, na=False)
+
+    df_fix = sub[~is_mob]
+    df_mob = sub[is_mob]
+
+    fixed_res = []
+    if len(df_fix) > 0:
+        all_fix_codes = df_fix[code_col].astype(str).str.strip().unique().tolist()
+        fixed_res.append(('⭐ All Fixed', all_fix_codes, len(df_fix)))
+        for s, grp in df_fix.groupby(df_fix[sum_col].astype(str).str.strip()):
+            codes = grp[code_col].astype(str).str.strip().unique().tolist()
+            fixed_res.append((str(s), codes, len(codes)))
+
+    mobile_res = []
+    if len(df_mob) > 0:
+        all_mob_codes = df_mob[code_col].astype(str).str.strip().unique().tolist()
+        mobile_res.append(('⭐ All Mobile', all_mob_codes, len(df_mob)))
+        for s, grp in df_mob.groupby(df_mob[sum_col].astype(str).str.strip()):
+            codes = grp[code_col].astype(str).str.strip().unique().tolist()
+            mobile_res.append((str(s), codes, len(codes)))
+
+    return {'fixed': fixed_res, 'mobile': mobile_res}
+
+def lookup_destination_current_pulse(df, target_dest, scope="All", dial_codes=None):
+    """
+    Looks up current (Minimum, Increment) pulse from dataframe for target_dest or explicit dial_codes.
     Returns (pulse_str, matched_rows_count). e.g. ("60/1", 12) or (None, 0).
     """
     import re
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty or not target_dest:
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or (not target_dest and not dial_codes):
         return None, 0
     try:
-        mask, _, _ = match_destination_rows(df, target_dest, scope)
+        code_col = next((c for c in df.columns if str(c).strip().lower() in ['dial code', 'dialcode', 'rate key', 'ratekey', 'code', 'prefix']), None)
+        if not code_col:
+            code_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['dial', 'code', 'prefix', 'key'])), None)
+        if not code_col:
+            code_col = 'Dial Code' if 'Dial Code' in df.columns else df.columns[0]
+
+        if dial_codes:
+            clean_codes = set(str(c).strip() for c in dial_codes)
+            mask = df[code_col].astype(str).str.strip().isin(clean_codes)
+        else:
+            mask, _, _ = match_destination_rows(df, target_dest, scope)
         count = int(mask.sum())
         if count == 0:
             return None, 0
@@ -2512,7 +2587,7 @@ def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
     gc.collect()
     return data
 
-def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif"):
+def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif", custom_deck_name=None):
     import io, re, datetime, time
     import pandas as pd
     import billing_manager as bm
@@ -2644,6 +2719,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             new_rate_raw = item.get("rate")
             scope = str(item.get("scope", "All")).strip()
             pulse_raw = item.get("pulse", "⚙️ Keep Standard")
+            explicit_codes = item.get("dial_codes")
             fallback_source = item.get("source")  # "CC", "CLI", or None
 
             if not target_dest or new_rate_raw is None:
@@ -2656,8 +2732,23 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             formatted_new_rate = format_telecom_rate(new_rate_float)
             min_val, inc_val = parse_billing_pulse(pulse_raw)
 
-            match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
-            matched_count = int(match_mask.sum())
+            breakout_label = item.get("breakout_name")
+            if explicit_codes:
+                clean_codes_set = set(str(c).strip() for c in explicit_codes)
+                match_mask = df['Dial Code'].astype(str).str.strip().isin(clean_codes_set)
+                if breakout_label and not str(breakout_label).startswith("⭐"):
+                    clean_dest = breakout_label
+                elif "fixed" in scope.lower() or "fix" in target_dest.lower():
+                    clean_dest = f"{target_dest} fix" if "fix" not in target_dest.lower() else target_dest
+                elif "mob" in scope.lower() or "mob" in target_dest.lower():
+                    clean_dest = f"{target_dest} mob" if "mob" not in target_dest.lower() else target_dest
+                else:
+                    clean_dest = target_dest
+                eff_scope = scope
+                matched_count = int(match_mask.sum())
+            else:
+                match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
+                matched_count = int(match_mask.sum())
 
             if matched_count > 0:
                 # Add all matched dial codes so they are completely excluded from mismatches
@@ -2758,9 +2849,12 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     if touched_dial_codes and mismatches:
         mismatches = [m for m in mismatches if str(m.get("dial_code", "")).strip() not in touched_dial_codes]
 
-    # 7. Build smart filename preserving original customer sheet base
-    base_stem = original_filename.rsplit(".", 1)[0]
-    base_clean = re.sub(r'^(?:name\s*[-:]?\s*)', '', base_stem, flags=re.I).strip()
+    # 7. Build smart filename preserving original customer sheet base or custom deck name
+    if custom_deck_name and str(custom_deck_name).strip():
+        base_clean = re.sub(r'^(?:name\s*[-:]?\s*)', '', str(custom_deck_name).strip(), flags=re.I).strip()
+    else:
+        base_stem = original_filename.rsplit(".", 1)[0]
+        base_clean = re.sub(r'^(?:name\s*[-:]?\s*)', '', base_stem, flags=re.I).strip()
     
     u_tag = str(current_username or "kaif").strip().lower()
     if len(dest_labels_for_name) == 1:
@@ -2884,9 +2978,25 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
 
             formatted_new_rate = format_telecom_rate(new_rate_float)
             min_val, inc_val = parse_billing_pulse(pulse_raw)
+            explicit_codes = item.get("dial_codes")
 
-            match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
-            matched_count = int(match_mask.sum())
+            breakout_label = item.get("breakout_name")
+            if explicit_codes:
+                clean_codes_set = set(str(c).strip() for c in explicit_codes)
+                match_mask = df['Dial Code'].astype(str).str.strip().isin(clean_codes_set)
+                if breakout_label and not str(breakout_label).startswith("⭐"):
+                    clean_dest = breakout_label
+                elif "fixed" in scope.lower() or "fix" in target_dest.lower():
+                    clean_dest = f"{target_dest} fix" if "fix" not in target_dest.lower() else target_dest
+                elif "mob" in scope.lower() or "mob" in target_dest.lower():
+                    clean_dest = f"{target_dest} mob" if "mob" not in target_dest.lower() else target_dest
+                else:
+                    clean_dest = target_dest
+                eff_scope = scope
+                matched_count = int(match_mask.sum())
+            else:
+                match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
+                matched_count = int(match_mask.sum())
 
             if matched_count > 0:
                 existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
@@ -3027,9 +3137,14 @@ def render_customer_standardizer_view():
             )
         with col_clr:
             if st.button("🗑️ Clear / Reset", type="secondary", use_container_width=True, key="cust_clear_results_btn"):
+                st.session_state.cust_uploader_key = st.session_state.get("cust_uploader_key", 0) + 1
                 st.session_state.cust_processed_result = None
                 st.session_state.pop("cust_dest_items", None)
                 st.session_state.pop("cust_new_dest_items", None)
+                st.session_state.pop("cust_raw_df", None)
+                st.session_state.pop("cust_raw_file_name", None)
+                st.session_state.pop("cust_deck_name_in", None)
+                st.session_state.new_cust_name_in = ""
                 st.rerun()
 
         # Executive Card Container (Identical in style to Vendor Deck Card!)
@@ -3354,24 +3469,36 @@ def render_customer_standardizer_view():
 
     with cust_tab1:
         with st.container(border=True):
-            st.markdown("""
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet (RouteTrust / CSV / Excel)</span>
-            </div>
-            """, unsafe_allow_html=True)
-            st.caption("Auto-maps RouteTrust export (`Rate Key`, `Rate Summary`, `Inter. Rate`, `Dur Min/Inc`). Standardizes to exact 6 columns:")
-            
+            col_t1_h, col_t1_rst = st.columns([3.5, 1.2])
+            with col_t1_h:
+                st.markdown("""
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet (RouteTrust / CSV / Excel)</span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.caption("Auto-maps RouteTrust export (`Rate Key`, `Rate Summary`, `Inter. Rate`, `Dur Min/Inc`). Standardizes to exact 6 columns:")
+            with col_t1_rst:
+                if st.button("🗑️ Clear / Reset Sheet", key="cust_tab1_reset_btn", type="secondary", use_container_width=True):
+                    st.session_state.cust_uploader_key = st.session_state.get("cust_uploader_key", 0) + 1
+                    st.session_state.cust_processed_result = None
+                    st.session_state.pop("cust_dest_items", None)
+                    st.session_state.pop("cust_raw_df", None)
+                    st.session_state.pop("cust_raw_file_name", None)
+                    st.session_state.pop("cust_deck_name_in", None)
+                    st.rerun()
+
+            cust_up_key = f"cust_main_uploader_{st.session_state.get('cust_uploader_key', 0)}"
             uploaded_cust_file = st.file_uploader(
                 "Upload Customer Rate Deck",
                 type=["xlsx", "xls", "csv"],
-                key="cust_main_uploader",
+                key=cust_up_key,
                 label_visibility="collapsed"
             )
             
             if uploaded_cust_file:
                 st.success(f"📂 **{uploaded_cust_file.name}** loaded successfully ({len(uploaded_cust_file.getvalue())/1024:.1f} KB).")
                 
-                # Cache parsed customer raw dataframe for instant pulse lookup
+                # Cache parsed customer raw dataframe for instant pulse & breakout lookup
                 if ("cust_raw_df" not in st.session_state or 
                     st.session_state.get("cust_raw_file_name") != uploaded_cust_file.name):
                     try:
@@ -3399,6 +3526,32 @@ def render_customer_standardizer_view():
                     except Exception:
                         st.session_state.cust_raw_df = None
 
+                # 1. Deck / Customer Name Configuration right at the start (just like Vendor Portal!)
+                raw_stem = os.path.splitext(uploaded_cust_file.name)[0]
+                clean_stem = re.sub(r'^(?:name\s*[-:]?\s*)', '', raw_stem, flags=re.I).strip()
+                default_deck_name = f"Name - {clean_stem}"
+
+                st.markdown("### 📝 Customer / Trunk Deck Name")
+                st.caption("Customize Customer / Trunk deck name for output file. Live final filename preview is shown below:")
+
+                c_fn1, c_fn2 = st.columns([1.8, 2.2])
+                with c_fn1:
+                    cust_deck_name_in = st.text_input(
+                        "Customer / Deck Name:",
+                        value=st.session_state.get("cust_deck_name_in", default_deck_name),
+                        key="cust_deck_name_in",
+                        help=f"Original File: {uploaded_cust_file.name}"
+                    )
+                with c_fn2:
+                    curr_u = current_user.get("username", "kaif") if isinstance(current_user, dict) else "kaif"
+                    clean_display_name = re.sub(r'^(?:name\s*[-:]?\s*)', '', cust_deck_name_in.strip(), flags=re.I).strip() if cust_deck_name_in else clean_stem
+                    st.markdown(
+                        f"<div style='margin-top: 26px; padding: 7px 12px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px; font-size: 0.82rem; color: #166534; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>"
+                        f"<b>Live Filename Preview:</b> Name - {clean_display_name} ... {curr_u}.xlsx"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
                 st.markdown("---")
                 st.markdown("##### 🎯 Update Destinations & Rates (Optional)")
                 st.caption("Enter requested destinations, rates, and billing pulse (instant detected from uploaded sheet):")
@@ -3418,9 +3571,13 @@ def render_customer_standardizer_view():
                         )
 
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
-                    c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.8, 1.1, 1.0, 1.3, 0.4])
+                    dest_val = d_item.get("dest", "").strip()
+                    breakouts = get_country_breakouts_from_df(st.session_state.get("cust_raw_df"), dest_val) if dest_val else {'fixed': [], 'mobile': []}
+                    has_breakouts = bool(breakouts.get("fixed") or breakouts.get("mobile"))
+                    
+                    c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.6, 1.2, 1.0, 1.4, 0.4])
                     with c_d1:
-                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Kazakhstan fix or 77", key=f"cust_dest_in_{idx}")
+                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Ghana or 233", key=f"cust_dest_in_{idx}")
                         dest_val = d_item.get("dest", "").strip()
                         if dest_val and len(dest_val) >= 2:
                             suggs = smart_spell_check_destination(dest_val, top_n=3)
@@ -3440,16 +3597,83 @@ def render_customer_standardizer_view():
                     with c_d2:
                         scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                         curr_sc = d_item.get("scope", "🌐 All")
+                        # Auto-detect scope if user typed 'fix' or 'mob' in destination string
+                        if "fix" in dest_val.lower() and curr_sc == "🌐 All":
+                            curr_sc = "☎️ Fixed Only"
+                        elif ("mob" in dest_val.lower() or "cell" in dest_val.lower()) and curr_sc == "🌐 All":
+                            curr_sc = "📱 Mobile Only"
                         sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
                         d_item["scope"] = st.selectbox(f"Scope #{idx+1}:", scope_opts, index=sc_idx, key=f"cust_scope_in_{idx}")
+
+                    # Determine dial codes based on scope & breakout selection
+                    target_codes = None
+                    breakout_name = None
+                    curr_scope = d_item.get("scope", "🌐 All")
+                    
+                    if has_breakouts:
+                        if curr_scope == "☎️ Fixed Only" and breakouts.get("fixed"):
+                            f_items = breakouts["fixed"]
+                            f_labels = [f"{b[0]} ({b[2]} rows)" for b in f_items]
+                            curr_b_name = d_item.get("breakout_name")
+                            def_idx = 0
+                            for b_i, b_l in enumerate(f_labels):
+                                if curr_b_name and curr_b_name in b_l:
+                                    def_idx = b_i
+                                    break
+                            chosen_f = st.selectbox(
+                                f"🎯 Select Fixed City / Breakout for #{idx+1}:",
+                                f_labels,
+                                index=def_idx,
+                                key=f"cust_fix_breakout_{idx}",
+                                help="Engine will execute rate & pulse change strictly by these Dial Codes"
+                            )
+                            sel_f_idx = f_labels.index(chosen_f)
+                            target_codes = f_items[sel_f_idx][1]
+                            breakout_name = f_items[sel_f_idx][0]
+                            st.caption(f"📌 **Dial Codes Applied ({len(target_codes)}):** `{', '.join(target_codes[:8])}{'...' if len(target_codes) > 8 else ''}`")
+                        elif curr_scope == "📱 Mobile Only" and breakouts.get("mobile"):
+                            m_items = breakouts["mobile"]
+                            m_labels = [f"{b[0]} ({b[2]} rows)" for b in m_items]
+                            curr_b_name = d_item.get("breakout_name")
+                            def_idx = 0
+                            for b_i, b_l in enumerate(m_labels):
+                                if curr_b_name and curr_b_name in b_l:
+                                    def_idx = b_i
+                                    break
+                            chosen_m = st.selectbox(
+                                f"🎯 Select Mobile Operator for #{idx+1}:",
+                                m_labels,
+                                index=def_idx,
+                                key=f"cust_mob_breakout_{idx}",
+                                help="Engine will execute rate & pulse change strictly by these Dial Codes"
+                            )
+                            sel_m_idx = m_labels.index(chosen_m)
+                            target_codes = m_items[sel_m_idx][1]
+                            breakout_name = m_items[sel_m_idx][0]
+                            st.caption(f"📌 **Dial Codes Applied ({len(target_codes)}):** `{', '.join(target_codes[:8])}{'...' if len(target_codes) > 8 else ''}`")
+                        elif curr_scope == "🌐 All":
+                            all_c = []
+                            for b in breakouts.get("fixed", []):
+                                if b[0].startswith("⭐"):
+                                    all_c.extend(b[1])
+                            for b in breakouts.get("mobile", []):
+                                if b[0].startswith("⭐"):
+                                    all_c.extend(b[1])
+                            if all_c:
+                                target_codes = list(dict.fromkeys(all_c))
+
+                    d_item["target_dial_codes"] = target_codes
+                    d_item["breakout_name"] = breakout_name
+
                     with c_d3:
                         d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_rate_in_{idx}")
                     with c_d4:
-                        # Instant Sheet Pulse Lookup!
+                        # Instant Sheet Pulse Lookup by target dial codes!
                         cur_pulse, p_rows = lookup_destination_current_pulse(
                             st.session_state.get("cust_raw_df"),
                             d_item.get("dest", ""),
-                            d_item.get("scope", "🌐 All")
+                            d_item.get("scope", "🌐 All"),
+                            dial_codes=d_item.get("target_dial_codes")
                         )
                         if cur_pulse:
                             st.markdown(f"<div style='margin-bottom: 2px;'><span style='background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 1px 7px; border-radius: 4px; border: 1px solid #BAE6FD;'>📄 In Sheet: <b>{cur_pulse}</b> ({p_rows}r)</span></div>", unsafe_allow_html=True)
@@ -3503,12 +3727,16 @@ def render_customer_standardizer_view():
                         r_val = di.get("rate", "").strip()
                         s_val = di.get("scope", "🌐 All")
                         p_val = di.get("pulse", "Keep")
+                        t_codes = di.get("target_dial_codes")
+                        b_name = di.get("breakout_name")
                         if d_val and r_val:
                             valid_updates.append({
                                 "destination": d_val,
                                 "scope": s_val,
                                 "rate": r_val,
                                 "pulse": p_val,
+                                "dial_codes": t_codes,
+                                "breakout_name": b_name,
                                 "source": fb_mode
                             })
                             
@@ -3518,7 +3746,8 @@ def render_customer_standardizer_view():
                             uploaded_cust_file.name,
                             valid_updates,
                             sel_eff_date,
-                            curr_u
+                            curr_u,
+                            custom_deck_name=cust_deck_name_in
                         )
                         if ok:
                             st.session_state.cust_processed_result = res
