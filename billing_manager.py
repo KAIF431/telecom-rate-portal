@@ -368,9 +368,10 @@ def audit_dataframe_billing(df_clean):
 
     return (len(mismatches) > 0), mismatches, summary_map, learned_count
 
-def apply_standard_billing_to_dataframe(df_clean, mismatch_list=None):
+def apply_standard_billing_to_dataframe(df_clean, mismatch_list=None, new_effective_date=None):
     """
     Applies master standard billing to all mismatched rows in df_clean in-place.
+    Also updates Effective Date for all modified rows if new_effective_date is provided.
     Returns the updated df_clean.
     """
     if df_clean is None or len(df_clean) == 0:
@@ -385,15 +386,20 @@ def apply_standard_billing_to_dataframe(df_clean, mismatch_list=None):
 
     mins = df_copy['Minimum'].tolist() if 'Minimum' in df_copy.columns else [None] * len(df_copy)
     incs = df_copy['Increment'].tolist() if 'Increment' in df_copy.columns else [None] * len(df_copy)
+    dates = df_copy['Effective Date'].tolist() if 'Effective Date' in df_copy.columns else [None] * len(df_copy)
 
     for item in mismatch_list:
         idx = item["row_idx"]
         if idx < len(mins):
             mins[idx] = item["standard_min"]
             incs[idx] = item["standard_inc"]
+            if new_effective_date is not None and idx < len(dates):
+                dates[idx] = str(new_effective_date)
 
     df_copy['Minimum'] = mins
     df_copy['Increment'] = incs
+    if new_effective_date is not None and 'Effective Date' in df_copy.columns:
+        df_copy['Effective Date'] = dates
     return df_copy
 
 _cached_master_excel_bytes = None

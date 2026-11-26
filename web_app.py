@@ -2114,6 +2114,87 @@ def format_telecom_rate(val):
     except Exception:
         return str(val).strip()
 
+
+_MASTER_SHEETS_CACHE = {}
+
+def get_master_reference_df(source="CC"):
+    global _MASTER_SHEETS_CACHE
+    src_key = str(source).upper().strip()
+    if src_key in _MASTER_SHEETS_CACHE:
+        return _MASTER_SHEETS_CACHE[src_key]
+
+    import os
+    import pandas as pd
+    if src_key == "CC":
+        p = os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx")
+    else:
+        p = os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx")
+
+    if not os.path.exists(p):
+        p = r"C:/Vendor Rates/" + os.path.basename(p)
+
+    if os.path.exists(p):
+        try:
+            df = pd.read_excel(p, dtype=str)
+            _MASTER_SHEETS_CACHE[src_key] = df
+            return df
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0", source="CC", eff_date_str="2026-02-01", existing_dial_codes=None):
+    import re
+    import pandas as pd
+
+    df_m = get_master_reference_df(source)
+    if df_m.empty:
+        return pd.DataFrame(), 0
+
+    dest_clean = str(target_dest).strip()
+    dest_escaped = re.escape(dest_clean)
+
+    mask = df_m['Summary'].astype(str).str.contains(dest_escaped, case=False, na=False)
+    if mask.sum() == 0:
+        words = [w for w in re.split(r'[\s\-_]+', dest_clean) if len(w) > 1]
+        if len(words) > 1:
+            mask = df_m['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
+    if mask.sum() == 0:
+        mask = df_m['Dial Code'].astype(str).str.startswith(dest_clean, na=False)
+
+    if mask.sum() == 0:
+        return pd.DataFrame(), 0
+
+    df_sub = df_m[mask].copy()
+
+    mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
+    if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
+        df_sub = df_sub[~df_sub['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)]
+    elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
+        df_sub = df_sub[df_sub['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)]
+
+    nanp_pattern = r'\b(?:USA|UNITED STATES|CANADA|PUERTO RICO)\b'
+    df_sub = df_sub[~df_sub['Summary'].astype(str).str.contains(nanp_pattern, case=False, na=False)]
+
+    if df_sub.empty:
+        return pd.DataFrame(), 0
+
+    res_df = pd.DataFrame()
+    res_df['Dial Code'] = df_sub['Dial Code'].astype(str).str.strip()
+    res_df['Summary'] = df_sub['Summary'].astype(str).str.strip()
+    res_df['New Rate'] = format_telecom_rate(new_rate_str)
+    res_df['Minimum'] = df_sub['Minimum'].astype(str).str.strip() if 'Minimum' in df_sub.columns else '1'
+    res_df['Increment'] = df_sub['Increment'].astype(str).str.strip() if 'Increment' in df_sub.columns else '1'
+    res_df['Effective Date'] = str(eff_date_str)
+
+    # STRICT DEDUPLICATION: Exclude any dial code already present in customer sheet!
+    if existing_dial_codes:
+        existing_set = set(str(c).strip() for c in existing_dial_codes)
+        res_df = res_df[~res_df['Dial Code'].isin(existing_set)]
+
+    # Deduplicate newly added rows themselves
+    res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
+    return res_df, len(res_df)
+
 def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif"):
     import io, re, datetime, time
     import pandas as pd
@@ -2223,12 +2304,18 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     change_summary = []
     dest_labels_for_name = []
     total_rows_updated = 0
+    total_new_rows_added = 0
+    missing_destinations = []
+    added_from_master_summary = []
     eff_date_str = str(effective_date_val)
 
     if dest_updates:
         for item in dest_updates:
             target_dest = str(item.get("destination", "")).strip()
             new_rate_raw = item.get("rate")
+            scope = str(item.get("scope", "All")).strip()
+            fallback_source = item.get("source")  # "CC", "CLI", or None
+
             if not target_dest or new_rate_raw is None:
                 continue
             try:
@@ -2236,12 +2323,28 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             except Exception:
                 continue
 
+            formatted_new_rate = format_telecom_rate(new_rate_float)
             dest_escaped = re.escape(target_dest)
             match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
             matched_count = int(match_mask.sum())
             if matched_count == 0:
+                words = [w for w in re.split(r'[\s\-_]+', target_dest) if len(w) > 1]
+                if len(words) > 1:
+                    match_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
+                    matched_count = int(match_mask.sum())
+            if matched_count == 0:
                 match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
                 matched_count = int(match_mask.sum())
+
+            # Apply scope filter if matched in sheet
+            if matched_count > 0:
+                mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
+                if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
+                    match_mask = match_mask & ~df['Summary'].str.contains(mobile_pattern, case=False, na=False)
+                    matched_count = int(match_mask.sum())
+                elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
+                    match_mask = match_mask & df['Summary'].str.contains(mobile_pattern, case=False, na=False)
+                    matched_count = int(match_mask.sum())
 
             if matched_count > 0:
                 existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
@@ -2252,7 +2355,6 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 trend = "inc" if new_rate_float >= old_avg_rate else "dec"
                 rate_diff = new_rate_float - old_avg_rate
 
-                formatted_new_rate = format_telecom_rate(new_rate_float)
                 df.loc[match_mask, 'New Rate'] = formatted_new_rate
                 df.loc[match_mask, 'Effective Date'] = eff_date_str
 
@@ -2260,18 +2362,64 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 dest_labels_for_name.append(f"{target_dest} {trend}")
                 change_summary.append({
                     "destination": target_dest,
+                    "scope": scope,
                     "old_rate": f"{old_avg_rate:.4f}",
                     "new_rate": formatted_new_rate,
                     "trend": trend.upper(),
                     "diff": rate_diff,
-                    "rows_updated": matched_count
+                    "rows_updated": matched_count,
+                    "status": "Updated Existing"
                 })
+            else:
+                # Destination missing in customer deck!
+                if fallback_source in ["CC", "CLI"]:
+                    existing_codes = df['Dial Code'].tolist()
+                    df_new_rows, count_added = import_destination_from_master(
+                        target_dest,
+                        scope=scope,
+                        new_rate_str=formatted_new_rate,
+                        source=fallback_source,
+                        eff_date_str=eff_date_str,
+                        existing_dial_codes=existing_codes
+                    )
+                    if count_added > 0:
+                        df = pd.concat([df, df_new_rows], ignore_index=True)
+                        total_new_rows_added += count_added
+                        dest_labels_for_name.append(f"{target_dest} new")
+                        added_from_master_summary.append({
+                            "destination": target_dest,
+                            "scope": scope,
+                            "source": f"Master {fallback_source}",
+                            "rows_added": count_added,
+                            "new_rate": formatted_new_rate
+                        })
+                    else:
+                        missing_destinations.append({
+                            "destination": target_dest,
+                            "scope": scope,
+                            "rate": formatted_new_rate,
+                            "reason": f"Not found in Customer sheet or Master {fallback_source}"
+                        })
+                else:
+                    missing_destinations.append({
+                        "destination": target_dest,
+                        "scope": scope,
+                        "rate": formatted_new_rate,
+                        "reason": "Not found in Customer deck"
+                    })
 
-    # 6. Check mismatches against Country Master Billing
+    # FINAL STRICT DEDUPLICATION: Guarantees 0 duplicate dial codes in entire deck!
+    df = df.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
+
+    # 6. Check mismatches against Country Master Billing (FIX TUPLE UNPACK!)
     mismatches = []
     if hasattr(bm, "audit_dataframe_billing"):
         try:
-            mismatches = bm.audit_dataframe_billing(df)
+            audit_res = bm.audit_dataframe_billing(df)
+            if isinstance(audit_res, tuple) and len(audit_res) >= 2:
+                mismatches = audit_res[1]
+            elif isinstance(audit_res, list):
+                mismatches = audit_res
         except Exception:
             mismatches = []
 
@@ -2317,7 +2465,9 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         "deleted_comments_count": deleted_comments_count,
         "nanp_excluded_count": nanp_excluded_count,
         "total_rows_updated": total_rows_updated,
-        "destinations_count": len(dest_updates) if dest_updates else 0
+        "total_new_rows_added": total_new_rows_added,
+        "destinations_count": len(dest_updates) if dest_updates else 0,
+        "duplicate_free": True
     }
 
     result = {
@@ -2332,6 +2482,8 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         "has_mismatch": len(mismatches) > 0,
         "stats": stats,
         "change_summary": change_summary,
+        "missing_destinations": missing_destinations,
+        "added_from_master_summary": added_from_master_summary,
         "effective_date": eff_date_str,
         "elapsed_time": elapsed_time
     }
@@ -2399,12 +2551,27 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
             except Exception:
                 continue
 
+            scope = str(item.get("scope", "All")).strip()
             dest_escaped = re.escape(target_dest)
             match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
             matched_count = int(match_mask.sum())
             if matched_count == 0:
+                words = [w for w in re.split(r'[\s\-_]+', target_dest) if len(w) > 1]
+                if len(words) > 1:
+                    match_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
+                    matched_count = int(match_mask.sum())
+            if matched_count == 0:
                 match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
                 matched_count = int(match_mask.sum())
+
+            if matched_count > 0:
+                mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
+                if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
+                    match_mask = match_mask & ~df['Summary'].str.contains(mobile_pattern, case=False, na=False)
+                    matched_count = int(match_mask.sum())
+                elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
+                    match_mask = match_mask & df['Summary'].str.contains(mobile_pattern, case=False, na=False)
+                    matched_count = int(match_mask.sum())
 
             if matched_count > 0:
                 existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
@@ -2430,11 +2597,18 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
                     "rows_updated": matched_count
                 })
 
-    # Check mismatches against Country Master Billing
+    # FINAL STRICT DEDUPLICATION: Guarantees 0 duplicate dial codes in entire deck!
+    df = df.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
+
+    # Check mismatches against Country Master Billing (FIX TUPLE UNPACK!)
     mismatches = []
     if hasattr(bm, "audit_dataframe_billing"):
         try:
-            mismatches = bm.audit_dataframe_billing(df)
+            audit_res = bm.audit_dataframe_billing(df)
+            if isinstance(audit_res, tuple) and len(audit_res) >= 2:
+                mismatches = audit_res[1]
+            elif isinstance(audit_res, list):
+                mismatches = audit_res
         except Exception:
             mismatches = []
 
@@ -2571,18 +2745,20 @@ def render_customer_standardizer_view():
                         st.caption("Customer pulse differs from standard master (Country Billing.xlsx)")
                         mm_table = []
                         for mm in mismatches[:100]:
-                            mm_table.append({
-                                "Destination": mm["destination"],
-                                "Dial Code": mm["dial_code"],
-                                "Sheet Pulse": mm["vendor_pulse"],
-                                "Standard Master": mm["standard_pulse"]
-                            })
+                            if isinstance(mm, dict):
+                                mm_table.append({
+                                    "Destination": mm.get("destination", ""),
+                                    "Dial Code": mm.get("dial_code", ""),
+                                    "Sheet Pulse": mm.get("vendor_pulse", ""),
+                                    "Standard Master": mm.get("standard_pulse", "")
+                                })
                         st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
                 with c_fix:
                     if st.button("⚡ Fix Standard", key="cust_btn_fix_std", type="primary", use_container_width=True):
                         df_curr = item.get("df_clean")
                         if df_curr is not None:
-                            df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
+                            eff_d = item.get("effective_date", str(datetime.date.today()))
+                            df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches, new_effective_date=eff_d) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
                             buf_x = io.BytesIO()
                             with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
                                 df_fixed.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
@@ -2623,6 +2799,14 @@ def render_customer_standardizer_view():
                             f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
                             f'<span style="color: #15803D; font-weight: 700;">⚡ ROWS UPDATED</span>'
                             f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">{stats.get("total_rows_updated", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #FAF5FF; border: 1px solid #E9D5FF; border-radius: 6px;">'
+                            f'<span style="color: #7E22CE; font-weight: 700;">➕ NEW FROM MASTER</span>'
+                            f'<span style="color: #6B21A8; font-weight: 800; font-size: 0.95rem;">{stats.get("total_new_rows_added", 0):,}</span>'
+                            f'</div>'
+                            f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 6px;">'
+                            f'<span style="color: #15803D; font-weight: 700;">🛡️ ZERO DUPLICATES</span>'
+                            f'<span style="color: #166534; font-weight: 800; font-size: 0.95rem;">100% Unique</span>'
                             f'</div>'
                             f'</div>'
                             f'</div>',
@@ -2678,14 +2862,129 @@ def render_customer_standardizer_view():
                 st.markdown("**📋 Rate Updates Breakdown:**")
                 c_rows_display = []
                 for cs in change_summary:
+                    sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
                     c_rows_display.append({
-                        "Destination": cs["destination"],
+                        "Destination": f"{cs['destination']}{sc_lbl}",
                         "Old Rate": cs["old_rate"],
                         "New Rate": cs["new_rate"],
                         "Action / Trend": f"📈 +{cs['diff']:.4f} (INC)" if cs["trend"] == "INC" else f"📉 {cs['diff']:.4f} (DEC)",
                         "Rows Impacted": cs["rows_updated"]
                     })
                 st.dataframe(pd.DataFrame(c_rows_display), use_container_width=True, hide_index=True)
+
+            # Added from Master Summary Table
+            if item.get("added_from_master_summary"):
+                st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+                st.markdown("**➕ Fresh Destinations Imported from Master Reference (Zero Duplicates):**")
+                m_rows_disp = []
+                for ms in item["added_from_master_summary"]:
+                    m_rows_disp.append({
+                        "Destination": ms["destination"],
+                        "Scope": ms.get("scope", "All"),
+                        "Source Master": ms.get("source", "Master"),
+                        "New Rate": ms["new_rate"],
+                        "Rows Added": ms["rows_added"],
+                        "Status": "✅ Added (Unique)"
+                    })
+                st.dataframe(pd.DataFrame(m_rows_disp), use_container_width=True, hide_index=True)
+
+            # Interactive Missing Destinations Action Box
+            if item.get("missing_destinations"):
+                st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;">'
+                    f'<div style="font-weight: 700; color: #B45309; font-size: 0.95rem; margin-bottom: 4px;">'
+                    f'⚠️ {len(item["missing_destinations"])} Destination(s) Customer Sheet me Maujood Nahi Hain!'
+                    f'</div>'
+                    f'<div style="color: #92400E; font-size: 0.84rem; margin-bottom: 10px;">'
+                    f'Aap in missing destinations ko direct Master CC ya Master CLI sheet se 1-click me import karke deck me add kar sakte hain (Zero-Duplicate Verified):'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                for m_idx, m_item in enumerate(list(item["missing_destinations"])):
+                    c_m_info, c_m_cc, c_m_cli = st.columns([2.2, 1.2, 1.2])
+                    with c_m_info:
+                        sc_txt = f"[{m_item.get('scope', 'All')}]"
+                        st.markdown(f"📍 **{m_item['destination']}** {sc_txt} &rarr; Target Rate: `{m_item['rate']}`")
+                    with c_m_cc:
+                        if st.button(f"➕ Add from Master CC", key=f"btn_add_missing_cc_{m_idx}", type="secondary", use_container_width=True):
+                            df_curr = item.get("df_clean")
+                            eff_d = item.get("effective_date", str(datetime.date.today()))
+                            existing_codes = df_curr['Dial Code'].tolist() if df_curr is not None else None
+                            df_new_rows, count_added = import_destination_from_master(
+                                m_item['destination'],
+                                scope=m_item.get('scope', 'All'),
+                                new_rate_str=m_item['rate'],
+                                source='CC',
+                                eff_date_str=eff_d,
+                                existing_dial_codes=existing_codes
+                            )
+                            if count_added > 0 and df_curr is not None:
+                                df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
+                                df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
+                                buf_x = io.BytesIO()
+                                with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
+                                    df_merged.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                                buf_c = io.StringIO()
+                                df_merged.to_csv(buf_c, index=False)
+                                item["df_clean"] = df_merged
+                                item["xl_bytes"] = buf_x.getvalue()
+                                item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                                item["missing_destinations"].pop(m_idx)
+                                item.setdefault("added_from_master_summary", []).append({
+                                    "destination": m_item['destination'],
+                                    "scope": m_item.get('scope', 'All'),
+                                    "source": "Master CC",
+                                    "rows_added": count_added,
+                                    "new_rate": m_item['rate']
+                                })
+                                item["stats"]["clean_rows"] = len(df_merged)
+                                item["stats"]["total_new_rows_added"] = item["stats"].get("total_new_rows_added", 0) + count_added
+                                st.success(f"✅ {count_added} rows added for {m_item['destination']} from Master CC with 0 duplicates!")
+                                time.sleep(0.6)
+                                st.rerun()
+                            else:
+                                st.error(f"'{m_item['destination']}' Master CC me bhi nahi mila.")
+                    with c_m_cli:
+                        if st.button(f"➕ Add from Master CLI", key=f"btn_add_missing_cli_{m_idx}", type="secondary", use_container_width=True):
+                            df_curr = item.get("df_clean")
+                            eff_d = item.get("effective_date", str(datetime.date.today()))
+                            existing_codes = df_curr['Dial Code'].tolist() if df_curr is not None else None
+                            df_new_rows, count_added = import_destination_from_master(
+                                m_item['destination'],
+                                scope=m_item.get('scope', 'All'),
+                                new_rate_str=m_item['rate'],
+                                source='CLI',
+                                eff_date_str=eff_d,
+                                existing_dial_codes=existing_codes
+                            )
+                            if count_added > 0 and df_curr is not None:
+                                df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
+                                df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
+                                buf_x = io.BytesIO()
+                                with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
+                                    df_merged.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                                buf_c = io.StringIO()
+                                df_merged.to_csv(buf_c, index=False)
+                                item["df_clean"] = df_merged
+                                item["xl_bytes"] = buf_x.getvalue()
+                                item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                                item["missing_destinations"].pop(m_idx)
+                                item.setdefault("added_from_master_summary", []).append({
+                                    "destination": m_item['destination'],
+                                    "scope": m_item.get('scope', 'All'),
+                                    "source": "Master CLI",
+                                    "rows_added": count_added,
+                                    "new_rate": m_item['rate']
+                                })
+                                item["stats"]["clean_rows"] = len(df_merged)
+                                item["stats"]["total_new_rows_added"] = item["stats"].get("total_new_rows_added", 0) + count_added
+                                st.success(f"✅ {count_added} rows added for {m_item['destination']} from Master CLI with 0 duplicates!")
+                                time.sleep(0.6)
+                                st.rerun()
+                            else:
+                                st.error(f"'{m_item['destination']}' Master CLI me bhi nahi mila.")
 
             # Editable Filename text box
             st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
@@ -2756,15 +3055,20 @@ def render_customer_standardizer_view():
                 st.caption("Enter requested destinations and new rates, or leave blank to standardize entire deck:")
                 
                 if "cust_dest_items" not in st.session_state:
-                    st.session_state.cust_dest_items = [{"dest": "", "rate": ""}]
+                    st.session_state.cust_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
                     
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
-                    c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
+                    c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
                     with c_d1:
-                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_dest_in_{idx}")
+                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_dest_in_{idx}")
                     with c_d2:
-                        d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_rate_in_{idx}")
+                        scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
+                        curr_sc = d_item.get("scope", "🌐 All")
+                        sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
+                        d_item["scope"] = st.selectbox(f"Scope #{idx+1}:", scope_opts, index=sc_idx, key=f"cust_scope_in_{idx}")
                     with c_d3:
+                        d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_rate_in_{idx}")
+                    with c_d4:
                         st.write("")
                         st.write("")
                         if len(st.session_state.cust_dest_items) > 1:
@@ -2772,22 +3076,41 @@ def render_customer_standardizer_view():
                                 st.session_state.cust_dest_items.pop(idx)
                                 st.rerun()
 
-                col_add_dest, col_date = st.columns([2, 2])
+                col_add_dest, col_fb, col_date = st.columns([1.5, 1.5, 1.5])
                 with col_add_dest:
-                    if st.button("➕ Add More Destination Rate", type="secondary", key="cust_btn_add_dest_row"):
-                        st.session_state.cust_dest_items.append({"dest": "", "rate": ""})
+                    if st.button("➕ Add More Destination", type="secondary", key="cust_btn_add_dest_row"):
+                        st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": ""})
                         st.rerun()
+                with col_fb:
+                    sel_missing_fallback = st.selectbox(
+                        "If missing in sheet:",
+                        ["❓ Ask me (Show Options)", "📊 Auto-Import from Master CC", "📊 Auto-Import from Master CLI"],
+                        index=0,
+                        key="cust_missing_fb_sel"
+                    )
                 with col_date:
                     sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_date_selector")
                     
                 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
                 if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
+                    fb_mode = None
+                    if "Master CC" in sel_missing_fallback:
+                        fb_mode = "CC"
+                    elif "Master CLI" in sel_missing_fallback:
+                        fb_mode = "CLI"
+
                     valid_updates = []
                     for di in st.session_state.cust_dest_items:
                         d_val = di.get("dest", "").strip()
                         r_val = di.get("rate", "").strip()
+                        s_val = di.get("scope", "🌐 All")
                         if d_val and r_val:
-                            valid_updates.append({"destination": d_val, "rate": r_val})
+                            valid_updates.append({
+                                "destination": d_val,
+                                "scope": s_val,
+                                "rate": r_val,
+                                "source": fb_mode
+                            })
                             
                     with st.spinner("Processing customer rate deck, filtering NANP & rounding rates to 6 digits..."):
                         ok, msg, res = process_customer_rate_deck(
@@ -2838,15 +3161,20 @@ def render_customer_standardizer_view():
             st.caption("If sales negotiated specific target rates (e.g. Italy: 0.01), enter them below or leave empty for base rates:")
 
             if "cust_new_dest_items" not in st.session_state:
-                st.session_state.cust_new_dest_items = [{"dest": "", "rate": ""}]
+                st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
 
             for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
-                c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
+                c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
                 with c_d1:
-                    d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_new_dest_in_{idx}")
+                    d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_new_dest_in_{idx}")
                 with c_d2:
-                    d_item["rate"] = st.text_input(f"Target Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_new_rate_in_{idx}")
+                    scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
+                    curr_sc = d_item.get("scope", "🌐 All")
+                    sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
+                    d_item["scope"] = st.selectbox(f"Scope #{idx+1}:", scope_opts, index=sc_idx, key=f"cust_new_scope_in_{idx}")
                 with c_d3:
+                    d_item["rate"] = st.text_input(f"Target Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_new_rate_in_{idx}")
+                with c_d4:
                     st.write("")
                     st.write("")
                     if len(st.session_state.cust_new_dest_items) > 1:
@@ -2857,7 +3185,7 @@ def render_customer_standardizer_view():
             col_add_n_dest, col_n_date = st.columns([2, 2])
             with col_add_n_dest:
                 if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
-                    st.session_state.cust_new_dest_items.append({"dest": "", "rate": ""})
+                    st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": ""})
                     st.rerun()
             with col_n_date:
                 sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
@@ -2872,8 +3200,9 @@ def render_customer_standardizer_view():
                     for di in st.session_state.cust_new_dest_items:
                         d_val = di.get("dest", "").strip()
                         r_val = di.get("rate", "").strip()
+                        s_val = di.get("scope", "🌐 All")
                         if d_val and r_val:
-                            valid_n_updates.append({"destination": d_val, "rate": r_val})
+                            valid_n_updates.append({"destination": d_val, "scope": s_val, "rate": r_val})
 
                     with st.spinner(f"Generating rate deck for {clean_cname} from Master {sel_service} ({sel_trunk_code})..."):
                         ok, msg, res = generate_new_customer_deck_from_master(
@@ -3064,7 +3393,8 @@ def render_executive_deck_card(idx, item, is_single=False):
                 if st.button(btn_fix_label, key=f"btn_apply_std_billing_{idx}_{is_single}", type="primary", use_container_width=True):
                     df_curr = item.get("df_clean")
                     if df_curr is not None:
-                        df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
+                        eff_d = item.get("effective_date", str(datetime.date.today()))
+                        df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches, new_effective_date=eff_d) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
                         new_xl_bytes = core_engine.generate_target_excel_bytes(df_fixed)
                         new_csv_bytes = core_engine.generate_target_csv_bytes(df_fixed)
                         
