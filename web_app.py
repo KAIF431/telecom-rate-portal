@@ -377,7 +377,7 @@ def clear_user_processed_cache(username):
         pass
 
 st.set_page_config(
-    page_title="🌐 Telecom Hub",
+    page_title="Telecom Hub",
     page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1275,7 +1275,7 @@ elif active_portal == "👥 Customer Portal":
     st.markdown('<div class="main-title">👥 Customer Rate Sheet Standardizer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Standardize customer rate decks against Master A-Z CC & CLI ratesheets with zero data loss.</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="main-title">🌐 Telecom Hub</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 # Expandable Profile Avatar Selector
