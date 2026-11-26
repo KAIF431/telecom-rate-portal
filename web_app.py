@@ -2196,22 +2196,101 @@ def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0",
     return res_df, len(res_df)
 
 
-def generate_customer_excel_bytes(df_clean, sheet_name="Customer Rate Deck"):
-    import io, gc
+_master_dest_cache = None
+def get_master_destinations_data():
+    global _master_dest_cache
+    if _master_dest_cache is not None:
+        return _master_dest_cache
+    json_path = os.path.join(os.path.dirname(__file__), "templates", "master_destinations.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                _master_dest_cache = json.load(f)
+                return _master_dest_cache
+        except Exception:
+            pass
+    return {"destinations": [], "details": {}}
+
+def smart_spell_check_destination(query, top_n=3):
+    import difflib
+    q = str(query or "").strip().lower()
+    if not q or len(q) < 2:
+        return []
+    data = get_master_destinations_data()
+    all_dests = data.get("destinations", [])
+    if not all_dests:
+        return []
+
+    words = [w for w in re.split(r'[\s\-_]+', q) if len(w) > 1]
+    
+    # Check if exact token match already works
+    if len(words) > 1:
+        exact_tok = [d for d in all_dests if all(w in d.lower() for w in words)]
+        if exact_tok:
+            return exact_tok[:top_n]
+    elif len(words) == 1:
+        exact_sub = [d for d in all_dests if words[0] in d.lower()]
+        if exact_sub:
+            return exact_sub[:top_n]
+
+    all_words = {}
+    for d in all_dests:
+        for w in re.split(r'[\s\-_]+', d):
+            wl = w.lower()
+            if len(wl) > 2:
+                if wl not in all_words:
+                    all_words[wl] = []
+                all_words[wl].append(d)
+
+    token_candidates = []
+    for qw in words:
+        close_w = difflib.get_close_matches(qw, all_words.keys(), n=3, cutoff=0.6)
+        for cw in close_w:
+            token_candidates.extend(all_words[cw])
+
+    if token_candidates:
+        scored = {}
+        for d in token_candidates:
+            d_lower = d.lower()
+            score = 0
+            for qw in words:
+                if qw in d_lower:
+                    score += 2
+                else:
+                    d_tokens = re.split(r'[\s\-_]+', d_lower)
+                    if difflib.get_close_matches(qw, d_tokens, cutoff=0.6):
+                        score += 1.5
+            scored[d] = score
+        sorted_dests = sorted(scored.keys(), key=lambda x: scored[x], reverse=True)
+        return sorted_dests[:top_n]
+    return []
+
+def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
+    """
+    Generates target Excel file matching 'Vendor Sample sheet.xlsx' exactly:
+    - Sheet Name: 'Rate_Amendment'
+    - Headers: ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
+    - Header fill: Silver/Grey (indexed 22 / D9D9D9)
+    - Header font: Calibri, 11pt, Bold, black
+    - Alignment: Center, Center
+    - Eff. Date: Native datetime.date with number_format = 'mm-dd-yy'
+    - AutoFilter: Enabled across A1:F...
+    - Column widths matching Vendor Sample Sheet exactly
+    """
+    import io, gc, datetime
     import openpyxl
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.styles.colors import Color
 
     output = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = sheet_name
 
-    headers = ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']
-    target_cols = [c for c in headers if c in df_clean.columns]
-    ws.append(target_cols)
+    headers = ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
+    ws.append(headers)
 
-    # Silver/Grey header fill matching Vendor Sample sheet.xlsx (D9D9D9 / indexed 22)
-    fill_hdr = PatternFill(fill_type='solid', start_color='D9D9D9', end_color='D9D9D9')
+    fill_22 = PatternFill(fill_type='solid', start_color='D9D9D9', end_color='D9D9D9')
     font_hdr = Font(name='Calibri', size=11, bold=True, color='000000')
     align_hdr = Alignment(horizontal='center', vertical='center')
     thin_border = Border(
@@ -2221,34 +2300,77 @@ def generate_customer_excel_bytes(df_clean, sheet_name="Customer Rate Deck"):
         bottom=Side(style='thin', color='BFBFBF')
     )
 
-    for col_num in range(1, len(target_cols) + 1):
+    for col_num in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=col_num)
-        cell.fill = fill_hdr
+        cell.fill = fill_22
         cell.font = font_hdr
         cell.alignment = align_hdr
         cell.border = thin_border
 
-    rows_data = df_clean[target_cols].values.tolist()
-    for r_idx, row in enumerate(rows_data, start=2):
-        ws.append(row)
-        ws.cell(row=r_idx, column=1).alignment = Alignment(horizontal='left', vertical='center')
-        ws.cell(row=r_idx, column=2).alignment = Alignment(horizontal='left', vertical='center')
-        ws.cell(row=r_idx, column=3).alignment = Alignment(horizontal='right', vertical='center')
-        ws.cell(row=r_idx, column=4).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=r_idx, column=5).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=r_idx, column=6).alignment = Alignment(horizontal='center', vertical='center')
+    codes = df_clean['Dial Code'].tolist() if 'Dial Code' in df_clean.columns else [''] * len(df_clean)
+    sums = df_clean['Summary'].tolist() if 'Summary' in df_clean.columns else [''] * len(df_clean)
+    rates = df_clean['New Rate'].tolist() if 'New Rate' in df_clean.columns else [''] * len(df_clean)
+    
+    date_col = 'Eff. Date' if 'Eff. Date' in df_clean.columns else ('Effective Date' if 'Effective Date' in df_clean.columns else None)
+    raw_dates = df_clean[date_col].tolist() if date_col else [None] * len(df_clean)
+    mins = df_clean['Minimum'].tolist() if 'Minimum' in df_clean.columns else [1] * len(df_clean)
+    incs = df_clean['Increment'].tolist() if 'Increment' in df_clean.columns else [1] * len(df_clean)
+
+    for r_idx in range(len(df_clean)):
+        c = str(codes[r_idx]).split('.')[0].strip() if pd.notna(codes[r_idx]) else ''
+        s = str(sums[r_idx]).strip() if pd.notna(sums[r_idx]) else ''
+        try:
+            r = float(rates[r_idx])
+        except Exception:
+            r = 0.0
+
+        d_val = raw_dates[r_idx]
+        d_obj = None
+        if pd.notna(d_val) and d_val:
+            if isinstance(d_val, (datetime.date, datetime.datetime)):
+                d_obj = d_val.date() if isinstance(d_val, datetime.datetime) else d_val
+            else:
+                d_str = str(d_val).split('T')[0].split(' ')[0].strip()
+                for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d']:
+                    try:
+                        d_obj = datetime.datetime.strptime(d_str, fmt).date()
+                        break
+                    except Exception:
+                        pass
+        if d_obj is None:
+            d_obj = datetime.date.today()
+
+        try:
+            m = int(float(mins[r_idx])) if pd.notna(mins[r_idx]) else 1
+        except Exception:
+            m = 1
+        try:
+            inc = int(float(incs[r_idx])) if pd.notna(incs[r_idx]) else 1
+        except Exception:
+            inc = 1
+
+        row_cells = [c, s, r, d_obj, m, inc]
+        ws.append(row_cells)
+
+        row_num = r_idx + 2
+        ws.cell(row=row_num, column=1).alignment = Alignment(horizontal='left', vertical='center')
+        ws.cell(row=row_num, column=2).alignment = Alignment(horizontal='left', vertical='center')
+        ws.cell(row=row_num, column=3).alignment = Alignment(horizontal='right', vertical='center')
+        ws.cell(row=row_num, column=4).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_num, column=4).number_format = 'mm-dd-yy'
+        ws.cell(row=row_num, column=5).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_num, column=6).alignment = Alignment(horizontal='center', vertical='center')
 
     # Enable Excel AutoFilter
-    max_col_letter = openpyxl.utils.get_column_letter(len(target_cols))
-    ws.auto_filter.ref = f"A1:{max_col_letter}{len(rows_data) + 1}"
+    ws.auto_filter.ref = f"A1:F{len(df_clean) + 1}"
 
-    # Auto-fit column widths matching professional telecom template
-    ws.column_dimensions['A'].width = 12.0
+    # Auto-fit column widths matching Vendor Sample Sheet exactly
+    ws.column_dimensions['A'].width = 11.0
     ws.column_dimensions['B'].width = 44.0
     ws.column_dimensions['C'].width = 14.5
-    ws.column_dimensions['D'].width = 12.0
-    ws.column_dimensions['E'].width = 12.0
-    ws.column_dimensions['F'].width = 16.0
+    ws.column_dimensions['D'].width = 13.0
+    ws.column_dimensions['E'].width = 10.0
+    ws.column_dimensions['F'].width = 10.5
 
     wb.save(output)
     output.seek(0)
@@ -2401,6 +2523,16 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             if matched_count == 0:
                 match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
                 matched_count = int(match_mask.sum())
+            if matched_count == 0:
+                spell_candidates = smart_spell_check_destination(target_dest, top_n=2)
+                for cand in spell_candidates:
+                    c_words = [w for w in re.split(r'[\s\-_]+', cand) if len(w) > 1]
+                    c_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in c_words))
+                    if int(c_mask.sum()) > 0:
+                        match_mask = c_mask
+                        matched_count = int(c_mask.sum())
+                        target_dest = cand
+                        break
 
             # Apply scope filter if matched in sheet
             if matched_count > 0:
@@ -2514,11 +2646,8 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
     # 8. Generate Styled Excel (Vendor Sample formatting with AutoFilter) and CSV bytes
-    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Customer Rate Deck")
-
-    buf_csv = io.StringIO()
-    df.to_csv(buf_csv, index=False)
-    csv_bytes = buf_csv.getvalue().encode("utf-8")
+    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Rate_Amendment")
+    csv_bytes = core_engine.generate_target_csv_bytes(df)
 
     elapsed_time = time.time() - t0
 
@@ -2626,6 +2755,16 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
             if matched_count == 0:
                 match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
                 matched_count = int(match_mask.sum())
+            if matched_count == 0:
+                spell_candidates = smart_spell_check_destination(target_dest, top_n=2)
+                for cand in spell_candidates:
+                    c_words = [w for w in re.split(r'[\s\-_]+', cand) if len(w) > 1]
+                    c_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in c_words))
+                    if int(c_mask.sum()) > 0:
+                        match_mask = c_mask
+                        matched_count = int(c_mask.sum())
+                        target_dest = cand
+                        break
 
             if matched_count > 0:
                 mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
@@ -2695,11 +2834,8 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
     # Generate Styled Excel matching Vendor Sample sheet exactly
-    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Customer Rate Deck")
-
-    buf_csv = io.StringIO()
-    df.to_csv(buf_csv, index=False)
-    csv_bytes = buf_csv.getvalue().encode("utf-8")
+    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Rate_Amendment")
+    csv_bytes = core_engine.generate_target_csv_bytes(df)
 
     elapsed_time = time.time() - t0
 
@@ -2812,11 +2948,9 @@ def render_customer_standardizer_view():
                         if df_curr is not None:
                             eff_d = item.get("effective_date", str(datetime.date.today()))
                             df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches, new_effective_date=eff_d) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
-                            item["xl_bytes"] = generate_customer_excel_bytes(df_fixed, sheet_name="Customer Rate Deck")
-                            buf_c = io.StringIO()
-                            df_fixed.to_csv(buf_c, index=False)
+                            item["xl_bytes"] = generate_customer_excel_bytes(df_fixed, sheet_name="Rate_Amendment")
                             item["df_clean"] = df_fixed
-                            item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                            item["csv_bytes"] = core_engine.generate_target_csv_bytes(df_fixed)
                             item["mismatches"] = []
                             item["has_mismatch"] = False
                             st.success("✅ Standard billing applied successfully!")
@@ -2986,12 +3120,9 @@ def render_customer_standardizer_view():
                             if count_added > 0 and df_curr is not None:
                                 df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
                                 df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
-                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Customer Rate Deck")
-                                buf_c = io.StringIO()
-                                df_merged.to_csv(buf_c, index=False)
+                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Rate_Amendment")
                                 item["df_clean"] = df_merged
-                                item["xl_bytes"] = buf_x.getvalue()
-                                item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                                item["csv_bytes"] = core_engine.generate_target_csv_bytes(df_merged)
                                 item["missing_destinations"].pop(m_idx)
                                 item.setdefault("added_from_master_summary", []).append({
                                     "destination": m_item['destination'],
@@ -3023,12 +3154,9 @@ def render_customer_standardizer_view():
                             if count_added > 0 and df_curr is not None:
                                 df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
                                 df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
-                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Customer Rate Deck")
-                                buf_c = io.StringIO()
-                                df_merged.to_csv(buf_c, index=False)
+                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Rate_Amendment")
                                 item["df_clean"] = df_merged
-                                item["xl_bytes"] = buf_x.getvalue()
-                                item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
+                                item["csv_bytes"] = core_engine.generate_target_csv_bytes(df_merged)
                                 item["missing_destinations"].pop(m_idx)
                                 item.setdefault("added_from_master_summary", []).append({
                                     "destination": m_item['destination'],
@@ -3116,11 +3244,32 @@ def render_customer_standardizer_view():
                 if "cust_dest_items" not in st.session_state:
                     st.session_state.cust_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
                     
+                with st.expander("🔍 Search & Pick Master Destination (CC & CLI)", expanded=False):
+                    master_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
+                    picked_d = st.selectbox("Search / Browse Master Destination:", master_d_list, key="cust_pick_master_tab1")
+                    if picked_d and picked_d != "-- Select or Type to Search Destination --":
+                        if st.button(f"➕ Use '{picked_d}' in Destination Input", key="btn_apply_picked_t1"):
+                            if st.session_state.cust_dest_items:
+                                st.session_state.cust_dest_items[0]["dest"] = picked_d
+                                st.session_state["cust_dest_in_0"] = picked_d
+                                st.rerun()
+
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
                     c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
                     with c_d1:
                         d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_dest_in_{idx}")
-                    with c_d2:
+                        dest_val = d_item.get("dest", "").strip()
+                        if dest_val and len(dest_val) >= 2:
+                            suggs = smart_spell_check_destination(dest_val, top_n=3)
+                            if suggs and dest_val.lower() != suggs[0].lower():
+                                c_sg1, c_sg2 = st.columns([2.8, 1.2])
+                                with c_sg1:
+                                    st.markdown(f"<span style='font-size: 0.78rem; color: #0E7490; font-weight: 600;'>💡 Did you mean: <b>{suggs[0]}</b>?</span>", unsafe_allow_html=True)
+                                with c_sg2:
+                                    if st.button("Apply", key=f"btn_apply_sugg_{idx}", type="secondary", use_container_width=True):
+                                        st.session_state.cust_dest_items[idx]["dest"] = suggs[0]
+                                        st.session_state[f"cust_dest_in_{idx}"] = suggs[0]
+                                        st.rerun()
                         scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                         curr_sc = d_item.get("scope", "🌐 All")
                         sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
@@ -3230,11 +3379,32 @@ def render_customer_standardizer_view():
             if "cust_new_dest_items" not in st.session_state:
                 st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
 
+            with st.expander("🔍 Search & Pick Master Destination (CC & CLI)", expanded=False):
+                master_n_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
+                picked_n_d = st.selectbox("Search / Browse Master Destination:", master_n_d_list, key="cust_pick_master_tab2")
+                if picked_n_d and picked_n_d != "-- Select or Type to Search Destination --":
+                    if st.button(f"➕ Use '{picked_n_d}' in Destination Input", key="btn_apply_picked_t2"):
+                        if st.session_state.cust_new_dest_items:
+                            st.session_state.cust_new_dest_items[0]["dest"] = picked_n_d
+                            st.session_state["cust_new_dest_in_0"] = picked_n_d
+                            st.rerun()
+
             for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
                 c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
                 with c_d1:
                     d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_new_dest_in_{idx}")
-                with c_d2:
+                    dest_val = d_item.get("dest", "").strip()
+                    if dest_val and len(dest_val) >= 2:
+                        suggs = smart_spell_check_destination(dest_val, top_n=3)
+                        if suggs and dest_val.lower() != suggs[0].lower():
+                            c_sg1, c_sg2 = st.columns([2.8, 1.2])
+                            with c_sg1:
+                                st.markdown(f"<span style='font-size: 0.78rem; color: #0E7490; font-weight: 600;'>💡 Did you mean: <b>{suggs[0]}</b>?</span>", unsafe_allow_html=True)
+                            with c_sg2:
+                                if st.button("Apply", key=f"btn_apply_new_sugg_{idx}", type="secondary", use_container_width=True):
+                                    st.session_state.cust_new_dest_items[idx]["dest"] = suggs[0]
+                                    st.session_state[f"cust_new_dest_in_{idx}"] = suggs[0]
+                                    st.rerun()
                     scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                     curr_sc = d_item.get("scope", "🌐 All")
                     sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
