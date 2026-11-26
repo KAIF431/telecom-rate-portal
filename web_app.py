@@ -377,8 +377,8 @@ def clear_user_processed_cache(username):
         pass
 
 st.set_page_config(
-    page_title="Vendor Rate Sheet Standardizer",
-    page_icon="⚡",
+    page_title="🌐 Telecom Hub",
+    page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1275,7 +1275,7 @@ elif active_portal == "👥 Customer Portal":
     st.markdown('<div class="main-title">👥 Customer Rate Sheet Standardizer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Standardize customer rate decks against Master A-Z CC & CLI ratesheets with zero data loss.</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="main-title">⚡ Vendor Rate Sheet Standardizer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">🌐 Telecom Hub</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">High-speed wholesale rate deck standardization, zero data loss, exact sample formatting.</div>', unsafe_allow_html=True)
 
 # Expandable Profile Avatar Selector
@@ -2195,6 +2195,72 @@ def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0",
     res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
     return res_df, len(res_df)
 
+
+def generate_customer_excel_bytes(df_clean, sheet_name="Customer Rate Deck"):
+    import io, gc
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+    output = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+
+    headers = ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']
+    target_cols = [c for c in headers if c in df_clean.columns]
+    ws.append(target_cols)
+
+    # Silver/Grey header fill matching Vendor Sample sheet.xlsx (D9D9D9 / indexed 22)
+    fill_hdr = PatternFill(fill_type='solid', start_color='D9D9D9', end_color='D9D9D9')
+    font_hdr = Font(name='Calibri', size=11, bold=True, color='000000')
+    align_hdr = Alignment(horizontal='center', vertical='center')
+    thin_border = Border(
+        left=Side(style='thin', color='BFBFBF'),
+        right=Side(style='thin', color='BFBFBF'),
+        top=Side(style='thin', color='BFBFBF'),
+        bottom=Side(style='thin', color='BFBFBF')
+    )
+
+    for col_num in range(1, len(target_cols) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = fill_hdr
+        cell.font = font_hdr
+        cell.alignment = align_hdr
+        cell.border = thin_border
+
+    rows_data = df_clean[target_cols].values.tolist()
+    for r_idx, row in enumerate(rows_data, start=2):
+        ws.append(row)
+        ws.cell(row=r_idx, column=1).alignment = Alignment(horizontal='left', vertical='center')
+        ws.cell(row=r_idx, column=2).alignment = Alignment(horizontal='left', vertical='center')
+        ws.cell(row=r_idx, column=3).alignment = Alignment(horizontal='right', vertical='center')
+        ws.cell(row=r_idx, column=4).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=r_idx, column=5).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=r_idx, column=6).alignment = Alignment(horizontal='center', vertical='center')
+
+    # Enable Excel AutoFilter
+    max_col_letter = openpyxl.utils.get_column_letter(len(target_cols))
+    ws.auto_filter.ref = f"A1:{max_col_letter}{len(rows_data) + 1}"
+
+    # Auto-fit column widths matching professional telecom template
+    ws.column_dimensions['A'].width = 12.0
+    ws.column_dimensions['B'].width = 44.0
+    ws.column_dimensions['C'].width = 14.5
+    ws.column_dimensions['D'].width = 12.0
+    ws.column_dimensions['E'].width = 12.0
+    ws.column_dimensions['F'].width = 16.0
+
+    wb.save(output)
+    output.seek(0)
+    data = output.getvalue()
+    try:
+        wb.close()
+    except Exception:
+        pass
+    del wb, ws
+    gc.collect()
+    return data
+
 def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif"):
     import io, re, datetime, time
     import pandas as pd
@@ -2447,11 +2513,8 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     final_xl_filename = f"{suggested_full_name}.xlsx"
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
-    # 8. Generate Excel and CSV bytes
-    buf_xl = io.BytesIO()
-    with pd.ExcelWriter(buf_xl, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Customer Rate Deck")
-    xl_bytes = buf_xl.getvalue()
+    # 8. Generate Styled Excel (Vendor Sample formatting with AutoFilter) and CSV bytes
+    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Customer Rate Deck")
 
     buf_csv = io.StringIO()
     df.to_csv(buf_csv, index=False)
@@ -2590,59 +2653,49 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
                 dest_labels_for_name.append(f"{target_dest} {trend}")
                 change_summary.append({
                     "destination": target_dest,
-                    "old_rate": f"{old_avg_rate:.4f}",
+                    "scope": scope,
                     "new_rate": formatted_new_rate,
-                    "trend": trend.upper(),
-                    "diff": rate_diff,
-                    "rows_updated": matched_count
+                    "rows_updated": matched_count,
+                    "is_new_deck": True
                 })
 
     # FINAL STRICT DEDUPLICATION: Guarantees 0 duplicate dial codes in entire deck!
     df = df.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
 
-    # Check mismatches against Country Master Billing (FIX TUPLE UNPACK!)
+    # For NEW Customer Deck from Master A-Z, no mismatches (pulses are already master standard!)
     mismatches = []
-    if hasattr(bm, "audit_dataframe_billing"):
-        try:
-            audit_res = bm.audit_dataframe_billing(df)
-            if isinstance(audit_res, tuple) and len(audit_res) >= 2:
-                mismatches = audit_res[1]
-            elif isinstance(audit_res, list):
-                mismatches = audit_res
-        except Exception:
-            mismatches = []
 
-    # Build smart filename
+    # Build clean filename following Kaif's exact formula:
+    # 1 dest: {Customer} {Dest1} new with A-Z {username}
+    # 2 dest: {Customer} {Dest1} {Dest2} new with A-Z {username}
+    # >2 or 0 dest: {Customer} A to Z new {username}
     c_clean = re.sub(r'[^a-zA-Z0-9_\-\s]+', '', str(customer_name).strip())
     if not c_clean:
         c_clean = "New Customer"
-        
-    u_tag = str(current_username or "kaif").strip().lower()
-    
-    if len(dest_labels_for_name) == 1:
-        suffix = f"{dest_labels_for_name[0]} {u_tag}"
-    elif len(dest_labels_for_name) == 2:
-        suffix = f"{dest_labels_for_name[0]} {dest_labels_for_name[1]} {u_tag}"
-    elif len(dest_labels_for_name) > 2:
-        trends = [c["trend"].lower() for c in change_summary]
-        if all(t == "inc" for t in trends):
-            suffix = f"Various inc {u_tag}"
-        elif all(t == "dec" for t in trends):
-            suffix = f"Various dec {u_tag}"
-        else:
-            suffix = f"Various inc dec {u_tag}"
-    else:
-        suffix = f"Standardized {u_tag}"
 
-    suggested_full_name = f"Name - {c_clean} ({trunk_code} {service_type}) A to Z {suffix}"
+    u_tag = str(current_username or "kaif").strip().lower()
+
+    clean_dest_list = []
+    if dest_updates:
+        for it in dest_updates:
+            d_str = str(it.get("destination", "")).strip()
+            if d_str and d_str not in clean_dest_list:
+                clean_dest_list.append(d_str)
+
+    if len(clean_dest_list) == 1:
+        suffix = f"{clean_dest_list[0]} new with A-Z {u_tag}"
+    elif len(clean_dest_list) == 2:
+        suffix = f"{clean_dest_list[0]} {clean_dest_list[1]} new with A-Z {u_tag}"
+    else:
+        suffix = f"A to Z new {u_tag}"
+
+    suggested_full_name = f"{c_clean} {suffix}"
+
     final_xl_filename = f"{suggested_full_name}.xlsx"
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
-    # Generate Excel and CSV bytes
-    buf_xl = io.BytesIO()
-    with pd.ExcelWriter(buf_xl, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Customer Rate Deck")
-    xl_bytes = buf_xl.getvalue()
+    # Generate Styled Excel matching Vendor Sample sheet exactly
+    xl_bytes = generate_customer_excel_bytes(df, sheet_name="Customer Rate Deck")
 
     buf_csv = io.StringIO()
     df.to_csv(buf_csv, index=False)
@@ -2759,13 +2812,10 @@ def render_customer_standardizer_view():
                         if df_curr is not None:
                             eff_d = item.get("effective_date", str(datetime.date.today()))
                             df_fixed = bm.apply_standard_billing_to_dataframe(df_curr, mismatches, new_effective_date=eff_d) if hasattr(bm, "apply_standard_billing_to_dataframe") else df_curr
-                            buf_x = io.BytesIO()
-                            with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
-                                df_fixed.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                            item["xl_bytes"] = generate_customer_excel_bytes(df_fixed, sheet_name="Customer Rate Deck")
                             buf_c = io.StringIO()
                             df_fixed.to_csv(buf_c, index=False)
                             item["df_clean"] = df_fixed
-                            item["xl_bytes"] = buf_x.getvalue()
                             item["csv_bytes"] = buf_c.getvalue().encode("utf-8")
                             item["mismatches"] = []
                             item["has_mismatch"] = False
@@ -2859,17 +2909,30 @@ def render_customer_standardizer_view():
             # Executive Summary of Rate Changes Table
             if change_summary:
                 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
-                st.markdown("**📋 Rate Updates Breakdown:**")
-                c_rows_display = []
-                for cs in change_summary:
-                    sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
-                    c_rows_display.append({
-                        "Destination": f"{cs['destination']}{sc_lbl}",
-                        "Old Rate": cs["old_rate"],
-                        "New Rate": cs["new_rate"],
-                        "Action / Trend": f"📈 +{cs['diff']:.4f} (INC)" if cs["trend"] == "INC" else f"📉 {cs['diff']:.4f} (DEC)",
-                        "Rows Impacted": cs["rows_updated"]
-                    })
+                is_any_new = any(cs.get("is_new_deck") for cs in change_summary)
+                if is_any_new:
+                    st.markdown("**🎯 Configured Target Rates:**")
+                    c_rows_display = []
+                    for cs in change_summary:
+                        sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
+                        c_rows_display.append({
+                            "Destination": f"{cs['destination']}{sc_lbl}",
+                            "Target Rate": cs["new_rate"],
+                            "Codes Impacted": cs["rows_updated"],
+                            "Status": "✅ Configured"
+                        })
+                else:
+                    st.markdown("**📋 Rate Updates Breakdown:**")
+                    c_rows_display = []
+                    for cs in change_summary:
+                        sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
+                        c_rows_display.append({
+                            "Destination": f"{cs['destination']}{sc_lbl}",
+                            "Old Rate": cs.get("old_rate", "-"),
+                            "New Rate": cs["new_rate"],
+                            "Action / Trend": f"📈 +{cs.get('diff', 0):.4f} (INC)" if cs.get("trend") == "INC" else f"📉 {cs.get('diff', 0):.4f} (DEC)",
+                            "Rows Impacted": cs["rows_updated"]
+                        })
                 st.dataframe(pd.DataFrame(c_rows_display), use_container_width=True, hide_index=True)
 
             # Added from Master Summary Table
@@ -2923,9 +2986,7 @@ def render_customer_standardizer_view():
                             if count_added > 0 and df_curr is not None:
                                 df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
                                 df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
-                                buf_x = io.BytesIO()
-                                with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
-                                    df_merged.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Customer Rate Deck")
                                 buf_c = io.StringIO()
                                 df_merged.to_csv(buf_c, index=False)
                                 item["df_clean"] = df_merged
@@ -2962,9 +3023,7 @@ def render_customer_standardizer_view():
                             if count_added > 0 and df_curr is not None:
                                 df_merged = pd.concat([df_curr, df_new_rows], ignore_index=True)
                                 df_merged = df_merged.drop_duplicates(subset=['Dial Code'], keep='last').reset_index(drop=True)
-                                buf_x = io.BytesIO()
-                                with pd.ExcelWriter(buf_x, engine="openpyxl") as wr:
-                                    df_merged.to_excel(wr, index=False, sheet_name="Customer Rate Deck")
+                                item["xl_bytes"] = generate_customer_excel_bytes(df_merged, sheet_name="Customer Rate Deck")
                                 buf_c = io.StringIO()
                                 df_merged.to_csv(buf_c, index=False)
                                 item["df_clean"] = df_merged
@@ -3130,12 +3189,20 @@ def render_customer_standardizer_view():
 
     with cust_tab2:
         with st.container(border=True):
-            st.markdown("""
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">➕ Generate New Customer Deck (From Master A-Z)</span>
-            </div>
-            """, unsafe_allow_html=True)
-            st.caption("Generate a fresh 6-column rate sheet from Master A-Z CC or CLI reference sheets for a new client:")
+            col_t2_h, col_t2_rst = st.columns([3.5, 1.2])
+            with col_t2_h:
+                st.markdown("""
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">➕ Generate New Customer Deck (From Master A-Z)</span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.caption("Generate a fresh 6-column rate sheet from Master A-Z CC or CLI reference sheets for a new client:")
+            with col_t2_rst:
+                if st.button("🗑️ Clear / Reset Form", key="btn_reset_new_cust_deck", type="secondary", use_container_width=True):
+                    st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
+                    st.session_state.cust_processed_result = None
+                    st.session_state.new_cust_name_in = ""
+                    st.rerun()
 
             c_n1, c_n2 = st.columns([1.5, 2.5])
             with c_n1:
@@ -3272,20 +3339,10 @@ st.write("")
 
 qc_codes = load_qc_exception_codes()
 
-# Initialize active session processed results (with auto-restore on page refresh)
-if "processed_results" not in st.session_state or st.session_state.processed_results is None:
-    if not st.session_state.get("cache_cleared"):
-        curr_u = current_user.get("username", "kaif") if ("current_user" in locals() and isinstance(current_user, dict)) else "kaif"
-        cached_items, cached_elapsed = load_user_processed_cache(curr_u)
-        if cached_items:
-            st.session_state.processed_results = cached_items
-            st.session_state.elapsed_time = cached_elapsed
-        else:
-            st.session_state.processed_results = None
-            st.session_state.elapsed_time = None
-    else:
-        st.session_state.processed_results = None
-        st.session_state.elapsed_time = None
+# Initialize active session processed results (Fresh session on login, no cross-session restore)
+if "processed_results" not in st.session_state:
+    st.session_state.processed_results = None
+    st.session_state.elapsed_time = None
 
 # If sheets were just processed, trigger automatic browser download via JS
 if st.session_state.get("just_processed") and st.session_state.processed_results:
@@ -3381,12 +3438,13 @@ def render_executive_deck_card(idx, item, is_single=False):
                     st.caption("Vendor pulse differs from standard master (Country Billing.xlsx)")
                     mm_table = []
                     for mm in mismatches[:100]:
-                        mm_table.append({
-                            "Destination": mm["destination"],
-                            "Dial Code": mm["dial_code"],
-                            "Vendor": mm["vendor_pulse"],
-                            "Standard": mm["standard_pulse"]
-                        })
+                        if isinstance(mm, dict):
+                            mm_table.append({
+                                "Destination": mm.get("destination", ""),
+                                "Dial Code": mm.get("dial_code", ""),
+                                "Vendor": mm.get("vendor_pulse", ""),
+                                "Standard": mm.get("standard_pulse", "")
+                            })
                     st.dataframe(pd.DataFrame(mm_table), use_container_width=True, hide_index=True)
             with c_fix:
                 btn_fix_label = "⚡ Fix Standard"
