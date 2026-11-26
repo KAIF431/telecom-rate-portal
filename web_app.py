@@ -2415,17 +2415,17 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     # Priority Pass: Exact RouteTrust signatures
     for c in df.columns:
         cl = str(c).strip().lower()
-        if cl in ['rate key', 'ratekey', 'rate_key']:
+        if cl in ['rate key', 'ratekey', 'rate_key'] and 'Dial Code' not in col_map.values():
             col_map[c] = 'Dial Code'
-        elif cl in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum']:
+        elif cl in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum'] and 'Summary' not in col_map.values():
             col_map[c] = 'Summary'
-        elif cl in ['inter. rate', 'inter rate', 'inter_rate', 'international rate', 'international_rate', 'inter.rate', 'interrate']:
+        elif cl in ['inter. rate', 'inter rate', 'inter_rate', 'international rate', 'international_rate', 'inter.rate', 'interrate'] and 'New Rate' not in col_map.values():
             col_map[c] = 'New Rate'
-        elif cl in ['dur min', 'dur_min', 'durmin', 'dur_min.', 'dur min.', 'duration min', 'dur. min']:
+        elif cl in ['dur min', 'dur_min', 'durmin', 'dur_min.', 'dur min.', 'duration min', 'dur. min'] and 'Minimum' not in col_map.values():
             col_map[c] = 'Minimum'
-        elif cl in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc']:
+        elif cl in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc'] and 'Increment' not in col_map.values():
             col_map[c] = 'Increment'
-        elif cl in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.']:
+        elif cl in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.'] and 'Effective Date' not in col_map.values():
             col_map[c] = 'Effective Date'
 
     # Second Pass: Standard telecom keyword matching for remaining columns
@@ -2433,24 +2433,27 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         if c in col_map:
             continue
         cl = str(c).strip().lower()
-        if any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code']) and 'Dial Code' not in col_map.values():
+        if any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code']) and 'Dial Code' not in col_map.values() and 'Dial Code' not in df.columns:
             col_map[c] = 'Dial Code'
-        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']) and 'center' not in cl and 'id' not in cl and 'Summary' not in col_map.values():
+        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']) and 'center' not in cl and 'id' not in cl and 'Summary' not in col_map.values() and 'Summary' not in df.columns:
             col_map[c] = 'Summary'
-        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) and 'New Rate' not in col_map.values():
+        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) and 'New Rate' not in col_map.values() and 'New Rate' not in df.columns:
             col_map[c] = 'New Rate'
-        elif cl == 'rate' and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values():
+        elif cl == 'rate' and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values() and 'New Rate' not in df.columns:
             col_map[c] = 'New Rate'
-        elif any(x in cl for x in ['minimum', 'pulse1', 'min']) and 'Minimum' not in col_map.values():
+        elif any(x in cl for x in ['minimum', 'pulse1', 'min']) and 'Minimum' not in col_map.values() and 'Minimum' not in df.columns:
             col_map[c] = 'Minimum'
-        elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc']) and 'Increment' not in col_map.values():
+        elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc']) and 'Increment' not in col_map.values() and 'Increment' not in df.columns:
             col_map[c] = 'Increment'
-        elif any(x in cl for x in ['effective date', 'effective', 'date']) and 'end date' not in cl and 'Effective Date' not in col_map.values():
+        elif any(x in cl for x in ['effective date', 'effective', 'date']) and 'end date' not in cl and 'Effective Date' not in col_map.values() and 'Effective Date' not in df.columns:
             col_map[c] = 'Effective Date'
-        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values():
+        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values() and 'Comments' not in df.columns:
             col_map[c] = 'Comments'
 
     df = df.rename(columns=col_map)
+    # Deduplicate columns if multiple columns ended up with the same name
+    if any(df.columns.duplicated()):
+        df = df.loc[:, ~df.columns.duplicated(keep='first')].copy()
 
     # Ensure required columns exist
     if 'Dial Code' not in df.columns or 'Summary' not in df.columns or 'New Rate' not in df.columns:
@@ -2465,8 +2468,16 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
 
     # Clean strings
     for col in ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']:
-        df[col] = df[col].astype(str).str.strip()
-    df['Effective Date'] = df['Effective Date'].astype(str).str.replace(r'\s+\d{2}:\d{2}:\d{2}.*$', '', regex=True)
+        if col in df.columns:
+            s_c = df[col]
+            if isinstance(s_c, pd.DataFrame):
+                s_c = s_c.iloc[:, 0]
+            df[col] = s_c.astype(str).str.strip()
+    if 'Effective Date' in df.columns:
+        s_d = df['Effective Date']
+        if isinstance(s_d, pd.DataFrame):
+            s_d = s_d.iloc[:, 0]
+        df['Effective Date'] = s_d.astype(str).str.replace(r'\s+\d{2}:\d{2}:\d{2}.*$', '', regex=True)
 
     # 2. Filter rows where comment contains 'delete'
     deleted_comments_count = 0
