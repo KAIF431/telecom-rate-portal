@@ -138,16 +138,24 @@ def detect_header_row_and_columns(df_raw):
             elif (
                 (any(k in v for k in [
                     'destination name', 'dest name', 'dst name', 'dest desc', 'dest description', 'dst desc', 'dst description', 'dst destination', 'destinations name', 'dest summary', 'dst code name', 'dest code name', 'destination code name', 'area name', 'zone name', 'country name', 'city name',
-                    'rate summary', 'rates summary', 'rate center', 'destination summary'
+                    'rate summary', 'rates summary', 'rate sumr', 'rates sumr', 'rate sum', 'rate center', 'destination summary'
                 ])
                  or (any(n in v for n in ['name', 'desc', 'description']) and any(d in v for d in ['dest', 'dst', 'code', 'loc', 'country', 'region', 'area', 'zone', 'city']))
                  or (any(k in v for k in ['destination', 'destinations', 'summary', 'location', 'loc name', 'national', 'international', 'country', 'country name', 'description', 'region', 'regions', 'region name', 'area', 'zone'])
                      and not any(c in v for c in ['code', 'dial', 'prefix', 'digit'])))
             ) and (any(n in v for n in ['name', 'desc', 'description']) or not any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode', 'destination code', 'dest code', 'dst code', 'area code', 'area prefix'])) \
               and not any(tb in v for tb in ['time', 'peak', 'offpeak', 'off peak', 'band', 'timezone', 'effective', 'expiry', 'valid']):
+                is_rate_summary = any(rs in v for rs in ['rate summary', 'rates summary', 'rate sumr', 'rates sumr', 'rate sum', 'destination summary'])
+                curr_is_rate_summary = mapping.get('destination_is_rate_summary', False)
                 if 'destination' not in mapping:
                     mapping['destination'] = col_idx
+                    mapping['destination_is_rate_summary'] = is_rate_summary
                     kw_score += 7
+                elif is_rate_summary and not curr_is_rate_summary:
+                    mapping['destination_detail'] = mapping['destination']
+                    mapping['destination'] = col_idx
+                    mapping['destination_is_rate_summary'] = True
+                    kw_score += 5
                 elif 'destination_detail' not in mapping:
                     mapping['destination_detail'] = col_idx
                     kw_score += 4
@@ -203,7 +211,7 @@ def detect_header_row_and_columns(df_raw):
             ]) or '$' in val or v in ['rate', 'rates', 'price', 'prices', 'tariff', 'usd', 'eur', 'dollar', 'dollars', 'euro', 'euros', 'charge']) \
                 and not any(bad in v for bad in ['table', 'sheet', 'deck', 'notice', 'notification', 'prefix', 'plan', 'card', 'zone', 'time', 'increase', 'effective', 'key']) \
                 and not re.search(r'\b(?:current|old|prev|previous|existing|base|diff)\b', v):
-                if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v or 'inter rate' in v:
+                if 'rate' not in mapping or 'new rate' in v or 'new price' in v or 'rate usd' in v or 'inter rate' in v or 'inter. rate' in v or 'inter.rate' in v:
                     mapping['rate'] = col_idx
                     kw_score += 7
 
@@ -248,6 +256,7 @@ def detect_header_row_and_columns(df_raw):
                 'billing pulse', 'billing unit', 'pulse rate', 'unit', 'resolution', 'minimal time', 'billing resolution',
                 'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc',
                 'rounding', 'round', 'round off', 'rounding rule', 'min (sec)', 'min(sec)', 'increment (sec)', 'increment(sec)',
+                'dur min', 'dur inc', 'dur_min', 'dur_inc', 'durmin', 'durinc',
                 'minimum', 'initial', 'additional', 'subsequent', 'addl'
             ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding', 'min', 'inc', 'additional', 'subsequent']:
                 if 'pulse' not in mapping:

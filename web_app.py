@@ -2079,6 +2079,41 @@ def render_super_admin_accounts_tabs():
 # 👥 CUSTOMER RATE DECK STANDARDIZER ENGINE
 # ==============================================================================
 
+MASTER_TRUNK_ENTITIES = [
+    {"code": "MCM", "name": "🏛️ My Country Mobile (MCM)"},
+    {"code": "ACE", "name": "🏛️ Ace Peak Investment (ACE)"},
+    {"code": "TECH", "name": "🏛️ Techknowledge Open Systems (TECH)"},
+    {"code": "TWICH", "name": "🏛️ Twiching General Trading (TWICH)"},
+    {"code": "SOFT", "name": "🏛️ Softtop Limited (SOFT)"},
+    {"code": "LETS", "name": "🏛️ Lets Dial SG (LETS)"},
+    {"code": "AJX", "name": "🏛️ Ajoxi Limited (AJX)"},
+    {"code": "MERA", "name": "🏛️ MeraTalk LLC (MERA)"},
+    {"code": "TEL", "name": "🏛️ Teloz Limited (TEL)"},
+    {"code": "ROZ", "name": "🏛️ Rozper Limited (ROZ)"},
+]
+
+def format_telecom_rate(val):
+    """
+    Rounds telecom rates to at most 6 decimal places.
+    Leaves rates with fewer decimals (e.g. 0.0054, 0.01) intact without unwanted padding,
+    and strips IEEE floating point artifacts (e.g. 0.14650000000000002 -> 0.1465).
+    """
+    try:
+        import pandas as pd
+        if pd.isna(val) or str(val).strip() in ['', 'nan', 'none', 'null']:
+            return ''
+        v_clean = str(val).replace('$', '').replace(',', '.').strip()
+        f_val = float(v_clean)
+        if f_val == -1:
+            return '-1'
+        r = round(f_val, 6)
+        s = f'{r:.6f}'.rstrip('0').rstrip('.')
+        if s == '':
+            return '0'
+        return s
+    except Exception:
+        return str(val).strip()
+
 def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effective_date_val, current_username="kaif"):
     import io, re, datetime, time
     import pandas as pd
@@ -2088,39 +2123,63 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     t0 = time.time()
     try:
         if str(original_filename).lower().endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str)
+            df = load_csv_safely(io.BytesIO(file_bytes))
         else:
             df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
     except Exception as e:
         return False, f"Could not parse sheet: {e}", None
 
+    # Promote header row if loaded without header (e.g. from load_csv_safely)
+    if all(isinstance(c, int) for c in df.columns) or any(str(c).isdigit() for c in df.columns):
+        for r_idx in range(min(5, len(df))):
+            row_vals = [str(v).strip().lower() for v in df.iloc[r_idx].values]
+            if any(k in row_vals for k in ['rate key', 'dial code', 'dialcode', 'code', 'prefix']) or any(k in row_vals for k in ['rate summary', 'rate sumr', 'rate sum', 'ratesummary', 'ratesumr', 'summary', 'destination']):
+                df.columns = [str(c).strip() for c in df.iloc[r_idx].values]
+                df = df.iloc[r_idx + 1:].copy().reset_index(drop=True)
+                break
+
     initial_rows = len(df)
     
-    # 1. Flexible column normalization
+    # 1. Flexible column normalization with RouteTrust Switch Export Priority
     col_map = {}
+    
+    # Priority Pass: Exact RouteTrust signatures
     for c in df.columns:
         cl = str(c).strip().lower()
-        if any(x in cl for x in ['rate key', 'dial code', 'dialcode', 'prefix', 'code']):
-            if 'Dial Code' not in col_map.values():
-                col_map[c] = 'Dial Code'
-        elif any(x in cl for x in ['rate summary', 'summary', 'destination', 'country', 'description']):
-            if 'Summary' not in col_map.values():
-                col_map[c] = 'Summary'
-        elif any(x in cl for x in ['inter. rate', 'inter rate', 'new rate', 'current rate', 'tariff', 'price']) or cl == 'rate':
-            if 'New Rate' not in col_map.values():
-                col_map[c] = 'New Rate'
-        elif any(x in cl for x in ['dur min', 'minimum', 'pulse1', 'min']):
-            if 'Minimum' not in col_map.values():
-                col_map[c] = 'Minimum'
-        elif any(x in cl for x in ['dur inc', 'increment', 'interval', 'pulse2', 'inc']):
-            if 'Increment' not in col_map.values():
-                col_map[c] = 'Increment'
-        elif any(x in cl for x in ['start date', 'effective date', 'effective', 'date']):
-            if 'Effective Date' not in col_map.values():
-                col_map[c] = 'Effective Date'
-        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']):
-            if 'Comments' not in col_map.values():
-                col_map[c] = 'Comments'
+        if cl in ['rate key', 'ratekey', 'rate_key']:
+            col_map[c] = 'Dial Code'
+        elif cl in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum']:
+            col_map[c] = 'Summary'
+        elif cl in ['inter. rate', 'inter rate', 'inter_rate', 'international rate', 'international_rate', 'inter.rate', 'interrate']:
+            col_map[c] = 'New Rate'
+        elif cl in ['dur min', 'dur_min', 'durmin', 'dur_min.', 'dur min.', 'duration min', 'dur. min']:
+            col_map[c] = 'Minimum'
+        elif cl in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc']:
+            col_map[c] = 'Increment'
+        elif cl in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.']:
+            col_map[c] = 'Effective Date'
+
+    # Second Pass: Standard telecom keyword matching for remaining columns
+    for c in df.columns:
+        if c in col_map:
+            continue
+        cl = str(c).strip().lower()
+        if any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code']) and 'Dial Code' not in col_map.values():
+            col_map[c] = 'Dial Code'
+        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']) and 'center' not in cl and 'id' not in cl and 'Summary' not in col_map.values():
+            col_map[c] = 'Summary'
+        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) and 'New Rate' not in col_map.values():
+            col_map[c] = 'New Rate'
+        elif cl == 'rate' and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values():
+            col_map[c] = 'New Rate'
+        elif any(x in cl for x in ['minimum', 'pulse1', 'min']) and 'Minimum' not in col_map.values():
+            col_map[c] = 'Minimum'
+        elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc']) and 'Increment' not in col_map.values():
+            col_map[c] = 'Increment'
+        elif any(x in cl for x in ['effective date', 'effective', 'date']) and 'end date' not in cl and 'Effective Date' not in col_map.values():
+            col_map[c] = 'Effective Date'
+        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values():
+            col_map[c] = 'Comments'
 
     df = df.rename(columns=col_map)
 
@@ -2153,6 +2212,9 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     nanp_excluded_count = int(mask_nanp.sum())
     df = df[~mask_nanp]
 
+    # Format all rates to max 6 decimal places (no floating point glitches)
+    df['New Rate'] = df['New Rate'].apply(format_telecom_rate)
+
     # 4. Extract only standard 6 columns in exact order
     target_cols = ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']
     df = df[target_cols].copy()
@@ -2163,51 +2225,55 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     total_rows_updated = 0
     eff_date_str = str(effective_date_val)
 
-    for item in dest_updates:
-        target_dest = str(item.get("destination", "")).strip()
-        new_rate_raw = item.get("rate")
-        if not target_dest or new_rate_raw is None:
-            continue
-        try:
-            new_rate_float = float(str(new_rate_raw).replace("$", "").strip())
-        except Exception:
-            continue
+    if dest_updates:
+        for item in dest_updates:
+            target_dest = str(item.get("destination", "")).strip()
+            new_rate_raw = item.get("rate")
+            if not target_dest or new_rate_raw is None:
+                continue
+            try:
+                new_rate_float = float(str(new_rate_raw).replace("$", "").replace(",", ".").strip())
+            except Exception:
+                continue
 
-        dest_escaped = re.escape(target_dest)
-        match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
-        matched_count = int(match_mask.sum())
-        if matched_count == 0:
-            match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
+            dest_escaped = re.escape(target_dest)
+            match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
             matched_count = int(match_mask.sum())
+            if matched_count == 0:
+                match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
+                matched_count = int(match_mask.sum())
 
-        if matched_count > 0:
-            existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
-            old_avg_rate = existing_rates_series.dropna().mean()
-            if pd.isna(old_avg_rate) or old_avg_rate == 0:
-                old_avg_rate = 0.0
+            if matched_count > 0:
+                existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
+                old_avg_rate = existing_rates_series.dropna().mean()
+                if pd.isna(old_avg_rate) or old_avg_rate == 0:
+                    old_avg_rate = 0.0
 
-            trend = "inc" if new_rate_float >= old_avg_rate else "dec"
-            rate_diff = new_rate_float - old_avg_rate
+                trend = "inc" if new_rate_float >= old_avg_rate else "dec"
+                rate_diff = new_rate_float - old_avg_rate
 
-            df.loc[match_mask, 'New Rate'] = f"{new_rate_float:.4f}"
-            df.loc[match_mask, 'Effective Date'] = eff_date_str
+                formatted_new_rate = format_telecom_rate(new_rate_float)
+                df.loc[match_mask, 'New Rate'] = formatted_new_rate
+                df.loc[match_mask, 'Effective Date'] = eff_date_str
 
-            total_rows_updated += matched_count
-            dest_labels_for_name.append(f"{target_dest} {trend}")
-            change_summary.append({
-                "destination": target_dest,
-                "old_rate": f"{old_avg_rate:.4f}",
-                "new_rate": f"{new_rate_float:.4f}",
-                "trend": trend.upper(),
-                "diff": rate_diff,
-                "rows_updated": matched_count
-            })
+                total_rows_updated += matched_count
+                dest_labels_for_name.append(f"{target_dest} {trend}")
+                change_summary.append({
+                    "destination": target_dest,
+                    "old_rate": f"{old_avg_rate:.4f}",
+                    "new_rate": formatted_new_rate,
+                    "trend": trend.upper(),
+                    "diff": rate_diff,
+                    "rows_updated": matched_count
+                })
 
     # 6. Check mismatches against Country Master Billing
     mismatches = []
-    bm_data = bm.load_master_billing() if hasattr(bm, "load_master_billing") else {}
-    if bm_data:
-        mismatches = bm.audit_dataframe_billing(df, bm_data) if hasattr(bm, "audit_dataframe_billing") else []
+    if hasattr(bm, "audit_dataframe_billing"):
+        try:
+            mismatches = bm.audit_dataframe_billing(df)
+        except Exception:
+            mismatches = []
 
     # 7. Build smart filename preserving original customer sheet base
     base_stem = original_filename.rsplit(".", 1)[0]
@@ -2227,7 +2293,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         else:
             suffix = f"Various inc dec {u_tag}"
     else:
-        suffix = f"standardized {u_tag}"
+        suffix = f"Standardized {u_tag}"
 
     suggested_full_name = f"Name - {base_clean} {suffix}"
     final_xl_filename = f"{suggested_full_name}.xlsx"
@@ -2251,7 +2317,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         "deleted_comments_count": deleted_comments_count,
         "nanp_excluded_count": nanp_excluded_count,
         "total_rows_updated": total_rows_updated,
-        "destinations_count": len(dest_updates)
+        "destinations_count": len(dest_updates) if dest_updates else 0
     }
 
     result = {
@@ -2271,6 +2337,170 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     }
     return True, "Success", result
 
+def generate_new_customer_deck_from_master(service_type, trunk_code, customer_name, dest_updates, effective_date_val, current_username="kaif"):
+    import io, re, datetime, time, os
+    import pandas as pd
+    import billing_manager as bm
+    import core_engine
+
+    t0 = time.time()
+    
+    if service_type == "CC":
+        p_master = os.path.join(os.path.dirname(__file__), "templates", "CC_Rates_Sheet_2026_02_01.xlsx")
+        if not os.path.exists(p_master):
+            p_master = r"C:/Vendor Rates\CC_Rates_Sheet_2026_02_01.xlsx"
+    else:
+        p_master = os.path.join(os.path.dirname(__file__), "templates", "CLI_Rate_sheet_2026_02_01.xlsx")
+        if not os.path.exists(p_master):
+            p_master = r"C:/Vendor Rates\CLI_Rate_sheet_2026_02_01.xlsx"
+
+    if not os.path.exists(p_master):
+        return False, f"Master {service_type} rate sheet not found on server ({p_master}).", None
+
+    try:
+        df_master = pd.read_excel(p_master, dtype=str)
+    except Exception as e:
+        return False, f"Could not load Master {service_type} sheet: {e}", None
+
+    if trunk_code not in df_master.columns:
+        return False, f"Trunk column '{trunk_code}' not found in Master {service_type} sheet.", None
+
+    initial_rows = len(df_master)
+    eff_date_str = str(effective_date_val)
+
+    # Build 6-column base dataframe
+    df = pd.DataFrame()
+    df['Dial Code'] = df_master['Dial Code'].astype(str).str.strip()
+    df['Summary'] = df_master['Summary'].astype(str).str.strip()
+    df['New Rate'] = df_master[trunk_code].apply(format_telecom_rate)
+    df['Minimum'] = df_master['Minimum'].astype(str).str.strip() if 'Minimum' in df_master.columns else '1'
+    df['Increment'] = df_master['Increment'].astype(str).str.strip() if 'Increment' in df_master.columns else '1'
+    df['Effective Date'] = eff_date_str
+
+    # Filter specifically USA, Canada, Puerto Rico
+    nanp_specific_pattern = r'\b(?:USA|UNITED STATES|CANADA|PUERTO RICO)\b'
+    mask_nanp = df['Summary'].astype(str).str.contains(nanp_specific_pattern, case=False, na=False)
+    nanp_excluded_count = int(mask_nanp.sum())
+    df = df[~mask_nanp].copy().reset_index(drop=True)
+
+    # Destination overrides
+    change_summary = []
+    dest_labels_for_name = []
+    total_rows_updated = 0
+
+    if dest_updates:
+        for item in dest_updates:
+            target_dest = str(item.get("destination", "")).strip()
+            new_rate_raw = item.get("rate")
+            if not target_dest or new_rate_raw is None:
+                continue
+            try:
+                new_rate_float = float(str(new_rate_raw).replace("$", "").replace(",", ".").strip())
+            except Exception:
+                continue
+
+            dest_escaped = re.escape(target_dest)
+            match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
+            matched_count = int(match_mask.sum())
+            if matched_count == 0:
+                match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
+                matched_count = int(match_mask.sum())
+
+            if matched_count > 0:
+                existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
+                old_avg_rate = existing_rates_series.dropna().mean()
+                if pd.isna(old_avg_rate) or old_avg_rate == 0:
+                    old_avg_rate = 0.0
+
+                trend = "inc" if new_rate_float >= old_avg_rate else "dec"
+                rate_diff = new_rate_float - old_avg_rate
+
+                formatted_new_rate = format_telecom_rate(new_rate_float)
+                df.loc[match_mask, 'New Rate'] = formatted_new_rate
+                df.loc[match_mask, 'Effective Date'] = eff_date_str
+
+                total_rows_updated += matched_count
+                dest_labels_for_name.append(f"{target_dest} {trend}")
+                change_summary.append({
+                    "destination": target_dest,
+                    "old_rate": f"{old_avg_rate:.4f}",
+                    "new_rate": formatted_new_rate,
+                    "trend": trend.upper(),
+                    "diff": rate_diff,
+                    "rows_updated": matched_count
+                })
+
+    # Check mismatches against Country Master Billing
+    mismatches = []
+    if hasattr(bm, "audit_dataframe_billing"):
+        try:
+            mismatches = bm.audit_dataframe_billing(df)
+        except Exception:
+            mismatches = []
+
+    # Build smart filename
+    c_clean = re.sub(r'[^a-zA-Z0-9_\-\s]+', '', str(customer_name).strip())
+    if not c_clean:
+        c_clean = "New Customer"
+        
+    u_tag = str(current_username or "kaif").strip().lower()
+    
+    if len(dest_labels_for_name) == 1:
+        suffix = f"{dest_labels_for_name[0]} {u_tag}"
+    elif len(dest_labels_for_name) == 2:
+        suffix = f"{dest_labels_for_name[0]} {dest_labels_for_name[1]} {u_tag}"
+    elif len(dest_labels_for_name) > 2:
+        trends = [c["trend"].lower() for c in change_summary]
+        if all(t == "inc" for t in trends):
+            suffix = f"Various inc {u_tag}"
+        elif all(t == "dec" for t in trends):
+            suffix = f"Various dec {u_tag}"
+        else:
+            suffix = f"Various inc dec {u_tag}"
+    else:
+        suffix = f"Standardized {u_tag}"
+
+    suggested_full_name = f"Name - {c_clean} ({trunk_code} {service_type}) A to Z {suffix}"
+    final_xl_filename = f"{suggested_full_name}.xlsx"
+    final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
+
+    # Generate Excel and CSV bytes
+    buf_xl = io.BytesIO()
+    with pd.ExcelWriter(buf_xl, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Customer Rate Deck")
+    xl_bytes = buf_xl.getvalue()
+
+    buf_csv = io.StringIO()
+    df.to_csv(buf_csv, index=False)
+    csv_bytes = buf_csv.getvalue().encode("utf-8")
+
+    elapsed_time = time.time() - t0
+
+    stats = {
+        "initial_rows": initial_rows,
+        "clean_rows": len(df),
+        "deleted_comments_count": 0,
+        "nanp_excluded_count": nanp_excluded_count,
+        "total_rows_updated": total_rows_updated,
+        "destinations_count": len(dest_updates) if dest_updates else 0
+    }
+
+    result = {
+        "df_clean": df,
+        "xl_bytes": xl_bytes,
+        "csv_bytes": csv_bytes,
+        "filename": final_xl_filename,
+        "csv_filename": final_csv_filename,
+        "base_clean": f"{c_clean} ({trunk_code} {service_type})",
+        "suffix": suffix,
+        "mismatches": mismatches,
+        "has_mismatch": len(mismatches) > 0,
+        "stats": stats,
+        "change_summary": change_summary,
+        "effective_date": eff_date_str,
+        "elapsed_time": elapsed_time
+    }
+    return True, "Success", result
 
 def render_customer_standardizer_view():
     import datetime, time, io
@@ -2304,6 +2534,7 @@ def render_customer_standardizer_view():
             if st.button("🗑️ Clear / Reset", type="secondary", use_container_width=True, key="cust_clear_results_btn"):
                 st.session_state.cust_processed_result = None
                 st.session_state.pop("cust_dest_items", None)
+                st.session_state.pop("cust_new_dest_items", None)
                 st.rerun()
 
         # Executive Card Container (Identical in style to Vendor Deck Card!)
@@ -2495,67 +2726,70 @@ def render_customer_standardizer_view():
                     use_container_width=True
                 )
 
-    # 2. UPLOAD & DESTINATION FORM CONTAINER (Matches Vendor Design!)
-    with st.container(border=True):
-        st.markdown("""
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet</span>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption("Drag and drop customer rate sheet (.xlsx, .xls, .csv). Batch filtering & auto Inc/Dec matching supported:")
-        
-        uploaded_cust_file = st.file_uploader(
-            "Upload Customer Rate Deck",
-            type=["xlsx", "xls", "csv"],
-            key="cust_main_uploader",
-            label_visibility="collapsed"
-        )
-        
-        if uploaded_cust_file:
-            st.success(f"📂 **{uploaded_cust_file.name}** loaded successfully ({len(uploaded_cust_file.getvalue())/1024:.1f} KB).")
-            
-            st.markdown("---")
-            st.markdown("##### 🎯 Update Destinations & Rates")
-            st.caption("Enter requested destinations, new rates, and effective date:")
-            
-            if "cust_dest_items" not in st.session_state:
-                st.session_state.cust_dest_items = [{"dest": "", "rate": ""}]
-                
-            for idx, d_item in enumerate(st.session_state.cust_dest_items):
-                c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
-                with c_d1:
-                    d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_dest_in_{idx}")
-                with c_d2:
-                    d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_rate_in_{idx}")
-                with c_d3:
-                    st.write("")
-                    st.write("")
-                    if len(st.session_state.cust_dest_items) > 1:
-                        if st.button("✖", key=f"cust_del_dest_{idx}", help="Remove this destination"):
-                            st.session_state.cust_dest_items.pop(idx)
-                            st.rerun()
+    # 2. TWO-TAB WORKFLOW CONTAINER
+    cust_tab1, cust_tab2 = st.tabs([
+        "📂 Existing Customer Deck (RouteTrust Update)",
+        "➕ New Customer Deck Generator (From Master A-Z)"
+    ])
 
-            col_add_dest, col_date = st.columns([2, 2])
-            with col_add_dest:
-                if st.button("➕ Add More Destination Rate", type="secondary", key="cust_btn_add_dest_row"):
-                    st.session_state.cust_dest_items.append({"dest": "", "rate": ""})
-                    st.rerun()
-            with col_date:
-                sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_date_selector")
+    with cust_tab1:
+        with st.container(border=True):
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet (RouteTrust / CSV / Excel)</span>
+            </div>
+            """, unsafe_allow_html=True)
+            st.caption("Auto-maps RouteTrust export (`Rate Key`, `Rate Summary`, `Inter. Rate`, `Dur Min/Inc`). Standardizes to exact 6 columns:")
+            
+            uploaded_cust_file = st.file_uploader(
+                "Upload Customer Rate Deck",
+                type=["xlsx", "xls", "csv"],
+                key="cust_main_uploader",
+                label_visibility="collapsed"
+            )
+            
+            if uploaded_cust_file:
+                st.success(f"📂 **{uploaded_cust_file.name}** loaded successfully ({len(uploaded_cust_file.getvalue())/1024:.1f} KB).")
                 
-            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-            if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
-                valid_updates = []
-                for di in st.session_state.cust_dest_items:
-                    d_val = di.get("dest", "").strip()
-                    r_val = di.get("rate", "").strip()
-                    if d_val and r_val:
-                        valid_updates.append({"destination": d_val, "rate": r_val})
-                        
-                if not valid_updates:
-                    st.warning("⚠️ Please enter at least one Destination and New Rate to update.")
-                else:
-                    with st.spinner("Processing customer rate deck, filtering NANP & checking billing rules..."):
+                st.markdown("---")
+                st.markdown("##### 🎯 Update Destinations & Rates (Optional)")
+                st.caption("Enter requested destinations and new rates, or leave blank to standardize entire deck:")
+                
+                if "cust_dest_items" not in st.session_state:
+                    st.session_state.cust_dest_items = [{"dest": "", "rate": ""}]
+                    
+                for idx, d_item in enumerate(st.session_state.cust_dest_items):
+                    c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
+                    with c_d1:
+                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_dest_in_{idx}")
+                    with c_d2:
+                        d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_rate_in_{idx}")
+                    with c_d3:
+                        st.write("")
+                        st.write("")
+                        if len(st.session_state.cust_dest_items) > 1:
+                            if st.button("✖", key=f"cust_del_dest_{idx}", help="Remove this destination"):
+                                st.session_state.cust_dest_items.pop(idx)
+                                st.rerun()
+
+                col_add_dest, col_date = st.columns([2, 2])
+                with col_add_dest:
+                    if st.button("➕ Add More Destination Rate", type="secondary", key="cust_btn_add_dest_row"):
+                        st.session_state.cust_dest_items.append({"dest": "", "rate": ""})
+                        st.rerun()
+                with col_date:
+                    sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_date_selector")
+                    
+                st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
+                    valid_updates = []
+                    for di in st.session_state.cust_dest_items:
+                        d_val = di.get("dest", "").strip()
+                        r_val = di.get("rate", "").strip()
+                        if d_val and r_val:
+                            valid_updates.append({"destination": d_val, "rate": r_val})
+                            
+                    with st.spinner("Processing customer rate deck, filtering NANP & rounding rates to 6 digits..."):
                         ok, msg, res = process_customer_rate_deck(
                             uploaded_cust_file.getvalue(),
                             uploaded_cust_file.name,
@@ -2566,6 +2800,93 @@ def render_customer_standardizer_view():
                         if ok:
                             st.session_state.cust_processed_result = res
                             st.success("✅ Customer rate deck standardized successfully!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+    with cust_tab2:
+        with st.container(border=True):
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">➕ Generate New Customer Deck (From Master A-Z)</span>
+            </div>
+            """, unsafe_allow_html=True)
+            st.caption("Generate a fresh 6-column rate sheet from Master A-Z CC or CLI reference sheets for a new client:")
+
+            c_n1, c_n2 = st.columns([1.5, 2.5])
+            with c_n1:
+                sel_service = st.selectbox(
+                    "Service Type:",
+                    ["CC", "CLI"],
+                    format_func=lambda x: "📊 CC Master (Call Center)" if x == "CC" else "📊 CLI Master (Pure Routes)",
+                    key="new_cust_service_sel"
+                )
+            with c_n2:
+                sel_trunk_obj = st.selectbox(
+                    "🎯 Trunk Reference Profile:",
+                    MASTER_TRUNK_ENTITIES,
+                    format_func=lambda x: x["name"],
+                    key="new_cust_trunk_sel"
+                )
+                sel_trunk_code = sel_trunk_obj["code"]
+
+            new_c_name = st.text_input("New Customer Name:", placeholder="e.g. Dexatel VoIP or Zadarma", key="new_cust_name_in")
+
+            st.markdown("---")
+            st.markdown("##### 🎯 Custom Destination Overrides (Optional)")
+            st.caption("If sales negotiated specific target rates (e.g. Italy: 0.01), enter them below or leave empty for base rates:")
+
+            if "cust_new_dest_items" not in st.session_state:
+                st.session_state.cust_new_dest_items = [{"dest": "", "rate": ""}]
+
+            for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
+                c_d1, c_d2, c_d3 = st.columns([2.5, 1.5, 0.6])
+                with c_d1:
+                    d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Italy or 39", key=f"cust_new_dest_in_{idx}")
+                with c_d2:
+                    d_item["rate"] = st.text_input(f"Target Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.01", key=f"cust_new_rate_in_{idx}")
+                with c_d3:
+                    st.write("")
+                    st.write("")
+                    if len(st.session_state.cust_new_dest_items) > 1:
+                        if st.button("✖", key=f"cust_new_del_dest_{idx}", help="Remove this override"):
+                            st.session_state.cust_new_dest_items.pop(idx)
+                            st.rerun()
+
+            col_add_n_dest, col_n_date = st.columns([2, 2])
+            with col_add_n_dest:
+                if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
+                    st.session_state.cust_new_dest_items.append({"dest": "", "rate": ""})
+                    st.rerun()
+            with col_n_date:
+                sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
+
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+            if st.button("⚡ Generate Customer Rate Deck (From Master)", type="primary", use_container_width=True, key="cust_btn_generate_new"):
+                clean_cname = new_c_name.strip()
+                if not clean_cname:
+                    st.warning("⚠️ Please enter a Customer Name before generating.")
+                else:
+                    valid_n_updates = []
+                    for di in st.session_state.cust_new_dest_items:
+                        d_val = di.get("dest", "").strip()
+                        r_val = di.get("rate", "").strip()
+                        if d_val and r_val:
+                            valid_n_updates.append({"destination": d_val, "rate": r_val})
+
+                    with st.spinner(f"Generating rate deck for {clean_cname} from Master {sel_service} ({sel_trunk_code})..."):
+                        ok, msg, res = generate_new_customer_deck_from_master(
+                            sel_service,
+                            sel_trunk_code,
+                            clean_cname,
+                            valid_n_updates,
+                            sel_n_eff_date,
+                            curr_u
+                        )
+                        if ok:
+                            st.session_state.cust_processed_result = res
+                            st.success(f"✅ Rate deck for '{clean_cname}' generated successfully!")
                             time.sleep(0.5)
                             st.rerun()
                         else:
