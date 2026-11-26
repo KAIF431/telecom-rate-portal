@@ -2142,60 +2142,6 @@ def get_master_reference_df(source="CC"):
             pass
     return pd.DataFrame()
 
-def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0", source="CC", eff_date_str="2026-02-01", existing_dial_codes=None):
-    import re
-    import pandas as pd
-
-    df_m = get_master_reference_df(source)
-    if df_m.empty:
-        return pd.DataFrame(), 0
-
-    dest_clean = str(target_dest).strip()
-    dest_escaped = re.escape(dest_clean)
-
-    mask = df_m['Summary'].astype(str).str.contains(dest_escaped, case=False, na=False)
-    if mask.sum() == 0:
-        words = [w for w in re.split(r'[\s\-_]+', dest_clean) if len(w) > 1]
-        if len(words) > 1:
-            mask = df_m['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
-    if mask.sum() == 0:
-        mask = df_m['Dial Code'].astype(str).str.startswith(dest_clean, na=False)
-
-    if mask.sum() == 0:
-        return pd.DataFrame(), 0
-
-    df_sub = df_m[mask].copy()
-
-    mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
-    if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
-        df_sub = df_sub[~df_sub['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)]
-    elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
-        df_sub = df_sub[df_sub['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)]
-
-    nanp_pattern = r'\b(?:USA|UNITED STATES|CANADA|PUERTO RICO)\b'
-    df_sub = df_sub[~df_sub['Summary'].astype(str).str.contains(nanp_pattern, case=False, na=False)]
-
-    if df_sub.empty:
-        return pd.DataFrame(), 0
-
-    res_df = pd.DataFrame()
-    res_df['Dial Code'] = df_sub['Dial Code'].astype(str).str.strip()
-    res_df['Summary'] = df_sub['Summary'].astype(str).str.strip()
-    res_df['New Rate'] = format_telecom_rate(new_rate_str)
-    res_df['Minimum'] = df_sub['Minimum'].astype(str).str.strip() if 'Minimum' in df_sub.columns else '1'
-    res_df['Increment'] = df_sub['Increment'].astype(str).str.strip() if 'Increment' in df_sub.columns else '1'
-    res_df['Effective Date'] = str(eff_date_str)
-
-    # STRICT DEDUPLICATION: Exclude any dial code already present in customer sheet!
-    if existing_dial_codes:
-        existing_set = set(str(c).strip() for c in existing_dial_codes)
-        res_df = res_df[~res_df['Dial Code'].isin(existing_set)]
-
-    # Deduplicate newly added rows themselves
-    res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
-    return res_df, len(res_df)
-
-
 _master_dest_cache = None
 def get_master_destinations_data():
     global _master_dest_cache
@@ -2264,6 +2210,189 @@ def smart_spell_check_destination(query, top_n=3):
         sorted_dests = sorted(scored.keys(), key=lambda x: scored[x], reverse=True)
         return sorted_dests[:top_n]
     return []
+
+def resolve_destination_and_scope(dest_str, explicit_scope="All"):
+    """
+    Extracts base destination query and effective scope:
+    - If dest_str contains 'fix', 'fixed', 'landline', 'proper':
+      strips keyword and sets scope = 'Fixed' (unless explicit_scope was already Mobile)
+    - If dest_str contains 'mob', 'mobile', 'cell', 'cellular':
+      strips keyword and sets scope = 'Mobile' (unless explicit_scope was already Fixed)
+    - Otherwise uses explicit_scope.
+    """
+    import re
+    q = str(dest_str or "").strip()
+    fixed_kw = re.search(r'\b(?:fix|fixed|landline|proper)\b', q, re.I)
+    mob_kw = re.search(r'\b(?:mob|mobile|cellular|cell)\b', q, re.I)
+
+    eff_scope = explicit_scope
+    clean_q = q
+    if fixed_kw:
+        eff_scope = "Fixed"
+        clean_q = re.sub(r'\b(?:fix|fixed|landline|proper)\b', '', clean_q, flags=re.I).strip()
+    elif mob_kw:
+        eff_scope = "Mobile"
+        clean_q = re.sub(r'\b(?:mob|mobile|cellular|cell)\b', '', clean_q, flags=re.I).strip()
+    elif "fixed" in str(explicit_scope).lower():
+        eff_scope = "Fixed"
+    elif "mob" in str(explicit_scope).lower():
+        eff_scope = "Mobile"
+    else:
+        eff_scope = "All"
+
+    clean_q = re.sub(r'\s+', ' ', clean_q).strip()
+    if not clean_q:
+        clean_q = q
+    return clean_q, eff_scope
+
+def parse_billing_pulse(pulse_str):
+    """
+    Parses billing pulse string (e.g. '⚡ 1/1 (Per Sec)', '60/1', '1/1')
+    Returns (min_val, inc_val) or (None, None) if default/standard.
+    """
+    import re
+    if not pulse_str or "default" in str(pulse_str).lower() or "standard" in str(pulse_str).lower():
+        return None, None
+    m = re.search(r'(\d+)\s*/\s*(\d+)', str(pulse_str))
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return None, None
+
+def match_destination_rows(df, target_dest, scope="All"):
+    """
+    Returns (boolean Series mask, clean_destination_name, effective_scope).
+    Intelligently matches:
+    1. Embedded 'fix' / 'mob' in target_dest (e.g. 'kazak fix' or 'kazak mob')
+    2. City & breakout names (e.g. 'Kazakhstan Almaty')
+    3. Multi-word search
+    4. Dial Code prefix
+    5. Smart spell-checking fallback
+    6. Telecom Fixed definition (~is_mobile) vs Mobile definition (is_mobile)
+    """
+    import re
+    import pandas as pd
+    clean_dest, eff_scope = resolve_destination_and_scope(target_dest, scope)
+    dest_escaped = re.escape(clean_dest)
+
+    # 1. Exact substring match on clean destination
+    match_mask = df['Summary'].astype(str).str.contains(dest_escaped, case=False, na=False)
+    matched_count = int(match_mask.sum())
+
+    # 2. Multi-word token match (e.g. 'kazak' -> all Kazakhstan)
+    if matched_count == 0:
+        words = [w for w in re.split(r'[\s\-_]+', clean_dest) if len(w) > 1]
+        if words:
+            match_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
+            matched_count = int(match_mask.sum())
+
+    # 3. Dial Code prefix match
+    if matched_count == 0:
+        clean_code = re.sub(r'[^\d]', '', clean_dest)
+        if clean_code:
+            match_mask = df['Dial Code'].astype(str).str.startswith(clean_code, na=False)
+            matched_count = int(match_mask.sum())
+
+    # 4. Smart Spell Check Fallback
+    if matched_count == 0:
+        spell_cands = smart_spell_check_destination(clean_dest, top_n=2)
+        for cand in spell_cands:
+            cand_clean, _ = resolve_destination_and_scope(cand, "All")
+            c_words = [w for w in re.split(r'[\s\-_]+', cand_clean) if len(w) > 1]
+            if c_words:
+                c_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in c_words))
+                if int(c_mask.sum()) > 0:
+                    match_mask = c_mask
+                    matched_count = int(c_mask.sum())
+                    clean_dest = cand_clean
+                    break
+
+    # 5. Apply Scope Filter
+    if matched_count > 0:
+        mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
+        if eff_scope == "Fixed":
+            match_mask = match_mask & ~df['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)
+        elif eff_scope == "Mobile":
+            match_mask = match_mask & df['Summary'].astype(str).str.contains(mobile_pattern, case=False, na=False)
+
+    return match_mask, clean_dest, eff_scope
+
+def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0", source="CC", eff_date_str="2026-02-01", existing_dial_codes=None, pulse_min=None, pulse_inc=None):
+    import re
+    import pandas as pd
+
+    df_m = get_master_reference_df(source)
+    if df_m.empty:
+        return pd.DataFrame(), 0
+
+    mask, clean_dest, eff_scope = match_destination_rows(df_m, target_dest, scope)
+    if mask.sum() == 0:
+        return pd.DataFrame(), 0
+
+    df_sub = df_m[mask].copy()
+
+    nanp_pattern = r'\b(?:USA|UNITED STATES|CANADA|PUERTO RICO)\b'
+    df_sub = df_sub[~df_sub['Summary'].astype(str).str.contains(nanp_pattern, case=False, na=False)]
+
+    if df_sub.empty:
+        return pd.DataFrame(), 0
+
+    res_df = pd.DataFrame()
+    res_df['Dial Code'] = df_sub['Dial Code'].astype(str).str.strip()
+    res_df['Summary'] = df_sub['Summary'].astype(str).str.strip()
+    res_df['New Rate'] = format_telecom_rate(new_rate_str)
+    if pulse_min is not None and pulse_inc is not None:
+        res_df['Minimum'] = str(pulse_min)
+        res_df['Increment'] = str(pulse_inc)
+    else:
+        res_df['Minimum'] = df_sub['Minimum'].astype(str).str.strip() if 'Minimum' in df_sub.columns else '1'
+        res_df['Increment'] = df_sub['Increment'].astype(str).str.strip() if 'Increment' in df_sub.columns else '1'
+    res_df['Effective Date'] = str(eff_date_str)
+
+    # STRICT DEDUPLICATION: Exclude any dial code already present in customer sheet!
+    if existing_dial_codes:
+        existing_set = set(str(c).strip() for c in existing_dial_codes)
+        res_df = res_df[~res_df['Dial Code'].isin(existing_set)]
+
+    # Deduplicate newly added rows themselves
+    res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
+    return res_df, len(res_df)
+
+def lookup_destination_current_pulse(df, target_dest, scope="All"):
+    """
+    Looks up current (Minimum, Increment) pulse from dataframe for target_dest.
+    Returns (pulse_str, matched_rows_count). e.g. ("60/1", 12) or (None, 0).
+    """
+    import re
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or not target_dest:
+        return None, 0
+    try:
+        mask, _, _ = match_destination_rows(df, target_dest, scope)
+        count = int(mask.sum())
+        if count == 0:
+            return None, 0
+        sub_df = df[mask]
+        
+        # Check standard Minimum / Increment columns
+        min_col = next((c for c in sub_df.columns if str(c).strip().lower() in ['minimum', 'min', 'dur min', 'initial_increment']), None)
+        inc_col = next((c for c in sub_df.columns if str(c).strip().lower() in ['increment', 'inc', 'dur inc', 'subsequent_increment']), None)
+        
+        # Or RouteTrust "Dur Min/Inc" (e.g. "60/1")
+        dur_col = next((c for c in sub_df.columns if 'min/inc' in str(c).strip().lower() or 'dur' in str(c).strip().lower()), None)
+        
+        if dur_col and (not min_col or not inc_col):
+            dur_val = str(sub_df[dur_col].dropna().iloc[0]).strip()
+            m = re.search(r'(\d+)\s*/\s*(\d+)', dur_val)
+            if m:
+                return f"{m.group(1)}/{m.group(2)}", count
+        
+        if min_col and inc_col:
+            m_val = str(sub_df[min_col].dropna().iloc[0]).split('.')[0].strip()
+            i_val = str(sub_df[inc_col].dropna().iloc[0]).split('.')[0].strip()
+            if m_val and i_val:
+                return f"{m_val}/{i_val}", count
+    except Exception:
+        pass
+    return None, 0
 
 def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
     """
@@ -2508,11 +2637,13 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     added_from_master_summary = []
     eff_date_str = str(effective_date_val)
 
+    touched_dial_codes = set()
     if dest_updates:
         for item in dest_updates:
             target_dest = str(item.get("destination", "")).strip()
             new_rate_raw = item.get("rate")
             scope = str(item.get("scope", "All")).strip()
+            pulse_raw = item.get("pulse", "⚙️ Keep Standard")
             fallback_source = item.get("source")  # "CC", "CLI", or None
 
             if not target_dest or new_rate_raw is None:
@@ -2523,39 +2654,16 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 continue
 
             formatted_new_rate = format_telecom_rate(new_rate_float)
-            dest_escaped = re.escape(target_dest)
-            match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
+            min_val, inc_val = parse_billing_pulse(pulse_raw)
+
+            match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
             matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                words = [w for w in re.split(r'[\s\-_]+', target_dest) if len(w) > 1]
-                if len(words) > 1:
-                    match_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
-                    matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
-                matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                spell_candidates = smart_spell_check_destination(target_dest, top_n=2)
-                for cand in spell_candidates:
-                    c_words = [w for w in re.split(r'[\s\-_]+', cand) if len(w) > 1]
-                    c_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in c_words))
-                    if int(c_mask.sum()) > 0:
-                        match_mask = c_mask
-                        matched_count = int(c_mask.sum())
-                        target_dest = cand
-                        break
-
-            # Apply scope filter if matched in sheet
-            if matched_count > 0:
-                mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
-                if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
-                    match_mask = match_mask & ~df['Summary'].str.contains(mobile_pattern, case=False, na=False)
-                    matched_count = int(match_mask.sum())
-                elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
-                    match_mask = match_mask & df['Summary'].str.contains(mobile_pattern, case=False, na=False)
-                    matched_count = int(match_mask.sum())
 
             if matched_count > 0:
+                # Add all matched dial codes so they are completely excluded from mismatches
+                for c_code in df.loc[match_mask, 'Dial Code'].dropna():
+                    touched_dial_codes.add(str(c_code).strip())
+
                 existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
                 old_avg_rate = existing_rates_series.dropna().mean()
                 if pd.isna(old_avg_rate) or old_avg_rate == 0:
@@ -2567,13 +2675,20 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 df.loc[match_mask, 'New Rate'] = formatted_new_rate
                 df.loc[match_mask, 'Effective Date'] = eff_date_str
 
+                # Apply billing pulse override if explicitly selected (e.g. 1/1 for Indonesia or Russia)
+                if min_val is not None and inc_val is not None:
+                    df.loc[match_mask, 'Minimum'] = str(min_val)
+                    df.loc[match_mask, 'Increment'] = str(inc_val)
+
                 total_rows_updated += matched_count
-                dest_labels_for_name.append(f"{target_dest} {trend}")
+                dest_labels_for_name.append(f"{clean_dest} {trend}")
+                pulse_disp = f"{min_val}/{inc_val}" if (min_val is not None and inc_val is not None) else "Kept Existing"
                 change_summary.append({
-                    "destination": target_dest,
-                    "scope": scope,
+                    "destination": clean_dest,
+                    "scope": eff_scope,
                     "old_rate": f"{old_avg_rate:.4f}",
                     "new_rate": formatted_new_rate,
+                    "pulse": pulse_disp,
                     "trend": trend.upper(),
                     "diff": rate_diff,
                     "rows_updated": matched_count,
@@ -2589,30 +2704,36 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                         new_rate_str=formatted_new_rate,
                         source=fallback_source,
                         eff_date_str=eff_date_str,
-                        existing_dial_codes=existing_codes
+                        existing_dial_codes=existing_codes,
+                        pulse_min=min_val,
+                        pulse_inc=inc_val
                     )
                     if count_added > 0:
                         df = pd.concat([df, df_new_rows], ignore_index=True)
                         total_new_rows_added += count_added
-                        dest_labels_for_name.append(f"{target_dest} new")
+                        dest_labels_for_name.append(f"{clean_dest} new")
+                        for c_code in df_new_rows['Dial Code'].dropna():
+                            touched_dial_codes.add(str(c_code).strip())
+                        pulse_disp = f"{min_val}/{inc_val}" if (min_val is not None and inc_val is not None) else "Standard"
                         added_from_master_summary.append({
-                            "destination": target_dest,
-                            "scope": scope,
+                            "destination": clean_dest,
+                            "scope": eff_scope,
                             "source": f"Master {fallback_source}",
                             "rows_added": count_added,
-                            "new_rate": formatted_new_rate
+                            "new_rate": formatted_new_rate,
+                            "pulse": pulse_disp
                         })
                     else:
                         missing_destinations.append({
-                            "destination": target_dest,
-                            "scope": scope,
+                            "destination": clean_dest,
+                            "scope": eff_scope,
                             "rate": formatted_new_rate,
                             "reason": f"Not found in Customer sheet or Master {fallback_source}"
                         })
                 else:
                     missing_destinations.append({
-                        "destination": target_dest,
-                        "scope": scope,
+                        "destination": clean_dest,
+                        "scope": eff_scope,
                         "rate": formatted_new_rate,
                         "reason": "Not found in Customer deck"
                     })
@@ -2631,6 +2752,11 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 mismatches = audit_res
         except Exception:
             mismatches = []
+
+    # USER'S CORE RULE: Exclude ALL destinations updated by sales from mismatches!
+    # "jitni bhi destinations mention ho jinka rate change karna hai woh chor kar mismatch billing aaye"
+    if touched_dial_codes and mismatches:
+        mismatches = [m for m in mismatches if str(m.get("dial_code", "")).strip() not in touched_dial_codes]
 
     # 7. Build smart filename preserving original customer sheet base
     base_stem = original_filename.rsplit(".", 1)[0]
@@ -2747,6 +2873,8 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
         for item in dest_updates:
             target_dest = str(item.get("destination", "")).strip()
             new_rate_raw = item.get("rate")
+            scope = str(item.get("scope", "All")).strip()
+            pulse_raw = item.get("pulse", "⚙️ Keep Standard")
             if not target_dest or new_rate_raw is None:
                 continue
             try:
@@ -2754,37 +2882,11 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
             except Exception:
                 continue
 
-            scope = str(item.get("scope", "All")).strip()
-            dest_escaped = re.escape(target_dest)
-            match_mask = df['Summary'].str.contains(dest_escaped, case=False, na=False)
-            matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                words = [w for w in re.split(r'[\s\-_]+', target_dest) if len(w) > 1]
-                if len(words) > 1:
-                    match_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in words))
-                    matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                match_mask = df['Dial Code'].str.startswith(target_dest, na=False)
-                matched_count = int(match_mask.sum())
-            if matched_count == 0:
-                spell_candidates = smart_spell_check_destination(target_dest, top_n=2)
-                for cand in spell_candidates:
-                    c_words = [w for w in re.split(r'[\s\-_]+', cand) if len(w) > 1]
-                    c_mask = df['Summary'].astype(str).apply(lambda s: all(w.lower() in s.lower() for w in c_words))
-                    if int(c_mask.sum()) > 0:
-                        match_mask = c_mask
-                        matched_count = int(c_mask.sum())
-                        target_dest = cand
-                        break
+            formatted_new_rate = format_telecom_rate(new_rate_float)
+            min_val, inc_val = parse_billing_pulse(pulse_raw)
 
-            if matched_count > 0:
-                mobile_pattern = r'\b(?:mobile|cell|mob|cellular|wireless)\b'
-                if scope in ["Fixed", "Fixed Only", "☎️ Fixed Only"]:
-                    match_mask = match_mask & ~df['Summary'].str.contains(mobile_pattern, case=False, na=False)
-                    matched_count = int(match_mask.sum())
-                elif scope in ["Mobile", "Mobile Only", "📱 Mobile Only"]:
-                    match_mask = match_mask & df['Summary'].str.contains(mobile_pattern, case=False, na=False)
-                    matched_count = int(match_mask.sum())
+            match_mask, clean_dest, eff_scope = match_destination_rows(df, target_dest, scope)
+            matched_count = int(match_mask.sum())
 
             if matched_count > 0:
                 existing_rates_series = pd.to_numeric(df.loc[match_mask, 'New Rate'], errors='coerce')
@@ -2795,16 +2897,21 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
                 trend = "inc" if new_rate_float >= old_avg_rate else "dec"
                 rate_diff = new_rate_float - old_avg_rate
 
-                formatted_new_rate = format_telecom_rate(new_rate_float)
                 df.loc[match_mask, 'New Rate'] = formatted_new_rate
                 df.loc[match_mask, 'Effective Date'] = eff_date_str
 
+                if min_val is not None and inc_val is not None:
+                    df.loc[match_mask, 'Minimum'] = str(min_val)
+                    df.loc[match_mask, 'Increment'] = str(inc_val)
+
                 total_rows_updated += matched_count
-                dest_labels_for_name.append(f"{target_dest} {trend}")
+                dest_labels_for_name.append(f"{clean_dest} {trend}")
+                pulse_disp = f"{min_val}/{inc_val}" if (min_val is not None and inc_val is not None) else "Standard"
                 change_summary.append({
-                    "destination": target_dest,
-                    "scope": scope,
+                    "destination": clean_dest,
+                    "scope": eff_scope,
                     "new_rate": formatted_new_rate,
+                    "pulse": pulse_disp,
                     "rows_updated": matched_count,
                     "is_new_deck": True
                 })
@@ -3070,18 +3177,19 @@ def render_customer_standardizer_view():
                 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
                 is_any_new = any(cs.get("is_new_deck") for cs in change_summary)
                 if is_any_new:
-                    st.markdown("**🎯 Configured Target Rates:**")
+                    st.markdown("**🎯 Configured Target Rates & Billing Pulses:**")
                     c_rows_display = []
                     for cs in change_summary:
                         sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
                         c_rows_display.append({
                             "Destination": f"{cs['destination']}{sc_lbl}",
                             "Target Rate": cs["new_rate"],
+                            "Billing Pulse": cs.get("pulse", "Standard"),
                             "Codes Impacted": cs["rows_updated"],
                             "Status": "✅ Configured"
                         })
                 else:
-                    st.markdown("**📋 Rate Updates Breakdown:**")
+                    st.markdown("**📋 Rate Updates & Billing Pulse Breakdown:**")
                     c_rows_display = []
                     for cs in change_summary:
                         sc_lbl = f" ({cs.get('scope')})" if cs.get('scope') and cs.get('scope') != 'All' else ""
@@ -3089,6 +3197,7 @@ def render_customer_standardizer_view():
                             "Destination": f"{cs['destination']}{sc_lbl}",
                             "Old Rate": cs.get("old_rate", "-"),
                             "New Rate": cs["new_rate"],
+                            "Billing Pulse": cs.get("pulse", "Standard"),
                             "Action / Trend": f"📈 +{cs.get('diff', 0):.4f} (INC)" if cs.get("trend") == "INC" else f"📉 {cs.get('diff', 0):.4f} (DEC)",
                             "Rows Impacted": cs["rows_updated"]
                         })
@@ -3262,12 +3371,40 @@ def render_customer_standardizer_view():
             if uploaded_cust_file:
                 st.success(f"📂 **{uploaded_cust_file.name}** loaded successfully ({len(uploaded_cust_file.getvalue())/1024:.1f} KB).")
                 
+                # Cache parsed customer raw dataframe for instant pulse lookup
+                if ("cust_raw_df" not in st.session_state or 
+                    st.session_state.get("cust_raw_file_name") != uploaded_cust_file.name):
+                    try:
+                        raw_bytes = uploaded_cust_file.getvalue()
+                        if uploaded_cust_file.name.lower().endswith(".csv"):
+                            parsed_df = load_csv_safely(io.BytesIO(raw_bytes))
+                        else:
+                            parsed_df = pd.read_excel(io.BytesIO(raw_bytes), dtype=str)
+                        if all(isinstance(c, int) for c in parsed_df.columns) or any(str(c).isdigit() for c in parsed_df.columns):
+                            for r_idx in range(min(5, len(parsed_df))):
+                                row_vals = [str(v).strip().lower() for v in parsed_df.iloc[r_idx].values]
+                                if any(k in row_vals for k in ['rate key', 'dial code', 'dialcode', 'code', 'prefix']) or any(k in row_vals for k in ['rate summary', 'summary', 'destination']):
+                                    parsed_df.columns = [str(c).strip() for c in parsed_df.iloc[r_idx].values]
+                                    parsed_df = parsed_df.iloc[r_idx + 1:].copy().reset_index(drop=True)
+                                    break
+                        cols_lower = {str(c).lower().strip(): c for c in parsed_df.columns}
+                        sum_col = next((cols_lower[k] for k in ['rate summary', 'summary', 'destination', 'rate sumr'] if k in cols_lower), None)
+                        if sum_col and 'Summary' not in parsed_df.columns:
+                            parsed_df['Summary'] = parsed_df[sum_col]
+                        code_col = next((cols_lower[k] for k in ['rate key', 'dial code', 'dialcode', 'code'] if k in cols_lower), None)
+                        if code_col and 'Dial Code' not in parsed_df.columns:
+                            parsed_df['Dial Code'] = parsed_df[code_col]
+                        st.session_state.cust_raw_df = parsed_df
+                        st.session_state.cust_raw_file_name = uploaded_cust_file.name
+                    except Exception:
+                        st.session_state.cust_raw_df = None
+
                 st.markdown("---")
                 st.markdown("##### 🎯 Update Destinations & Rates (Optional)")
-                st.caption("Enter requested destinations and new rates, or leave blank to standardize entire deck:")
+                st.caption("Enter requested destinations, rates, and billing pulse (instant detected from uploaded sheet):")
                 
                 if "cust_dest_items" not in st.session_state:
-                    st.session_state.cust_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
+                    st.session_state.cust_dest_items = [{"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"}]
                     
                 with st.expander("🔍 Search & Pick Master Destination (CC & CLI)", expanded=False):
                     master_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
@@ -3281,9 +3418,9 @@ def render_customer_standardizer_view():
                         )
 
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
-                    c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
+                    c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.8, 1.1, 1.0, 1.3, 0.4])
                     with c_d1:
-                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_dest_in_{idx}")
+                        d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Kazakhstan fix or 77", key=f"cust_dest_in_{idx}")
                         dest_val = d_item.get("dest", "").strip()
                         if dest_val and len(dest_val) >= 2:
                             suggs = smart_spell_check_destination(dest_val, top_n=3)
@@ -3300,6 +3437,7 @@ def render_customer_standardizer_view():
                                         on_click=on_apply_destination_suggestion,
                                         args=(idx, suggs[0], False)
                                     )
+                    with c_d2:
                         scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                         curr_sc = d_item.get("scope", "🌐 All")
                         sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
@@ -3307,6 +3445,28 @@ def render_customer_standardizer_view():
                     with c_d3:
                         d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_rate_in_{idx}")
                     with c_d4:
+                        # Instant Sheet Pulse Lookup!
+                        cur_pulse, p_rows = lookup_destination_current_pulse(
+                            st.session_state.get("cust_raw_df"),
+                            d_item.get("dest", ""),
+                            d_item.get("scope", "🌐 All")
+                        )
+                        if cur_pulse:
+                            st.markdown(f"<div style='margin-bottom: 2px;'><span style='background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 1px 7px; border-radius: 4px; border: 1px solid #BAE6FD;'>📄 In Sheet: <b>{cur_pulse}</b> ({p_rows}r)</span></div>", unsafe_allow_html=True)
+                            p_keep_lbl = f"⚙️ Keep Sheet ({cur_pulse})"
+                        else:
+                            p_keep_lbl = "⚙️ Keep Standard"
+                        
+                        p_opts = [p_keep_lbl, "⚡ 1/1 (Per Sec)", "⚡ 60/1 (1m/1s)", "⚡ 60/60 (Per Min)", "⚡ 30/6 (30s/6s)", "⚡ 15/15 (15s/15s)"]
+                        curr_p = d_item.get("pulse", p_keep_lbl)
+                        if curr_p in p_opts:
+                            p_idx = p_opts.index(curr_p)
+                        elif "keep" in str(curr_p).lower():
+                            p_idx = 0
+                        else:
+                            p_idx = 0
+                        d_item["pulse"] = st.selectbox(f"Billing Pulse #{idx+1}:", p_opts, index=p_idx, key=f"cust_pulse_in_{idx}")
+                    with c_d5:
                         st.write("")
                         st.write("")
                         if len(st.session_state.cust_dest_items) > 1:
@@ -3317,7 +3477,7 @@ def render_customer_standardizer_view():
                 col_add_dest, col_fb, col_date = st.columns([1.5, 1.5, 1.5])
                 with col_add_dest:
                     if st.button("➕ Add More Destination", type="secondary", key="cust_btn_add_dest_row"):
-                        st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": ""})
+                        st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
                         st.rerun()
                 with col_fb:
                     sel_missing_fallback = st.selectbox(
@@ -3342,11 +3502,13 @@ def render_customer_standardizer_view():
                         d_val = di.get("dest", "").strip()
                         r_val = di.get("rate", "").strip()
                         s_val = di.get("scope", "🌐 All")
+                        p_val = di.get("pulse", "Keep")
                         if d_val and r_val:
                             valid_updates.append({
                                 "destination": d_val,
                                 "scope": s_val,
                                 "rate": r_val,
+                                "pulse": p_val,
                                 "source": fb_mode
                             })
                             
@@ -3378,7 +3540,7 @@ def render_customer_standardizer_view():
                 st.caption("Generate a fresh 6-column rate sheet from Master A-Z CC or CLI reference sheets for a new client:")
             with col_t2_rst:
                 if st.button("🗑️ Clear / Reset Form", key="btn_reset_new_cust_deck", type="secondary", use_container_width=True):
-                    st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
+                    st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"}]
                     st.session_state.cust_processed_result = None
                     st.session_state.new_cust_name_in = ""
                     st.rerun()
@@ -3407,7 +3569,7 @@ def render_customer_standardizer_view():
             st.caption("If sales negotiated specific target rates (e.g. Italy: 0.01), enter them below or leave empty for base rates:")
 
             if "cust_new_dest_items" not in st.session_state:
-                st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": ""}]
+                st.session_state.cust_new_dest_items = [{"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"}]
 
             with st.expander("🔍 Search & Pick Master Destination (CC & CLI)", expanded=False):
                 master_n_d_list = ["-- Select or Type to Search Destination --"] + get_master_destinations_data().get("destinations", [])
@@ -3421,7 +3583,7 @@ def render_customer_standardizer_view():
                     )
 
             for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
-                c_d1, c_d2, c_d3, c_d4 = st.columns([2.0, 1.2, 1.1, 0.5])
+                c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.8, 1.1, 1.0, 1.3, 0.4])
                 with c_d1:
                     d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_new_dest_in_{idx}")
                     dest_val = d_item.get("dest", "").strip()
@@ -3440,6 +3602,7 @@ def render_customer_standardizer_view():
                                     on_click=on_apply_destination_suggestion,
                                     args=(idx, suggs[0], True)
                                 )
+                with c_d2:
                     scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                     curr_sc = d_item.get("scope", "🌐 All")
                     sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
@@ -3447,6 +3610,28 @@ def render_customer_standardizer_view():
                 with c_d3:
                     d_item["rate"] = st.text_input(f"Target Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_new_rate_in_{idx}")
                 with c_d4:
+                    # Instant Master Pulse Lookup!
+                    cur_pulse, p_rows = lookup_destination_current_pulse(
+                        get_master_reference_df(sel_service),
+                        d_item.get("dest", ""),
+                        d_item.get("scope", "🌐 All")
+                    )
+                    if cur_pulse:
+                        st.markdown(f"<div style='margin-bottom: 2px;'><span style='background: #FAF5FF; color: #6B21A8; font-weight: 700; font-size: 0.74rem; padding: 1px 7px; border-radius: 4px; border: 1px solid #E9D5FF;'>📊 In Master: <b>{cur_pulse}</b> ({p_rows}r)</span></div>", unsafe_allow_html=True)
+                        p_keep_lbl = f"⚙️ Keep Master ({cur_pulse})"
+                    else:
+                        p_keep_lbl = "⚙️ Keep Standard"
+                    
+                    p_opts = [p_keep_lbl, "⚡ 1/1 (Per Sec)", "⚡ 60/1 (1m/1s)", "⚡ 60/60 (Per Min)", "⚡ 30/6 (30s/6s)", "⚡ 15/15 (15s/15s)"]
+                    curr_p = d_item.get("pulse", p_keep_lbl)
+                    if curr_p in p_opts:
+                        p_idx = p_opts.index(curr_p)
+                    elif "keep" in str(curr_p).lower():
+                        p_idx = 0
+                    else:
+                        p_idx = 0
+                    d_item["pulse"] = st.selectbox(f"Billing Pulse #{idx+1}:", p_opts, index=p_idx, key=f"cust_new_pulse_in_{idx}")
+                with c_d5:
                     st.write("")
                     st.write("")
                     if len(st.session_state.cust_new_dest_items) > 1:
@@ -3457,7 +3642,7 @@ def render_customer_standardizer_view():
             col_add_n_dest, col_n_date = st.columns([2, 2])
             with col_add_n_dest:
                 if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
-                    st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": ""})
+                    st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
                     st.rerun()
             with col_n_date:
                 sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
@@ -3473,8 +3658,9 @@ def render_customer_standardizer_view():
                         d_val = di.get("dest", "").strip()
                         r_val = di.get("rate", "").strip()
                         s_val = di.get("scope", "🌐 All")
+                        p_val = di.get("pulse", "Keep")
                         if d_val and r_val:
-                            valid_n_updates.append({"destination": d_val, "scope": s_val, "rate": r_val})
+                            valid_n_updates.append({"destination": d_val, "scope": s_val, "rate": r_val, "pulse": p_val})
 
                     with st.spinner(f"Generating rate deck for {clean_cname} from Master {sel_service} ({sel_trunk_code})..."):
                         ok, msg, res = generate_new_customer_deck_from_master(
