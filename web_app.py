@@ -2357,9 +2357,27 @@ def import_destination_from_master(target_dest, scope="All", new_rate_str="0.0",
     res_df = res_df.drop_duplicates(subset=['Dial Code'], keep='first').reset_index(drop=True)
     return res_df, len(res_df)
 
+_master_code_map_cache = None
+def get_master_code_map():
+    global _master_code_map_cache
+    if _master_code_map_cache is not None:
+        return _master_code_map_cache
+    import json
+    json_path = os.path.join(os.path.dirname(__file__), "templates", "master_code_map.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                _master_code_map_cache = json.load(f)
+                return _master_code_map_cache
+        except Exception:
+            pass
+    _master_code_map_cache = {}
+    return _master_code_map_cache
+
 def get_country_breakouts_from_df(df, query):
     """
     Extracts all Fixed and Mobile breakouts and their exact dial codes from df for query.
+    Enriches generic descriptions (like 'GHANA MOBILE') with Master operator names (e.g. MTN, Vodafone, Airtel Tigo).
     Returns:
     {
         'fixed': [('⭐ All Fixed', [all_fixed_codes], total_rows), ('Ghana Accra', ['23321'], 1), ...],
@@ -2404,21 +2422,45 @@ def get_country_breakouts_from_df(df, query):
     df_fix = sub[~is_mob]
     df_mob = sub[is_mob]
 
+    code_map = get_master_code_map()
+
     fixed_res = []
     if len(df_fix) > 0:
         all_fix_codes = df_fix[code_col].astype(str).str.strip().unique().tolist()
         fixed_res.append(('⭐ All Fixed', all_fix_codes, len(df_fix)))
-        for s, grp in df_fix.groupby(df_fix[sum_col].astype(str).str.strip()):
-            codes = grp[code_col].astype(str).str.strip().unique().tolist()
-            fixed_res.append((str(s), codes, len(codes)))
+        
+        resolved_fix = {}
+        for _, r in df_fix.iterrows():
+            c_val = str(r[code_col]).strip()
+            s_sheet = str(r[sum_col]).strip()
+            m_name = code_map.get(c_val)
+            dest_label = m_name if m_name else s_sheet
+            if dest_label not in resolved_fix:
+                resolved_fix[dest_label] = []
+            resolved_fix[dest_label].append(c_val)
+            
+        for s_lbl, codes in resolved_fix.items():
+            u_codes = list(dict.fromkeys(codes))
+            fixed_res.append((s_lbl, u_codes, len(u_codes)))
 
     mobile_res = []
     if len(df_mob) > 0:
         all_mob_codes = df_mob[code_col].astype(str).str.strip().unique().tolist()
         mobile_res.append(('⭐ All Mobile', all_mob_codes, len(df_mob)))
-        for s, grp in df_mob.groupby(df_mob[sum_col].astype(str).str.strip()):
-            codes = grp[code_col].astype(str).str.strip().unique().tolist()
-            mobile_res.append((str(s), codes, len(codes)))
+        
+        resolved_mob = {}
+        for _, r in df_mob.iterrows():
+            c_val = str(r[code_col]).strip()
+            s_sheet = str(r[sum_col]).strip()
+            m_name = code_map.get(c_val)
+            dest_label = m_name if m_name else s_sheet
+            if dest_label not in resolved_mob:
+                resolved_mob[dest_label] = []
+            resolved_mob[dest_label].append(c_val)
+            
+        for s_lbl, codes in resolved_mob.items():
+            u_codes = list(dict.fromkeys(codes))
+            mobile_res.append((s_lbl, u_codes, len(u_codes)))
 
     return {'fixed': fixed_res, 'mobile': mobile_res}
 
