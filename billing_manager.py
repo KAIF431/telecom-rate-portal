@@ -339,6 +339,21 @@ def audit_dataframe_billing(df_clean):
                     "increment": v_i_val
                 })
 
+        # Telecommunication custom deal exemption: Colombia, Philippines, Indonesia, Russia, China
+        # "inn destinations ki billing agar jis file me jaise hi waise hi rehne dena hai in me changes nahi karna hai kyuki mostly inko hi 1/1 dete hai"
+        d_lower = str(d_name).lower()
+        c_str = str(c_clean)
+        is_protected = (
+            any(k in d_lower for k in ['colombia', 'philippine', 'phili', 'indonesia', 'russia', 'china']) or
+            c_str.startswith('57') or  # Colombia
+            c_str.startswith('63') or  # Philippines
+            c_str.startswith('62') or  # Indonesia
+            c_str.startswith('86') or  # China
+            (c_str.startswith('7') and not c_str.startswith('76') and not c_str.startswith('77'))  # Russia (excluding Kazakhstan 76/77)
+        )
+        if is_protected:
+            continue
+
         # Resolve expected standard billing (by Code LPM, then Destination)
         std_pulse, match_method = resolve_standard_billing(c_code, d_name)
         if std_pulse is not None:
@@ -390,6 +405,15 @@ def apply_standard_billing_to_dataframe(df_clean, mismatch_list=None, new_effect
 
     for item in mismatch_list:
         idx = item["row_idx"]
+        dest_val = str(item.get("destination", "")).lower()
+        code_val = str(item.get("dial_code", ""))
+        is_protected = (
+            any(k in dest_val for k in ['colombia', 'philippine', 'phili', 'indonesia', 'russia', 'china']) or
+            code_val.startswith('57') or code_val.startswith('63') or code_val.startswith('62') or code_val.startswith('86') or
+            (code_val.startswith('7') and not code_val.startswith('76') and not code_val.startswith('77'))
+        )
+        if is_protected:
+            continue
         if idx < len(mins):
             mins[idx] = item["standard_min"]
             incs[idx] = item["standard_inc"]

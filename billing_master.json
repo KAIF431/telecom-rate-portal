@@ -155829,6 +155829,21 @@
       1,
       1,
       "Zimbabwe VoIP"
+    ],
+    "7916": [
+      1,
+      1,
+      "Russia Mobile MTS"
+    ],
+    "86138": [
+      1,
+      1,
+      "China Mobile"
+    ],
+    "840": [
+      1,
+      1,
+      "Abkhazia"
     ]
   },
   "dest_rules": {
@@ -161089,6 +161104,10 @@
       1
     ],
     "zimbabwe voip": [
+      1,
+      1
+    ],
+    "china mobile": [
       1,
       1
     ]
@@ -348897,6 +348916,24 @@
     {
       "dial_code": "26386",
       "destination": "Zimbabwe VoIP",
+      "minimum": 1,
+      "increment": 1
+    },
+    {
+      "dial_code": "7916",
+      "destination": "Russia Mobile MTS",
+      "minimum": 1,
+      "increment": 1
+    },
+    {
+      "dial_code": "86138",
+      "destination": "China Mobile",
+      "minimum": 1,
+      "increment": 1
+    },
+    {
+      "dial_code": "840",
+      "destination": "Abkhazia",
       "minimum": 1,
       "increment": 1
     }

@@ -1163,47 +1163,64 @@ with st.sidebar:
     st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
     # 📁 Standard Formats / Standard A-Z Rates Expanders in Sidebar
-    # Live synced whenever Admin replaces sheets!
-    if active_portal in ["🏢 Vendor Portal", "👑 Super Admin (Accounts)"]:
-        with st.expander("📁 Standard Formats ▾", expanded=False):
-            st.caption("Standard Vendor Formats & Exceptions:")
-            if sample_bytes:
-                st.download_button(
-                    label="📄 Vendor Sample Rate Sheet (.xlsx)",
-                    data=sample_bytes,
-                    file_name="Vendor Sample Format.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="sb_dl_vendor_sample",
-                    use_container_width=True
-                )
-            if qc_bytes:
-                st.download_button(
-                    label="📑 QC Blocked Codes (.xlsx)",
-                    data=qc_bytes,
-                    file_name="QC Blocked.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="sb_dl_qc_blocked",
-                    use_container_width=True
-                )
-            country_billing_live = safe_get_master_excel_bytes()
-            if country_billing_live:
-                st.download_button(
-                    label="📊 Country Master Billing (.xlsx)",
-                    data=country_billing_live,
-                    file_name="Country Billing.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="sb_dl_country_billing",
-                    use_container_width=True
-                )
-            if separate_codes_bytes:
-                st.download_button(
-                    label="📁 Separate Codes (.xls)",
-                    data=separate_codes_bytes,
-                    file_name="Separate_codes_sample_ratesheet.xls",
-                    mime="application/vnd.ms-excel",
-                    key="sb_dl_sep_codes",
-                    use_container_width=True
-                )
+    # Live synced whenever Admin replaces sheets! Available in ALL portals!
+    with st.expander("📁 Standard Formats & Templates ▾", expanded=False):
+        st.caption("Standard Wholesale Rate Deck Formats:")
+        cust_csv_bytes = "Dial Code,Summary,New Rate,Minimum,Increment,Effective Date\n971,United Arab Emirates,0.120000,1,1,2026-11-27\n97150,United Arab Emirates Mobile,0.150000,1,1,2026-11-27\n233,Ghana,0.080000,60,1,2026-11-27\n23324,Ghana mobile MTN,0.045000,1,1,2026-11-27\n".encode('utf-8')
+        st.download_button(
+            label="📄 Customer Standard Format (.csv)",
+            data=cust_csv_bytes,
+            file_name="Customer_Standard_Format.csv",
+            mime="text/csv",
+            key="sb_dl_cust_csv_sample",
+            use_container_width=True
+        )
+        rt_csv_bytes = "Rate Key,Rate Summary,Inter. Rate,Dur Min,Dur Inc,Start Date\n971,United Arab Emirates,0.120000,1,1,2026-11-27\n97150,United Arab Emirates Mobile,0.150000,1,1,2026-11-27\n233,Ghana,0.080000,60,1,2026-11-27\n23324,Ghana mobile MTN,0.045000,1,1,2026-11-27\n".encode('utf-8')
+        st.download_button(
+            label="📄 RouteTrust Switch Export (.csv)",
+            data=rt_csv_bytes,
+            file_name="RouteTrust_Export_Sample.csv",
+            mime="text/csv",
+            key="sb_dl_rt_csv_sample",
+            use_container_width=True
+        )
+        if sample_bytes:
+            st.download_button(
+                label="📄 Vendor Sample Rate Sheet (.xlsx)",
+                data=sample_bytes,
+                file_name="Vendor Sample Format.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="sb_dl_vendor_sample",
+                use_container_width=True
+            )
+        if qc_bytes:
+            st.download_button(
+                label="📑 QC Blocked Codes (.xlsx)",
+                data=qc_bytes,
+                file_name="QC Blocked.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="sb_dl_qc_blocked",
+                use_container_width=True
+            )
+        country_billing_live = safe_get_master_excel_bytes()
+        if country_billing_live:
+            st.download_button(
+                label="📊 Country Master Billing (.xlsx)",
+                data=country_billing_live,
+                file_name="Country Billing.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="sb_dl_country_billing",
+                use_container_width=True
+            )
+        if separate_codes_bytes:
+            st.download_button(
+                label="📁 Separate Codes (.xls)",
+                data=separate_codes_bytes,
+                file_name="Separate_codes_sample_ratesheet.xls",
+                mime="application/vnd.ms-excel",
+                key="sb_dl_sep_codes",
+                use_container_width=True
+            )
 
     if active_portal in ["👥 Customer Portal", "👑 Super Admin (Accounts)"]:
         with st.expander("📊 Standard A-Z Rates ▾", expanded=False):
@@ -2168,48 +2185,24 @@ def smart_spell_check_destination(query, top_n=3):
         return []
 
     words = [w for w in re.split(r'[\s\-_]+', q) if len(w) > 1]
-    
-    # Check if exact token match already works
-    if len(words) > 1:
-        exact_tok = [d for d in all_dests if all(w in d.lower() for w in words)]
-        if exact_tok:
-            return exact_tok[:top_n]
-    elif len(words) == 1:
-        exact_sub = [d for d in all_dests if words[0] in d.lower()]
-        if exact_sub:
-            return exact_sub[:top_n]
+    if not words:
+        return []
 
-    all_words = {}
-    for d in all_dests:
-        for w in re.split(r'[\s\-_]+', d):
-            wl = w.lower()
-            if len(wl) > 2:
-                if wl not in all_words:
-                    all_words[wl] = []
-                all_words[wl].append(d)
+    # If the user already typed words matching a valid destination, they did NOT make a typo!
+    # Returning [] prevents annoying 'Did you mean: ... FIXED' suggestions when typing normal country names!
+    exact_tok = [d for d in all_dests if all(w in d.lower() for w in words)]
+    if exact_tok:
+        return []
 
-    token_candidates = []
-    for qw in words:
-        close_w = difflib.get_close_matches(qw, all_words.keys(), n=3, cutoff=0.6)
-        for cw in close_w:
-            token_candidates.extend(all_words[cw])
-
-    if token_candidates:
-        scored = {}
-        for d in token_candidates:
-            d_lower = d.lower()
-            score = 0
-            for qw in words:
-                if qw in d_lower:
-                    score += 2
-                else:
-                    d_tokens = re.split(r'[\s\-_]+', d_lower)
-                    if difflib.get_close_matches(qw, d_tokens, cutoff=0.6):
-                        score += 1.5
-            scored[d] = score
-        sorted_dests = sorted(scored.keys(), key=lambda x: scored[x], reverse=True)
-        return sorted_dests[:top_n]
-    return []
+    # Genuine typo detection: Use close matches on destination bases
+    close = difflib.get_close_matches(q, [d.lower() for d in all_dests], n=top_n * 2, cutoff=0.7)
+    clean_suggs = []
+    for c in close:
+        orig = next((d for d in all_dests if d.lower() == c), c)
+        clean = re.sub(r'\s*\b(?:FIXED|MOBILE|MOB|FIX)\b.*$', '', orig, flags=re.I).strip()
+        if clean and clean not in clean_suggs and clean.lower() != q:
+            clean_suggs.append(clean)
+    return clean_suggs[:top_n]
 
 def resolve_destination_and_scope(dest_str, explicit_scope="All"):
     """
@@ -2646,12 +2639,25 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
 
     # Promote header row if loaded without header (e.g. from load_csv_safely)
     if all(isinstance(c, int) for c in df.columns) or any(str(c).isdigit() for c in df.columns):
-        for r_idx in range(min(5, len(df))):
-            row_vals = [str(v).strip().lower() for v in df.iloc[r_idx].values]
-            if any(k in row_vals for k in ['rate key', 'dial code', 'dialcode', 'code', 'prefix']) or any(k in row_vals for k in ['rate summary', 'rate sumr', 'rate sum', 'ratesummary', 'ratesumr', 'summary', 'destination']):
-                df.columns = [str(c).strip() for c in df.iloc[r_idx].values]
-                df = df.iloc[r_idx + 1:].copy().reset_index(drop=True)
-                break
+        # 1. Try core_engine.detect_header_row_and_columns first!
+        try:
+            h_row, h_map = core_engine.detect_header_row_and_columns(df)
+            if h_row is not None and ('dial_code' in h_map or 'destination' in h_map or 'rate' in h_map):
+                df.columns = [str(c).strip() for c in df.iloc[h_row].values]
+                df = df.iloc[h_row + 1:].copy().reset_index(drop=True)
+        except Exception:
+            pass
+        # 2. Fallback scan if still numeric columns
+        if all(isinstance(c, int) for c in df.columns) or any(str(c).isdigit() for c in df.columns):
+            for r_idx in range(min(15, len(df))):
+                row_vals = [str(v).strip().lower() for v in df.iloc[r_idx].values]
+                has_code = any(any(k in v for k in ['dial code', 'dialcode', 'code', 'prefix', 'key']) for v in row_vals)
+                has_dest = any(any(k in v for k in ['summary', 'dest', 'country', 'description']) for v in row_vals)
+                has_rate = any(any(k in v for k in ['rate', 'price', 'tariff', 'cost']) for v in row_vals)
+                if (has_code and has_dest) or (has_code and has_rate) or (has_dest and has_rate):
+                    df.columns = [str(c).strip() for c in df.iloc[r_idx].values]
+                    df = df.iloc[r_idx + 1:].copy().reset_index(drop=True)
+                    break
 
     initial_rows = len(df)
     
@@ -2661,17 +2667,17 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     # Priority Pass: Exact RouteTrust signatures
     for c in df.columns:
         cl = str(c).strip().lower()
-        if cl in ['rate key', 'ratekey', 'rate_key'] and 'Dial Code' not in col_map.values():
+        if any(x == cl for x in ['rate key', 'ratekey', 'rate_key', 'dial code', 'dialcode', 'dial_code', 'dialed digit', 'dialed digits']) and 'Dial Code' not in col_map.values():
             col_map[c] = 'Dial Code'
-        elif cl in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum'] and 'Summary' not in col_map.values():
+        elif any(x == cl for x in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum', 'destination', 'summary']) and 'Summary' not in col_map.values():
             col_map[c] = 'Summary'
-        elif cl in ['inter. rate', 'inter rate', 'inter_rate', 'international rate', 'international_rate', 'inter.rate', 'interrate'] and 'New Rate' not in col_map.values():
+        elif any(x in cl for x in ['inter. rate', 'inter rate', 'inter_rate', 'international rate', 'international_rate', 'inter.rate', 'interrate']) and 'New Rate' not in col_map.values():
             col_map[c] = 'New Rate'
-        elif cl in ['dur min', 'dur_min', 'durmin', 'dur_min.', 'dur min.', 'duration min', 'dur. min'] and 'Minimum' not in col_map.values():
+        elif any(x in cl for x in ['dur min', 'dur_min', 'durmin', 'dur_min.', 'dur min.', 'duration min', 'dur. min']) and 'Minimum' not in col_map.values():
             col_map[c] = 'Minimum'
-        elif cl in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc'] and 'Increment' not in col_map.values():
+        elif any(x in cl for x in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc']) and 'Increment' not in col_map.values():
             col_map[c] = 'Increment'
-        elif cl in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.'] and 'Effective Date' not in col_map.values():
+        elif any(x in cl for x in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.']) and 'Effective Date' not in col_map.values():
             col_map[c] = 'Effective Date'
 
     # Second Pass: Standard telecom keyword matching for remaining columns
@@ -2679,27 +2685,49 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         if c in col_map:
             continue
         cl = str(c).strip().lower()
-        if any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code']) and 'Dial Code' not in col_map.values() and 'Dial Code' not in df.columns:
+        # Dial Code
+        if (any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code', 'dst code', 'dest code', 'rate key', 'dst_code']) or cl == 'code') and 'name' not in cl and 'Dial Code' not in col_map.values():
             col_map[c] = 'Dial Code'
-        elif any(x in cl for x in ['summary', 'destination', 'country', 'description']) and 'center' not in cl and 'id' not in cl and 'Summary' not in col_map.values() and 'Summary' not in df.columns:
+        # Summary / Destination
+        elif (any(x in cl for x in ['summary', 'destination', 'country', 'description', 'dest', 'dst', 'area', 'zone']) or cl == 'dest') and 'center' not in cl and 'id' not in cl and 'code' not in cl and 'Summary' not in col_map.values():
             col_map[c] = 'Summary'
-        elif any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price']) and 'New Rate' not in col_map.values() and 'New Rate' not in df.columns:
+        # Rate
+        elif (any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price', 'rates', 'rate', 'cost', 'sell rate', 'selling rate', 'cust rate', 'rate/min', 'rate (', 'rate_', 'rate-', 'rate:']) or cl.startswith('rate')) and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values():
             col_map[c] = 'New Rate'
-        elif cl == 'rate' and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values() and 'New Rate' not in df.columns:
-            col_map[c] = 'New Rate'
-        elif any(x in cl for x in ['minimum', 'pulse1', 'min']) and 'Minimum' not in col_map.values() and 'Minimum' not in df.columns:
+        # Minimum
+        elif any(x in cl for x in ['minimum', 'pulse1', 'min', 'dur min', 'initial']) and 'Minimum' not in col_map.values():
             col_map[c] = 'Minimum'
-        elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc']) and 'Increment' not in col_map.values() and 'Increment' not in df.columns:
+        # Increment
+        elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc', 'dur inc', 'subsequent']) and 'Increment' not in col_map.values():
             col_map[c] = 'Increment'
-        elif any(x in cl for x in ['effective date', 'effective', 'date']) and 'end date' not in cl and 'Effective Date' not in col_map.values() and 'Effective Date' not in df.columns:
+        # Effective Date
+        elif any(x in cl for x in ['effective date', 'effective', 'date', 'start date']) and 'end date' not in cl and 'expiry' not in cl and 'Effective Date' not in col_map.values():
             col_map[c] = 'Effective Date'
-        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values() and 'Comments' not in df.columns:
+        # Comments
+        elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values():
             col_map[c] = 'Comments'
 
     df = df.rename(columns=col_map)
     # Deduplicate columns if multiple columns ended up with the same name
     if any(df.columns.duplicated()):
         df = df.loc[:, ~df.columns.duplicated(keep='first')].copy()
+
+    # Safety Fallback: If any required column still missing, use core_engine column index detector
+    if 'Dial Code' not in df.columns or 'Summary' not in df.columns or 'New Rate' not in df.columns:
+        try:
+            h_row, h_map = core_engine.detect_header_row_and_columns(df)
+            if 'dial_code' in h_map and 'Dial Code' not in df.columns:
+                df['Dial Code'] = df.iloc[:, h_map['dial_code']]
+            if 'destination' in h_map and 'Summary' not in df.columns:
+                df['Summary'] = df.iloc[:, h_map['destination']]
+            if 'rate' in h_map and 'New Rate' not in df.columns:
+                df['New Rate'] = df.iloc[:, h_map['rate']]
+            if 'min' in h_map and 'Minimum' not in df.columns:
+                df['Minimum'] = df.iloc[:, h_map['min']]
+            if 'inc' in h_map and 'Increment' not in df.columns:
+                df['Increment'] = df.iloc[:, h_map['inc']]
+        except Exception:
+            pass
 
     # Ensure required columns exist
     if 'Dial Code' not in df.columns or 'Summary' not in df.columns or 'New Rate' not in df.columns:
@@ -3519,6 +3547,16 @@ def render_customer_standardizer_view():
                 </div>
                 """, unsafe_allow_html=True)
                 st.caption("Auto-maps RouteTrust export (`Rate Key`, `Rate Summary`, `Inter. Rate`, `Dur Min/Inc`). Standardizes to exact 6 columns:")
+                st.markdown("""
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; margin-bottom: 12px;">
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">1. Dial Code</span>
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">2. Summary</span>
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">3. New Rate</span>
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">4. Minimum</span>
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">5. Increment</span>
+                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">6. Effective Date</span>
+                </div>
+                """, unsafe_allow_html=True)
             with col_t1_rst:
                 if st.button("🗑️ Clear / Reset Sheet", key="cust_tab1_reset_btn", type="secondary", use_container_width=True):
                     st.session_state.cust_uploader_key = st.session_state.get("cust_uploader_key", 0) + 1
@@ -3550,17 +3588,32 @@ def render_customer_standardizer_view():
                         else:
                             parsed_df = pd.read_excel(io.BytesIO(raw_bytes), dtype=str)
                         if all(isinstance(c, int) for c in parsed_df.columns) or any(str(c).isdigit() for c in parsed_df.columns):
-                            for r_idx in range(min(5, len(parsed_df))):
+                            try:
+                                h_row, h_map = core_engine.detect_header_row_and_columns(parsed_df)
+                                if h_row is not None and ('dial_code' in h_map or 'destination' in h_map or 'rate' in h_map):
+                                    parsed_df.columns = [str(c).strip() for c in parsed_df.iloc[h_row].values]
+                                    parsed_df = parsed_df.iloc[h_row + 1:].copy().reset_index(drop=True)
+                            except Exception:
+                                pass
+                        if all(isinstance(c, int) for c in parsed_df.columns) or any(str(c).isdigit() for c in parsed_df.columns):
+                            for r_idx in range(min(15, len(parsed_df))):
                                 row_vals = [str(v).strip().lower() for v in parsed_df.iloc[r_idx].values]
-                                if any(k in row_vals for k in ['rate key', 'dial code', 'dialcode', 'code', 'prefix']) or any(k in row_vals for k in ['rate summary', 'summary', 'destination']):
+                                has_code = any(any(k in v for k in ['dial code', 'dialcode', 'code', 'prefix', 'key']) for v in row_vals)
+                                has_dest = any(any(k in v for k in ['summary', 'dest', 'country', 'description']) for v in row_vals)
+                                has_rate = any(any(k in v for k in ['rate', 'price', 'tariff', 'cost']) for v in row_vals)
+                                if (has_code and has_dest) or (has_code and has_rate) or (has_dest and has_rate):
                                     parsed_df.columns = [str(c).strip() for c in parsed_df.iloc[r_idx].values]
                                     parsed_df = parsed_df.iloc[r_idx + 1:].copy().reset_index(drop=True)
                                     break
                         cols_lower = {str(c).lower().strip(): c for c in parsed_df.columns}
-                        sum_col = next((cols_lower[k] for k in ['rate summary', 'summary', 'destination', 'rate sumr'] if k in cols_lower), None)
+                        sum_col = next((cols_lower[k] for k in ['rate summary', 'summary', 'destination', 'rate sumr', 'country', 'description', 'dest'] if k in cols_lower), None)
+                        if not sum_col:
+                            sum_col = next((cols_lower[k] for k in cols_lower if any(x in k for x in ['summary', 'dest', 'country', 'desc'])), None)
                         if sum_col and 'Summary' not in parsed_df.columns:
                             parsed_df['Summary'] = parsed_df[sum_col]
-                        code_col = next((cols_lower[k] for k in ['rate key', 'dial code', 'dialcode', 'code'] if k in cols_lower), None)
+                        code_col = next((cols_lower[k] for k in ['rate key', 'dial code', 'dialcode', 'code', 'prefix', 'key'] if k in cols_lower), None)
+                        if not code_col:
+                            code_col = next((cols_lower[k] for k in cols_lower if any(x in k for x in ['dial', 'code', 'prefix', 'key'])), None)
                         if code_col and 'Dial Code' not in parsed_df.columns:
                             parsed_df['Dial Code'] = parsed_df[code_col]
                         st.session_state.cust_raw_df = parsed_df
