@@ -3682,10 +3682,38 @@ def render_customer_standardizer_view():
 
                 for idx, d_item in enumerate(st.session_state.cust_dest_items):
                     dest_val = d_item.get("dest", "").strip()
+                    rate_val = d_item.get("rate", "").strip()
                     breakouts = get_country_breakouts_from_df(st.session_state.get("cust_raw_df"), dest_val) if dest_val else {'fixed': [], 'mobile': []}
                     has_breakouts = bool(breakouts.get("fixed") or breakouts.get("mobile"))
                     
-                    c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.6, 1.2, 1.0, 1.4, 0.4])
+                    # DYNAMIC RATE HIGHLIGHT: Pulsing amber border when destination is entered but rate is missing!
+                    if dest_val and not rate_val:
+                        st.markdown(f"""
+                        <style>
+                        div.st-key-cust_rate_in_{idx} input {{
+                            border: 2.5px solid #F59E0B !important;
+                            background-color: #FFFBEB !important;
+                            box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
+                            animation: pulse_amber_{idx} 1.8s infinite !important;
+                        }}
+                        @keyframes pulse_amber_{idx} {{
+                            0% {{ box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }}
+                            70% {{ box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }}
+                            100% {{ box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }}
+                        }}
+                        </style>
+                        """, unsafe_allow_html=True)
+                    elif dest_val and rate_val:
+                        st.markdown(f"""
+                        <style>
+                        div.st-key-cust_rate_in_{idx} input {{
+                            border: 1.5px solid #86EFAC !important;
+                            background-color: #F0FDF4 !important;
+                        }}
+                        </style>
+                        """, unsafe_allow_html=True)
+
+                    c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.6, 1.1, 1.1, 1.3, 0.4])
                     with c_d1:
                         d_item["dest"] = st.text_input(f"Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. Ghana or 233", key=f"cust_dest_in_{idx}")
                         dest_val = d_item.get("dest", "").strip()
@@ -3704,7 +3732,14 @@ def render_customer_standardizer_view():
                                         on_click=on_apply_destination_suggestion,
                                         args=(idx, suggs[0], False)
                                     )
+
                     with c_d2:
+                        rate_label = f"👉 Rate #{idx+1} (Required):" if (dest_val and not rate_val) else (f"✅ Rate #{idx+1}:" if (dest_val and rate_val) else f"New Rate #{idx+1}:")
+                        rate_placeholder = "e.g. 0.045" if dest_val else "Pehle destination daalein"
+                        d_item["rate"] = st.text_input(rate_label, value=d_item.get("rate", ""), placeholder=rate_placeholder, key=f"cust_rate_in_{idx}")
+                        rate_val = d_item.get("rate", "").strip()
+
+                    with c_d3:
                         scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                         curr_sc = d_item.get("scope", "🌐 All")
                         # Auto-detect scope if user typed 'fix' or 'mob' in destination string
@@ -3775,8 +3810,6 @@ def render_customer_standardizer_view():
                     d_item["target_dial_codes"] = target_codes
                     d_item["breakout_name"] = breakout_name
 
-                    with c_d3:
-                        d_item["rate"] = st.text_input(f"New Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_rate_in_{idx}")
                     with c_d4:
                         # Instant Sheet Pulse Lookup by target dial codes!
                         cur_pulse, p_rows = lookup_destination_current_pulse(
@@ -3822,12 +3855,13 @@ def render_customer_standardizer_view():
                 col_add_dest, col_fb, col_date = st.columns([1.5, 1.5, 1.5])
                 with col_add_dest:
                     if can_add_more:
-                        if st.button("➕ Add More Destination", type="secondary", key="cust_btn_add_dest_row"):
+                        next_num = len(st.session_state.cust_dest_items) + 1
+                        if st.button(f"➕ Add Next Destination (#{next_num})", type="secondary", key="cust_btn_add_dest_row"):
                             st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
                             st.rerun()
                     else:
                         st.button(
-                            "➕ Add More Destination 🔒",
+                            "➕ Add Next Destination 🔒",
                             type="secondary",
                             key="cust_btn_add_dest_row_locked",
                             disabled=True,
@@ -3987,7 +4021,37 @@ def render_customer_standardizer_view():
                     )
 
             for idx, d_item in enumerate(st.session_state.cust_new_dest_items):
-                c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.8, 1.1, 1.0, 1.3, 0.4])
+                dest_val = d_item.get("dest", "").strip()
+                rate_val = d_item.get("rate", "").strip()
+
+                # DYNAMIC RATE HIGHLIGHT: Pulsing amber border when destination is entered but rate is missing!
+                if dest_val and not rate_val:
+                    st.markdown(f"""
+                    <style>
+                    div.st-key-cust_new_rate_in_{idx} input {{
+                        border: 2.5px solid #F59E0B !important;
+                        background-color: #FFFBEB !important;
+                        box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
+                        animation: pulse_amber_new_{idx} 1.8s infinite !important;
+                    }}
+                    @keyframes pulse_amber_new_{idx} {{
+                        0% {{ box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }}
+                        70% {{ box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }}
+                        100% {{ box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }}
+                    }}
+                    </style>
+                    """, unsafe_allow_html=True)
+                elif dest_val and rate_val:
+                    st.markdown(f"""
+                    <style>
+                    div.st-key-cust_new_rate_in_{idx} input {{
+                        border: 1.5px solid #86EFAC !important;
+                        background-color: #F0FDF4 !important;
+                    }}
+                    </style>
+                    """, unsafe_allow_html=True)
+
+                c_d1, c_d2, c_d3, c_d4, c_d5 = st.columns([1.6, 1.1, 1.1, 1.3, 0.4])
                 with c_d1:
                     d_item["dest"] = st.text_input(f"Override Destination #{idx+1}:", value=d_item.get("dest", ""), placeholder="e.g. France or 33", key=f"cust_new_dest_in_{idx}")
                     dest_val = d_item.get("dest", "").strip()
@@ -4007,12 +4071,17 @@ def render_customer_standardizer_view():
                                     args=(idx, suggs[0], True)
                                 )
                 with c_d2:
+                    rate_label = f"👉 Rate #{idx+1} (Required):" if (dest_val and not rate_val) else (f"✅ Rate #{idx+1}:" if (dest_val and rate_val) else f"Target Rate #{idx+1}:")
+                    rate_placeholder = "e.g. 0.015" if dest_val else "Destination pehle daalein"
+                    d_item["rate"] = st.text_input(rate_label, value=d_item.get("rate", ""), placeholder=rate_placeholder, key=f"cust_new_rate_in_{idx}")
+                    rate_val = d_item.get("rate", "").strip()
+
+                with c_d3:
                     scope_opts = ["🌐 All", "☎️ Fixed Only", "📱 Mobile Only"]
                     curr_sc = d_item.get("scope", "🌐 All")
                     sc_idx = scope_opts.index(curr_sc) if curr_sc in scope_opts else 0
                     d_item["scope"] = st.selectbox(f"Scope #{idx+1}:", scope_opts, index=sc_idx, key=f"cust_new_scope_in_{idx}")
-                with c_d3:
-                    d_item["rate"] = st.text_input(f"Target Rate #{idx+1}:", value=d_item.get("rate", ""), placeholder="e.g. 0.015", key=f"cust_new_rate_in_{idx}")
+
                 with c_d4:
                     # Instant Master Pulse Lookup!
                     cur_pulse, p_rows = lookup_destination_current_pulse(
@@ -4057,18 +4126,19 @@ def render_customer_standardizer_view():
             col_add_n_dest, col_n_date = st.columns([2, 2])
             with col_add_n_dest:
                 if can_add_n_more:
-                    if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
+                    next_n_num = len(st.session_state.cust_new_dest_items) + 1
+                    if st.button(f"➕ Add Next Rate Override (#{next_n_num})", type="secondary", key="cust_new_btn_add_dest_row"):
                         st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
                         st.rerun()
                 else:
                     st.button(
-                        "➕ Add More Rate Override 🔒",
+                        "➕ Add Next Rate Override 🔒",
                         type="secondary",
                         key="cust_new_btn_add_dest_row_locked",
                         disabled=True,
                         help=f"Pehle Override #{missing_n_num} ka Destination Name aur New Rate dono fill karo tabhi agla option on hoga."
                     )
-                    st.caption(f"<span style='color: #B45309; font-size: 0.76rem; font-weight: 600;'>🔒 Pehle #{missing_n_num} complete karo (Dest + Rate)</span>", unsafe_allow_html=True)
+                    st.caption(f"<span style='color: #B45309; font-size: 0.76rem; font-weight: 600;'>🔒 Pehle Override #{missing_n_num} complete karo (Dest + Rate)</span>", unsafe_allow_html=True)
             with col_n_date:
                 sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
 
