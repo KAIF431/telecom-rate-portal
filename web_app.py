@@ -2510,6 +2510,8 @@ def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
     - Sheet Name: 'Rate_Amendment'
     - Headers: ['Dial Code', 'Summary', 'New Rate', 'Eff. Date', 'Minimum', 'Increment']
     - AutoFilter, Column widths, and Silver Header styling.
+    - Eff. Date: Native datetime.date with number_format = 'mm-dd-yy'
+    - New Rate: Numeric float matching standard template
     """
     import io, gc, datetime
     import pandas as pd
@@ -2518,13 +2520,14 @@ def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
     out_df = pd.DataFrame()
     out_df['Dial Code'] = df_clean['Dial Code'].astype(str).str.split('.').str[0].str.strip() if 'Dial Code' in df_clean.columns else ''
     out_df['Summary'] = df_clean['Summary'].astype(str).str.strip() if 'Summary' in df_clean.columns else ''
-    out_df['New Rate'] = pd.to_numeric(df_clean['New Rate'], errors='coerce').fillna(0.0).apply(lambda x: f"{x:.6f}") if 'New Rate' in df_clean.columns else '0.000000'
+    out_df['New Rate'] = pd.to_numeric(df_clean['New Rate'], errors='coerce').fillna(0.0)
     
     date_col = 'Eff. Date' if 'Eff. Date' in df_clean.columns else ('Effective Date' if 'Effective Date' in df_clean.columns else None)
     if date_col:
-        out_df['Eff. Date'] = df_clean[date_col].astype(str).str.split(' ').str[0].str.split('T').str[0].str.strip()
+        parsed_dates = pd.to_datetime(df_clean[date_col], errors='coerce').dt.date
+        out_df['Eff. Date'] = parsed_dates.fillna(datetime.date.today())
     else:
-        out_df['Eff. Date'] = str(datetime.date.today())
+        out_df['Eff. Date'] = datetime.date.today()
         
     out_df['Minimum'] = pd.to_numeric(df_clean['Minimum'], errors='coerce').fillna(1).astype(int) if 'Minimum' in df_clean.columns else 1
     out_df['Increment'] = pd.to_numeric(df_clean['Increment'], errors='coerce').fillna(1).astype(int) if 'Increment' in df_clean.columns else 1
@@ -2551,6 +2554,9 @@ def generate_customer_excel_bytes(df_clean, sheet_name="Rate_Amendment"):
             cell.alignment = align_hdr
             cell.border = thin_border
             
+        for cell in ws['D'][1:]:
+            cell.number_format = 'mm-dd-yy'
+
         ws.column_dimensions['A'].width = 11.0
         ws.column_dimensions['B'].width = 44.0
         ws.column_dimensions['C'].width = 14.5
@@ -3827,7 +3833,7 @@ def render_customer_standardizer_view():
                         key="cust_missing_fb_sel"
                     )
                 with col_date:
-                    sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_date_selector")
+                    sel_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), format="MM/DD/YYYY", key="cust_date_selector")
                     
                 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
                 if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
@@ -4091,7 +4097,7 @@ def render_customer_standardizer_view():
                     )
                     st.caption(f"<span style='color: #B45309; font-size: 0.76rem; font-weight: 600;'>🔒 Complete Override #{missing_n_num} (Dest + Rate) first</span>", unsafe_allow_html=True)
             with col_n_date:
-                sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
+                sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), format="MM/DD/YYYY", key="cust_new_date_selector")
 
             st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
             if st.button("⚡ Generate Customer Rate Deck (From Master)", type="primary", use_container_width=True, key="cust_btn_generate_new"):
