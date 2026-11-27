@@ -2943,6 +2943,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         suffix = f"Standardized {u_tag}"
 
     suggested_full_name = f"Name - {base_clean} {suffix}"
+    suggested_full_name = re.sub(r'[/\\:*?\"<>|]', '_', suggested_full_name).strip()
     final_xl_filename = f"{suggested_full_name}.xlsx"
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
@@ -3127,7 +3128,7 @@ def generate_new_customer_deck_from_master(service_type, trunk_code, customer_na
         suffix = f"A to Z new {u_tag}"
 
     suggested_full_name = f"{c_clean} {suffix}"
-
+    suggested_full_name = re.sub(r'[/\\:*?\"<>|]', '_', suggested_full_name).strip()
     final_xl_filename = f"{suggested_full_name}.xlsx"
     final_csv_filename = core_engine.build_csv_output_filename(suggested_full_name)
 
@@ -3178,12 +3179,37 @@ def on_pick_master_destination(sugg_val, is_new=False):
     st.session_state[f"{prefix}_0"] = sugg_val
 
 def render_customer_standardizer_view():
-    import datetime, time, io
+    import datetime, time, io, base64
     import pandas as pd
     import billing_manager as bm
     import core_engine
+    import streamlit.components.v1 as components
 
     curr_u = current_user.get("username", "kaif") if isinstance(current_user, dict) else "kaif"
+
+    # Auto-trigger instant browser download via JS when processed!
+    if st.session_state.get("cust_just_processed") and st.session_state.get("cust_processed_result"):
+        st.session_state.pop("cust_just_processed", None)
+        item_dl = st.session_state.cust_processed_result
+        f_b = item_dl.get("xl_bytes")
+        if f_b:
+            try:
+                b64_str = base64.b64encode(f_b).decode('utf-8')
+                fname_dl = item_dl["filename"]
+                components.html(f"""
+                <script>
+                    try {{
+                        var a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_str}';
+                        a.download = '{fname_dl}';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function() {{ document.body.removeChild(a); }}, 1000);
+                    }} catch(e) {{}}
+                </script>
+                """, height=0, width=0)
+            except Exception:
+                pass
 
     # 1. DISPLAY PERSISTENT RESULTS AT TOP (Identical to Vendor Portal!)
     if st.session_state.get("cust_processed_result"):
@@ -3542,19 +3568,8 @@ def render_customer_standardizer_view():
             col_t1_h, col_t1_rst = st.columns([3.5, 1.2])
             with col_t1_h:
                 st.markdown("""
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <span style="font-size: 1.05rem; font-weight: 700; color: #0F172A;">📁 Upload Customer Rate Sheet (RouteTrust / CSV / Excel)</span>
-                </div>
-                """, unsafe_allow_html=True)
-                st.caption("Auto-maps RouteTrust export (`Rate Key`, `Rate Summary`, `Inter. Rate`, `Dur Min/Inc`). Standardizes to exact 6 columns:")
-                st.markdown("""
-                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; margin-bottom: 12px;">
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">1. Dial Code</span>
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">2. Summary</span>
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">3. New Rate</span>
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">4. Minimum</span>
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">5. Increment</span>
-                    <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; border: 1px solid #BAE6FD;">6. Effective Date</span>
                 </div>
                 """, unsafe_allow_html=True)
             with col_t1_rst:
@@ -3793,11 +3808,32 @@ def render_customer_standardizer_view():
                                 st.session_state.cust_dest_items.pop(idx)
                                 st.rerun()
 
+                # Validation: Can we add more destinations? Only if all previous rows are complete!
+                can_add_more = True
+                missing_row_num = None
+                for c_idx, c_item in enumerate(st.session_state.cust_dest_items):
+                    c_dest = c_item.get("dest", "").strip()
+                    c_rate = c_item.get("rate", "").strip()
+                    if not c_dest or not c_rate:
+                        can_add_more = False
+                        missing_row_num = c_idx + 1
+                        break
+
                 col_add_dest, col_fb, col_date = st.columns([1.5, 1.5, 1.5])
                 with col_add_dest:
-                    if st.button("➕ Add More Destination", type="secondary", key="cust_btn_add_dest_row"):
-                        st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
-                        st.rerun()
+                    if can_add_more:
+                        if st.button("➕ Add More Destination", type="secondary", key="cust_btn_add_dest_row"):
+                            st.session_state.cust_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
+                            st.rerun()
+                    else:
+                        st.button(
+                            "➕ Add More Destination 🔒",
+                            type="secondary",
+                            key="cust_btn_add_dest_row_locked",
+                            disabled=True,
+                            help=f"Pehle Destination #{missing_row_num} ka Destination Name aur New Rate dono fill karo tabhi agla option on hoga."
+                        )
+                        st.caption(f"<span style='color: #B45309; font-size: 0.76rem; font-weight: 600;'>🔒 Pehle #{missing_row_num} complete karo (Dest + Rate)</span>", unsafe_allow_html=True)
                 with col_fb:
                     sel_missing_fallback = st.selectbox(
                         "If missing in sheet:",
@@ -3810,6 +3846,16 @@ def render_customer_standardizer_view():
                     
                 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
                 if st.button("⚡ Standardize & Update Customer Rate Deck", type="primary", use_container_width=True, key="cust_btn_process"):
+                    missing_rates = []
+                    for c_idx, di in enumerate(st.session_state.cust_dest_items):
+                        d_val = di.get("dest", "").strip()
+                        r_val = di.get("rate", "").strip()
+                        if d_val and not r_val:
+                            missing_rates.append(f"Destination #{c_idx+1} ('{d_val}')")
+                    if missing_rates:
+                        st.error(f"⚠️ Rate missing hai: {', '.join(missing_rates)}! Kripya New Rate enter karein ya destination box clear karein.")
+                        st.stop()
+
                     fb_mode = None
                     if "Master CC" in sel_missing_fallback:
                         fb_mode = "CC"
@@ -3846,11 +3892,45 @@ def render_customer_standardizer_view():
                         )
                         if ok:
                             st.session_state.cust_processed_result = res
+                            st.session_state.cust_just_processed = True
                             st.success("✅ Customer rate deck standardized successfully!")
-                            time.sleep(0.5)
+                            time.sleep(0.3)
                             st.rerun()
                         else:
                             st.error(msg)
+
+            if st.session_state.get("cust_processed_result"):
+                res_tab = st.session_state.cust_processed_result
+                st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 12px 16px; margin: 8px 0;">'
+                    f'<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">'
+                    f'<span style="font-weight: 800; color: #166534; font-size: 0.96rem;">🎉 Rate Deck Ready: <b>{res_tab["filename"]}</b></span>'
+                    f'<span style="background: #DCFCE7; color: #15803D; font-weight: 700; font-size: 0.76rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #86EFAC;">Auto-Download Triggered</span>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                c_bt_dl1, c_bt_dl2 = st.columns([3, 2])
+                with c_bt_dl1:
+                    st.download_button(
+                        label=f"📥 Download Excel: {res_tab['filename']}",
+                        data=res_tab["xl_bytes"],
+                        file_name=res_tab["filename"],
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="cust_tab1_instant_dl_excel",
+                        type="primary",
+                        use_container_width=True
+                    )
+                with c_bt_dl2:
+                    st.download_button(
+                        label="📄 Download CSV (.csv)",
+                        data=res_tab["csv_bytes"],
+                        file_name=res_tab["csv_filename"],
+                        mime="text/csv",
+                        key="cust_tab1_instant_dl_csv",
+                        use_container_width=True
+                    )
 
     with cust_tab2:
         with st.container(border=True):
@@ -3963,11 +4043,32 @@ def render_customer_standardizer_view():
                             st.session_state.cust_new_dest_items.pop(idx)
                             st.rerun()
 
+            # Validation: Can we add more overrides? Only if all previous rows are complete!
+            can_add_n_more = True
+            missing_n_num = None
+            for c_i, c_it in enumerate(st.session_state.cust_new_dest_items):
+                d_v = c_it.get("dest", "").strip()
+                r_v = c_it.get("rate", "").strip()
+                if not d_v or not r_v:
+                    can_add_n_more = False
+                    missing_n_num = c_i + 1
+                    break
+
             col_add_n_dest, col_n_date = st.columns([2, 2])
             with col_add_n_dest:
-                if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
-                    st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
-                    st.rerun()
+                if can_add_n_more:
+                    if st.button("➕ Add More Rate Override", type="secondary", key="cust_new_btn_add_dest_row"):
+                        st.session_state.cust_new_dest_items.append({"dest": "", "scope": "🌐 All", "rate": "", "pulse": "⚙️ Keep Standard"})
+                        st.rerun()
+                else:
+                    st.button(
+                        "➕ Add More Rate Override 🔒",
+                        type="secondary",
+                        key="cust_new_btn_add_dest_row_locked",
+                        disabled=True,
+                        help=f"Pehle Override #{missing_n_num} ka Destination Name aur New Rate dono fill karo tabhi agla option on hoga."
+                    )
+                    st.caption(f"<span style='color: #B45309; font-size: 0.76rem; font-weight: 600;'>🔒 Pehle #{missing_n_num} complete karo (Dest + Rate)</span>", unsafe_allow_html=True)
             with col_n_date:
                 sel_n_eff_date = st.date_input("Effective Date (Default Today):", value=datetime.date.today(), key="cust_new_date_selector")
 
@@ -3977,6 +4078,16 @@ def render_customer_standardizer_view():
                 if not clean_cname:
                     st.warning("⚠️ Please enter a Customer Name before generating.")
                 else:
+                    missing_n_rates = []
+                    for c_i, di in enumerate(st.session_state.cust_new_dest_items):
+                        d_val = di.get("dest", "").strip()
+                        r_val = di.get("rate", "").strip()
+                        if d_val and not r_val:
+                            missing_n_rates.append(f"Override #{c_i+1} ('{d_val}')")
+                    if missing_n_rates:
+                        st.error(f"⚠️ Rate missing hai: {', '.join(missing_n_rates)}! Kripya New Rate enter karein ya destination box clear karein.")
+                        st.stop()
+
                     valid_n_updates = []
                     for di in st.session_state.cust_new_dest_items:
                         d_val = di.get("dest", "").strip()
@@ -3997,11 +4108,45 @@ def render_customer_standardizer_view():
                         )
                         if ok:
                             st.session_state.cust_processed_result = res
+                            st.session_state.cust_just_processed = True
                             st.success(f"✅ Rate deck for '{clean_cname}' generated successfully!")
-                            time.sleep(0.5)
+                            time.sleep(0.3)
                             st.rerun()
                         else:
                             st.error(msg)
+
+            if st.session_state.get("cust_processed_result"):
+                res_tab2 = st.session_state.cust_processed_result
+                st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 8px; padding: 12px 16px; margin: 8px 0;">'
+                    f'<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">'
+                    f'<span style="font-weight: 800; color: #166534; font-size: 0.96rem;">🎉 Rate Deck Ready: <b>{res_tab2["filename"]}</b></span>'
+                    f'<span style="background: #DCFCE7; color: #15803D; font-weight: 700; font-size: 0.76rem; padding: 2px 8px; border-radius: 10px; border: 1px solid #86EFAC;">Auto-Download Triggered</span>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                c_bt_dl1_t2, c_bt_dl2_t2 = st.columns([3, 2])
+                with c_bt_dl1_t2:
+                    st.download_button(
+                        label=f"📥 Download Excel: {res_tab2['filename']}",
+                        data=res_tab2["xl_bytes"],
+                        file_name=res_tab2["filename"],
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="cust_tab2_instant_dl_excel",
+                        type="primary",
+                        use_container_width=True
+                    )
+                with c_bt_dl2_t2:
+                    st.download_button(
+                        label="📄 Download CSV (.csv)",
+                        data=res_tab2["csv_bytes"],
+                        file_name=res_tab2["csv_filename"],
+                        mime="text/csv",
+                        key="cust_tab2_instant_dl_csv",
+                        use_container_width=True
+                    )
 
 
 # Sidebar already mounted at top
