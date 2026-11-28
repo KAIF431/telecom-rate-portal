@@ -2584,8 +2584,14 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     except Exception as e:
         return False, f"Could not parse sheet: {e}", None
 
-    # Promote header row if loaded without header (e.g. from load_csv_safely)
-    if all(isinstance(c, int) for c in df.columns) or any(str(c).isdigit() for c in df.columns):
+    # Promote header row if loaded without header (e.g. from load_csv_safely or Excel with title banner)
+    needs_header_scan = (
+        all(isinstance(c, int) for c in df.columns) or 
+        any(str(c).isdigit() for c in df.columns) or
+        any(str(c).startswith('Unnamed') for c in df.columns) or
+        not any(any(k in str(c).lower() for k in ['dial', 'code', 'prefix', 'key']) for c in df.columns)
+    )
+    if needs_header_scan:
         # 1. Try core_engine.detect_header_row_and_columns first!
         try:
             h_row, h_map = core_engine.detect_header_row_and_columns(df)
@@ -2594,12 +2600,12 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
                 df = df.iloc[h_row + 1:].copy().reset_index(drop=True)
         except Exception:
             pass
-        # 2. Fallback scan if still numeric columns
-        if all(isinstance(c, int) for c in df.columns) or any(str(c).isdigit() for c in df.columns):
-            for r_idx in range(min(15, len(df))):
+        # 2. Fallback scan if still unnamed or numeric columns
+        if any(str(c).startswith('Unnamed') for c in df.columns) or all(isinstance(c, int) for c in df.columns):
+            for r_idx in range(min(40, len(df))):
                 row_vals = [str(v).strip().lower() for v in df.iloc[r_idx].values]
-                has_code = any(any(k in v for k in ['dial code', 'dialcode', 'code', 'prefix', 'key']) for v in row_vals)
-                has_dest = any(any(k in v for k in ['summary', 'dest', 'country', 'description']) for v in row_vals)
+                has_code = any(any(k in v for k in ['dial code', 'dialing code', 'dialcode', 'code', 'prefix', 'key']) for v in row_vals)
+                has_dest = any(any(k in v for k in ['summary', 'dest', 'destination', 'country', 'description']) for v in row_vals)
                 has_rate = any(any(k in v for k in ['rate', 'price', 'tariff', 'cost']) for v in row_vals)
                 if (has_code and has_dest) or (has_code and has_rate) or (has_dest and has_rate):
                     df.columns = [str(c).strip() for c in df.iloc[r_idx].values]
@@ -2614,7 +2620,7 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     # Priority Pass: Exact RouteTrust signatures
     for c in df.columns:
         cl = str(c).strip().lower()
-        if any(x == cl for x in ['rate key', 'ratekey', 'rate_key', 'dial code', 'dialcode', 'dial_code', 'dialed digit', 'dialed digits']) and 'Dial Code' not in col_map.values():
+        if any(x == cl for x in ['new dialing code', 'new dial code', 'dialing code', 'dialing_code', 'dialling code', 'dialling_code', 'rate key', 'ratekey', 'rate_key', 'dial code', 'dialcode', 'dial_code', 'dialed digit', 'dialed digits']) and 'Dial Code' not in col_map.values():
             col_map[c] = 'Dial Code'
         elif any(x == cl for x in ['rate summary', 'rate sumr', 'ratesummary', 'ratesumr', 'rate_summary', 'rate_sumr', 'rate sum', 'rates sum', 'destination', 'summary']) and 'Summary' not in col_map.values():
             col_map[c] = 'Summary'
@@ -2624,7 +2630,9 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             col_map[c] = 'Minimum'
         elif any(x in cl for x in ['dur inc', 'dur_inc', 'durinc', 'dur_inc.', 'dur inc.', 'duration inc', 'dur. inc']) and 'Increment' not in col_map.values():
             col_map[c] = 'Increment'
-        elif any(x in cl for x in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.']) and 'Effective Date' not in col_map.values():
+        elif any(x in cl for x in ['bill unit', 'billing unit', 'pulse', 'billing pulse']) and 'Pulse' not in col_map.values():
+            col_map[c] = 'Pulse'
+        elif any(x in cl for x in ['start date', 'start_date', 'startdate', 'start_date.', 'start date.', 'effective start date (rate)', 'effective start date']) and 'dialing' not in cl and 'Effective Date' not in col_map.values():
             col_map[c] = 'Effective Date'
 
     # Second Pass: Standard telecom keyword matching for remaining columns
@@ -2633,13 +2641,13 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
             continue
         cl = str(c).strip().lower()
         # Dial Code
-        if (any(x in cl for x in ['dial code', 'dialcode', 'prefix', 'code', 'dst code', 'dest code', 'rate key', 'dst_code']) or cl == 'code') and 'name' not in cl and 'Dial Code' not in col_map.values():
+        if (any(x in cl for x in ['dial code', 'dialing code', 'dialcode', 'prefix', 'code', 'dst code', 'dest code', 'rate key', 'dst_code']) or cl in ['code', 'dialing', 'dialling']) and 'name' not in cl and 'Dial Code' not in col_map.values():
             col_map[c] = 'Dial Code'
         # Summary / Destination
         elif (any(x in cl for x in ['summary', 'destination', 'country', 'description', 'dest', 'dst', 'area', 'zone']) or cl == 'dest') and 'center' not in cl and 'id' not in cl and 'code' not in cl and 'Summary' not in col_map.values():
             col_map[c] = 'Summary'
         # Rate
-        elif (any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price', 'rates', 'rate', 'cost', 'sell rate', 'selling rate', 'cust rate', 'rate/min', 'rate (', 'rate_', 'rate-', 'rate:']) or cl.startswith('rate')) and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values():
+        elif (any(x in cl for x in ['new rate', 'current rate', 'tariff', 'price', 'rates', 'rate', 'cost', 'sell rate', 'selling rate', 'cust rate', 'rate/min', 'rate (', 'rate_', 'rate-', 'rate:']) or cl.startswith('rate') or cl == 'rate') and 'intra' not in cl and 'indet' not in cl and 'New Rate' not in col_map.values():
             col_map[c] = 'New Rate'
         # Minimum
         elif any(x in cl for x in ['minimum', 'pulse1', 'min', 'dur min', 'initial']) and 'Minimum' not in col_map.values():
@@ -2647,8 +2655,11 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
         # Increment
         elif any(x in cl for x in ['increment', 'interval', 'pulse2', 'inc', 'dur inc', 'subsequent']) and 'Increment' not in col_map.values():
             col_map[c] = 'Increment'
+        # Pulse
+        elif any(x in cl for x in ['bill unit', 'billing unit', 'pulse', 'billing pulse']) and 'Pulse' not in col_map.values():
+            col_map[c] = 'Pulse'
         # Effective Date
-        elif any(x in cl for x in ['effective date', 'effective', 'date', 'start date']) and 'end date' not in cl and 'expiry' not in cl and 'Effective Date' not in col_map.values():
+        elif any(x in cl for x in ['effective date', 'effective start date', 'effective', 'date', 'start date']) and 'end date' not in cl and 'expiry' not in cl and 'dialing' not in cl and 'Effective Date' not in col_map.values():
             col_map[c] = 'Effective Date'
         # Comments
         elif any(x in cl for x in ['comment', 'remark', 'note', 'status', 'action']) and 'Comments' not in col_map.values():
@@ -2680,12 +2691,35 @@ def process_customer_rate_deck(file_bytes, original_filename, dest_updates, effe
     if 'Dial Code' not in df.columns or 'Summary' not in df.columns or 'New Rate' not in df.columns:
         return False, "Uploaded file must contain Dial Code, Destination/Summary, and Rate columns.", None
 
+    # Handle combined pulse column (e.g. Bill Unit '60+1', '1+1')
+    if 'Pulse' in df.columns and ('Minimum' not in df.columns or 'Increment' not in df.columns):
+        def _parse_pulse_val(v):
+            nums = re.findall(r'\d+', str(v))
+            if len(nums) >= 2:
+                return nums[0], nums[1]
+            elif len(nums) == 1:
+                return nums[0], nums[0]
+            return '1', '1'
+        parsed_pulses = df['Pulse'].apply(_parse_pulse_val)
+        df['Minimum'] = [p[0] for p in parsed_pulses]
+        df['Increment'] = [p[1] for p in parsed_pulses]
+
     if 'Minimum' not in df.columns:
         df['Minimum'] = '1'
     if 'Increment' not in df.columns:
         df['Increment'] = '1'
     if 'Effective Date' not in df.columns:
         df['Effective Date'] = str(effective_date_val)
+
+    # Explode comma-separated dial codes if present (e.g. '9376, 9377')
+    if 'Dial Code' in df.columns and df['Dial Code'].astype(str).str.contains(r'[,;]').any():
+        df['Dial Code'] = df['Dial Code'].astype(str).str.split(r'[,;]+')
+        df = df.explode('Dial Code').reset_index(drop=True)
+        df['Dial Code'] = df['Dial Code'].astype(str).str.strip()
+
+    # Filter out footer notes / non-numeric dial codes
+    valid_dc_mask = df['Dial Code'].astype(str).str.replace(r'[^\d]', '', regex=True).str.len() > 0
+    df = df[valid_dc_mask].reset_index(drop=True)
 
     # Clean strings
     for col in ['Dial Code', 'Summary', 'New Rate', 'Minimum', 'Increment', 'Effective Date']:

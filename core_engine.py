@@ -163,7 +163,8 @@ def detect_header_row_and_columns(df_raw):
             # 3. Dial code keywords (Specific code keywords take higher priority over generic 'prefix')
             elif (any(k in v for k in [
                 'complete code', 'complete codes', 'full code', 'full codes', 'complete dial code', 'full dial code', 'complete prefix', 'full prefix',
-                'dial code', 'dial codes', 'dialcode', 'dialcodes',
+                'dial code', 'dial codes', 'dialcode', 'dialcodes', 'dialing code', 'dialing codes', 'dialling code', 'dialling codes',
+                'new dialing code', 'new dial code', 'new code', 'existing dialing code', 'existing dial code',
                 'dest code', 'dest codes', 'destination code', 'destination codes', 'destcode', 'destcodes',
                 'dst code', 'dst codes', 'dstcode', 'dstcodes', 'dst_code', 'dst. code',
                 'region code', 'region codes', 'zone code', 'zone codes', 'city code', 'city codes', 'telecom code',
@@ -171,17 +172,20 @@ def detect_header_row_and_columns(df_raw):
                 'rate key', 'rate keys', 'rate_key', 'ratekey', 'code key', 'code keys', 'dial key', 'dial keys', 'prefix key',
                 'dialed digit', 'dialed digits', 'dialled digit', 'dialled digits', 'dialed number', 'dialed numbers',
                 'calling code', 'call code', 'dial digit', 'dial digits', 'e164'
-            ]) or v in ['code', 'codes', 'dst', 'dst_code', 'dialcode']) \
+            ]) or v in ['code', 'codes', 'dst', 'dst_code', 'dialcode', 'dialing', 'dialling']) \
                 and not any(n in v for n in ['name', 'desc', 'description']) \
                 and not any(c in v for c in ['country code', 'country codes', 'countrycode', 'county code', 'county codes', 'countycode', 'area code', 'area codes', 'areacode', 'areacodes']):
                 
-                is_complete = any(cp in v for cp in ['complete code', 'full code', 'complete dial code', 'dial code', 'dialcode', 'region code', 'dest code', 'destination code'])
+                is_new_code = any(nc in v for nc in ['new dialing code', 'new dial code', 'new code'])
+                is_complete = any(cp in v for cp in ['complete code', 'full code', 'complete dial code', 'dial code', 'dialcode', 'region code', 'dest code', 'destination code', 'dialing code', 'dialling code'])
                 curr_is_complete = mapping.get('dial_code_is_complete', False)
-                if 'dial_code' not in mapping or (is_complete and not curr_is_complete):
+                curr_is_new = mapping.get('dial_code_is_new', False)
+                if 'dial_code' not in mapping or (is_new_code and not curr_is_new) or (is_complete and not curr_is_complete and not curr_is_new):
                     mapping['dial_code'] = col_idx
                     mapping['dial_code_is_complete'] = is_complete
+                    mapping['dial_code_is_new'] = is_new_code
                     mapping['dial_code_is_generic_prefix'] = False
-                    kw_score += 10 if is_complete else 8
+                    kw_score += 12 if is_new_code else (10 if is_complete else 8)
 
             elif any(k in v for k in ['country code', 'country codes', 'county code', 'county codes', 'countrycode', 'countycode']):
                 if 'country_code' not in mapping:
@@ -220,12 +224,13 @@ def detect_header_row_and_columns(df_raw):
                 'effective from', 'eff date', 'effective date', 'effectiv date', 'eff. date', 'eff_date',
                 'application date', 'date activate', 'date', 'eff', 'effectiv', 'pricing valid from',
                 'valid from', 'valid date', 'start date', 'active from', 'active date', 'activation date',
-                'active', 'activation'
+                'active', 'activation', 'effective start date'
             ]) and not any(bad in v for bad in [
                 'expiry', 'expire', 'end', 'until', 'close', 'termination', 'to date', 'effective to',
                 'valid to', 'eff to', 'minimum', 'increment', 'increments', 'pulse', 'billing', 'min/inc',
                 'notice', 'issue', 'creation', 'created', 'file date', 'sent date', 'export', 'generated',
-                'old date', 'prev date', 'previous date', 'last change', 'modify', 'modified', 'download'
+                'old date', 'prev date', 'previous date', 'last change', 'modify', 'modified', 'download',
+                'dialing code', 'dial code', 'dialing'
             ]) and not bool(re.search(r'\b(?:to|thru|through)\b', v)):
                 is_valid_date_col = True
                 if v in ['active', 'activation']:
@@ -241,7 +246,7 @@ def detect_header_row_and_columns(df_raw):
                 if is_valid_date_col:
                     is_high_priority = any(k in v for k in [
                         'eff date', 'effective date', 'eff. date', 'eff_date', 'effective from',
-                        'application date', 'pricing valid from', 'valid from'
+                        'application date', 'pricing valid from', 'valid from', 'effective start date'
                     ])
                     curr_is_high = mapping.get('effective_date_is_high', False)
                     if 'effective_date' not in mapping or (is_high_priority and not curr_is_high):
@@ -257,7 +262,7 @@ def detect_header_row_and_columns(df_raw):
                 'interval', 'intervals', 'billing interval', 'billinc', 'bill inc', 'billincr', 'bill_inc',
                 'rounding', 'round', 'round off', 'rounding rule', 'min (sec)', 'min(sec)', 'increment (sec)', 'increment(sec)',
                 'dur min', 'dur inc', 'dur_min', 'dur_inc', 'durmin', 'durinc',
-                'minimum', 'initial', 'additional', 'subsequent', 'addl'
+                'minimum', 'initial', 'additional', 'subsequent', 'addl', 'bill unit'
             ]) or v in ['mc', 'ci', 'pulse', 'interval', 'step', 'billinc', 'rounding', 'min', 'inc', 'additional', 'subsequent']:
                 if 'pulse' not in mapping:
                     mapping['pulse'] = col_idx
@@ -296,8 +301,10 @@ def detect_header_row_and_columns(df_raw):
             if code_col is not None and code_col < sample_rows.shape[1]:
                 for c_val in sample_rows.iloc[:, code_col]:
                     cs = str(c_val).strip()
-                    if cs and re.match(r'^\+?\d{1,15}$', cs.split('.')[0]):
-                        valid_codes += 1
+                    if cs and not cs.lower() in ['nan', 'none', '']:
+                        parts = [p.split('.')[0].replace('+', '').strip() for p in re.split(r'[,;/]+', cs) if p.strip()]
+                        if parts and all(p.isdigit() and 1 <= len(p) <= 15 for p in parts):
+                            valid_codes += 1
             if rate_col is not None and rate_col < sample_rows.shape[1]:
                 for r_val in sample_rows.iloc[:, rate_col]:
                     try:
@@ -322,14 +329,14 @@ def detect_header_row_and_columns(df_raw):
             data_score -= 30
 
         # Distinct columns bonus
-        distinct_cols = len({v for k, v in mapping.items() if k not in ['dial_code_is_generic_prefix', 'dial_code_split']})
+        distinct_cols = len({v for k, v in mapping.items() if type(v) is int})
         width_bonus = min(distinct_cols * 3, 18)
         total_score = kw_score + data_score + width_bonus
 
         if total_score > best_total_score:
             best_total_score = total_score
             best_row_idx = row_idx
-            best_mapping = {k: v for k, v in mapping.items() if k not in ['dial_code_is_generic_prefix', 'dial_code_is_complete', 'status_is_high']}
+            best_mapping = {k: v for k, v in mapping.items() if type(v) is int}
 
     # Zero-Maintenance Data Pattern Recognition Fallback:
     # If no standard header keywords matched, scan sample data directly for telecom signatures
